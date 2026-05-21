@@ -162,7 +162,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:#000;
 /* ── TOP-RIGHT: Minimap ── */
 #minimap{position:absolute;top:calc(var(--sT) + 8px);right:calc(var(--sR) + 8px);
   width:90px;height:90px;background:rgba(0,0,0,.88);border:1px solid rgba(255,140,0,.18);
-  cursor:pointer}
+  cursor:pointer;pointer-events:auto}
 #minimap canvas{display:block;width:90px;height:90px}
 #minimap-lbl{position:absolute;bottom:1px;width:100%;text-align:center;font-size:5px;
   letter-spacing:2px;color:#334}
@@ -191,7 +191,13 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:#000;
   right:calc(var(--sR) + 104px);text-align:left}
 #zone-name{font-size:9px;color:#e67e22;letter-spacing:2px;margin-bottom:1px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#zone-sub{font-size:6px;color:#445;letter-spacing:1px}
+#zone-sub{font-size:6px;color:#445;letter-spacing:1px;margin-bottom:3px}
+#zone-progress-wrap{position:relative;width:100%;height:6px;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.06);overflow:hidden}
+#zone-progress-fill{height:100%;background:linear-gradient(90deg,#e67e22,#f39c12);
+  width:0%;transition:width .3s ease}
+#zone-progress-lbl{position:absolute;right:3px;top:50%;transform:translateY(-50%);
+  font-size:5px;letter-spacing:1px;color:rgba(255,255,255,.5);white-space:nowrap}
 
 /* ── BELOW ZONE INFO: Kill feed ── */
 #kill-feed{position:absolute;top:calc(var(--sT) + 54px);left:calc(var(--sL) + 8px);
@@ -329,7 +335,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:#000;
 
 /* Mob skills — bottom-center, above weapon HUD */
 #mob-skills{position:fixed;z-index:15;
-  bottom:calc(var(--sB) + 82px);
+  bottom:calc(var(--sB) + 10px);
   left:50%;transform:translateX(-50%);
   display:none;gap:5px;pointer-events:auto}
 .mob-sk{width:48px;height:48px;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.12);
@@ -343,10 +349,10 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:#000;
   #hints{display:none}
   #mob-skills{display:flex}
   #skill-bar{display:none}
-  /* Compress status bars on mobile */
   #status-bars{width:155px}
-  /* Weapon HUD slightly higher on mobile to clear skills */
-  #weapon-hud{bottom:calc(var(--sB) + 116px)}
+  /* Weapon HUD sits just above the skill buttons */
+  #weapon-hud{bottom:calc(var(--sB) + 70px)}
+  #reload-bar{bottom:calc(var(--sB) + 70px)}
 }
 
 /* ──────────────────────────────────────────────────────
@@ -434,7 +440,8 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:#000;
 /* Bump up font sizes throughout */
 /* HUD */
 #zone-name{font-size:14px!important;letter-spacing:3px!important}
-#zone-sub{font-size:12px!important}
+#zone-sub{font-size:11px!important}
+#zone-progress-lbl{font-size:9px!important;color:rgba(255,255,255,.7)!important}
 .kentry{font-size:12px!important}
 .lentry{font-size:11px!important;padding:4px 8px!important}
 .bar-lbl{font-size:11px!important;margin-bottom:3px!important}
@@ -583,6 +590,136 @@ input[type=range]::-webkit-slider-thumb{
   cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all .15s;
 }
 #fullmap-close:hover,#fullmap-close:active{background:rgba(230,126,34,.15);color:#e67e22;border-color:rgba(230,126,34,.4)}
+/* ══════════════════════════════════════════════════════
+   TUTORIAL SYSTEM
+══════════════════════════════════════════════════════ */
+#tutorial-screen{
+  position:fixed;inset:0;z-index:200;
+  pointer-events:none;display:none;
+}
+#tutorial-screen.on{display:block;pointer-events:auto}
+
+/* Dark backdrop with hole cut out via clip-path */
+#tut-backdrop{
+  position:absolute;inset:0;
+  background:rgba(0,0,0,.82);
+  transition:clip-path .45s cubic-bezier(.4,0,.2,1);
+}
+
+/* Animated spotlight ring around highlighted element */
+#tut-spotlight{
+  position:absolute;
+  border:2px solid #e67e22;
+  border-radius:6px;
+  box-shadow:0 0 0 3000px rgba(0,0,0,.75),0 0 24px rgba(230,126,34,.6),inset 0 0 14px rgba(230,126,34,.15);
+  transition:all .4s cubic-bezier(.4,0,.2,1);
+  pointer-events:none;
+  display:none;
+}
+#tut-spotlight.on{display:block}
+@keyframes tut-pulse{
+  0%,100%{box-shadow:0 0 0 3000px rgba(0,0,0,.75),0 0 16px rgba(230,126,34,.5),inset 0 0 10px rgba(230,126,34,.1)}
+  50%{box-shadow:0 0 0 3000px rgba(0,0,0,.75),0 0 36px rgba(230,126,34,.9),inset 0 0 20px rgba(230,126,34,.2)}
+}
+#tut-spotlight.on{animation:tut-pulse 2s ease infinite}
+
+/* Tutorial card */
+#tut-card{
+  position:absolute;
+  left:50%;transform:translateX(-50%);
+  width:min(340px,90vw);
+  background:rgba(5,5,12,.97);
+  border:1px solid rgba(230,126,34,.35);
+  padding:22px 22px 16px;
+  font-family:'Courier New',monospace;
+  box-shadow:0 0 60px rgba(230,126,34,.15),0 24px 80px rgba(0,0,0,.8);
+  transition:top .4s cubic-bezier(.4,0,.2,1),bottom .4s cubic-bezier(.4,0,.2,1);
+}
+#tut-step-badge{
+  font-size:9px;letter-spacing:3px;color:#556;margin-bottom:10px;
+}
+#tut-icon{font-size:36px;text-align:center;margin-bottom:10px;display:block}
+#tut-title{
+  font-size:15px;letter-spacing:4px;color:#e67e22;
+  text-align:center;margin-bottom:12px;text-transform:uppercase;
+  text-shadow:0 0 20px rgba(230,126,34,.4);
+}
+#tut-body{
+  font-size:13px;line-height:1.85;color:#bcc8d4;
+  text-align:center;margin-bottom:10px;letter-spacing:.5px;
+}
+#tut-tip{
+  font-size:11px;color:#8899aa;line-height:1.7;
+  text-align:center;margin-bottom:16px;min-height:0;
+  padding:0;border-top:0;transition:all .2s;
+}
+#tut-tip.has-tip{
+  padding:10px 0 0;
+  border-top:1px solid rgba(255,255,255,.06);
+  min-height:24px;
+}
+#tut-btns{display:flex;gap:10px;justify-content:center}
+#tut-skip{
+  padding:10px 18px;
+  border:1px solid rgba(255,255,255,.1);background:transparent;
+  color:#556;font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all .15s;
+}
+#tut-skip:hover{color:#8899aa;border-color:rgba(255,255,255,.2)}
+#tut-next{
+  padding:10px 24px;flex:1;
+  border:1px solid rgba(230,126,34,.45);background:rgba(230,126,34,.1);
+  color:#e67e22;font-family:'Courier New',monospace;font-size:13px;letter-spacing:3px;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all .15s;
+}
+#tut-next:hover,#tut-next:active{background:rgba(230,126,34,.22);box-shadow:0 0 14px rgba(230,126,34,.3)}
+#tut-progress-bar{
+  margin-top:14px;height:2px;background:rgba(255,255,255,.07);border-radius:1px;overflow:hidden;
+}
+#tut-progress-fill{
+  height:100%;background:linear-gradient(90deg,#e67e22,#f39c12);
+  width:8.33%;transition:width .4s ease;
+}
+
+/* Arrow pointer toward spotlight */
+#tut-arrow{
+  position:absolute;width:0;height:0;display:none;
+  transition:all .4s cubic-bezier(.4,0,.2,1);
+}
+#tut-arrow.up{
+  border-left:10px solid transparent;border-right:10px solid transparent;
+  border-bottom:14px solid rgba(230,126,34,.7);
+}
+#tut-arrow.down{
+  border-left:10px solid transparent;border-right:10px solid transparent;
+  border-top:14px solid rgba(230,126,34,.7);
+}
+/* ══════════════════════════════════════════════════════
+   SLOT PICKER
+══════════════════════════════════════════════════════ */
+#slot-screen{background:#000;z-index:102;align-items:center;justify-content:center}
+#slot-inner{width:100%;max-width:380px;padding:20px;display:flex;flex-direction:column;align-items:center;gap:10px;z-index:1}
+#slot-title{font-size:18px;letter-spacing:6px;color:#e67e22;margin-bottom:4px;text-align:center}
+#slot-sub{font-size:11px;letter-spacing:2px;color:#8899aa;margin-bottom:8px;text-align:center;min-height:16px}
+#slot-cards{display:flex;flex-direction:column;gap:10px;width:100%}
+.slot-card{
+  position:relative;padding:16px 14px;border:1px solid rgba(255,255,255,.1);
+  background:rgba(255,255,255,.03);cursor:pointer;
+  transition:all .15s;-webkit-tap-highlight-color:transparent;
+}
+.slot-card:hover,.slot-card:active{border-color:rgba(230,126,34,.5);background:rgba(230,126,34,.08)}
+.slot-card.empty{border-style:dashed;opacity:.7}
+.slot-num{font-size:10px;letter-spacing:3px;color:#e67e22;margin-bottom:6px}
+.slot-info{font-size:12px;color:#bcc8d4;line-height:1.8;letter-spacing:.5px}
+.slot-info.empty{font-size:11px;color:#445;letter-spacing:2px}
+.slot-del{
+  position:absolute;top:10px;right:12px;
+  font-size:14px;color:#445;padding:4px 8px;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:color .15s;
+}
+.slot-del:hover{color:#e74c3c}
+.slot-del.hidden{display:none}
 </style>
 </head>
 <body>
@@ -602,13 +739,40 @@ input[type=range]::-webkit-slider-thumb{
   </div>
 </div>
 
+<!-- SLOT PICKER -->
+<div id="slot-screen" class="overlay">
+  <div class="scanlines"></div>
+  <div id="slot-inner">
+    <div id="slot-title">SELECT SAVE SLOT</div>
+    <div id="slot-sub"></div>
+    <div id="slot-cards">
+      <div class="slot-card" id="slot-card-1" onclick="slotPick(1)">
+        <div class="slot-num">SLOT 01</div>
+        <div class="slot-info" id="slot-info-1"></div>
+        <div class="slot-del" id="slot-del-1" onclick="slotDelete(event,1)">✕</div>
+      </div>
+      <div class="slot-card" id="slot-card-2" onclick="slotPick(2)">
+        <div class="slot-num">SLOT 02</div>
+        <div class="slot-info" id="slot-info-2"></div>
+        <div class="slot-del" id="slot-del-2" onclick="slotDelete(event,2)">✕</div>
+      </div>
+      <div class="slot-card" id="slot-card-3" onclick="slotPick(3)">
+        <div class="slot-num">SLOT 03</div>
+        <div class="slot-info" id="slot-info-3"></div>
+        <div class="slot-del" id="slot-del-3" onclick="slotDelete(event,3)">✕</div>
+      </div>
+    </div>
+    <button class="mbtn" style="width:100%;max-width:340px;margin-top:8px" onclick="slotCancel()">← BACK</button>
+  </div>
+</div>
+
 <!-- CHARACTER CREATOR -->
 <div id="char-creator" class="overlay">
   <div class="cc-title">CREATE AGENT</div>
   <div class="cc-sub">AGENT ZERO · OPERATIVE PROFILE</div>
   <div class="cc-preview">
     <canvas id="cc-canvas" width="90" height="130"></canvas>
-    <div class="cc-preview-name">AGENT ZERO</div>
+    <div class="cc-preview-name">ZERO</div>
     <div class="cc-preview-class" id="cc-cls-label">SELECT CLASS</div>
   </div>
   <div class="cc-sec">
@@ -759,7 +923,14 @@ input[type=range]::-webkit-slider-thumb{
   <div id="dmg-flash"></div>
   <div id="skill-notify"></div>
   <div id="headshot-text">HEADSHOT</div>
-  <div id="zone-info"><div id="zone-name">SECTOR ALPHA</div><div id="zone-sub">HOSTILE ZONE</div></div>
+  <div id="zone-info">
+    <div id="zone-name">SECTOR ALPHA</div>
+    <div id="zone-sub">HOSTILE ZONE</div>
+    <div id="zone-progress-wrap">
+      <div id="zone-progress-fill"></div>
+      <div id="zone-progress-lbl">0 / 10 KILLS</div>
+    </div>
+  </div>
   <div id="reload-bar"><div id="reload-lbl">RELOADING</div><div style="background:rgba(255,255,255,.07);height:2px"><div id="reload-fill"></div></div></div>
   <div id="hints">WASD · SHIFT SPRINT · SPACE DODGE · R RELOAD<br>Q/E/F/X SKILLS · I INVENTORY · H HUB</div>
   <div id="drone-hud">✦ DRONE ACTIVE</div>
@@ -785,6 +956,25 @@ input[type=range]::-webkit-slider-thumb{
 
 <!-- Pause button (shown during mission) -->
 <button id="btn-pause" onclick="togglePause()">⏸</button>
+
+<!-- ═══════════════════════════════ TUTORIAL ═══════════════════════════════ -->
+<div id="tutorial-screen">
+  <div id="tut-backdrop"></div>
+  <div id="tut-spotlight"></div>
+  <div id="tut-card">
+    <div id="tut-step-badge">01 / 12</div>
+    <div id="tut-icon">🕵️</div>
+    <div id="tut-title">WELCOME, AGENT ZERO</div>
+    <div id="tut-body">You are an elite operative dropped into hostile territory. Survive, eliminate, and extract with the best loot possible.</div>
+    <div id="tut-tip"></div>
+    <div id="tut-btns">
+      <button id="tut-skip" onclick="tutSkip()">SKIP TUTORIAL</button>
+      <button id="tut-next" onclick="tutNext()">NEXT  ›</button>
+    </div>
+    <div id="tut-progress-bar"><div id="tut-progress-fill"></div></div>
+  </div>
+  <div id="tut-arrow"></div>
+</div>
 
 <!-- PAUSE SCREEN -->
 <div id="pause-screen">
@@ -837,7 +1027,7 @@ input[type=range]::-webkit-slider-thumb{
 <div id="inventory">
   <div id="inv-close">✕</div>
   <div class="inv-title">AGENT LOADOUT</div>
-  <div class="inv-sub">AGENT ZERO · GEAR</div>
+  <div class="inv-sub">ZERO · OPERATIVE LOADOUT</div>
   <div class="sec-lbl">ARMOR</div>
   <div class="armor-slots" id="armor-slots">
     <div class="aslot" data-slot="helmet">⛑<div class="sn">HELM</div></div>
@@ -952,8 +1142,12 @@ const Input = {
   keys:{}, mouse:{nx:0,ny:0,btn:false}, world:new THREE.Vector3(),
   moveX:0, moveZ:0, aimX:0, aimZ:0, mAiming:false, mDodge:false,
   init(){
-    const P=['Space','KeyR','KeyF','KeyE','KeyQ','KeyX','KeyI','KeyH','KeyP','Escape'];
-    window.addEventListener('keydown',e=>{this.keys[e.code]=true;if(P.includes(e.code))e.preventDefault();if((e.code==='KeyP'||e.code==='Escape')&&(gameState===GS.MISSION||_paused))togglePause();});
+    const P=['Space','KeyR','KeyF','KeyE','KeyQ','KeyX','KeyI','KeyH','KeyP','KeyM','Escape'];
+    window.addEventListener('keydown',e=>{this.keys[e.code]=true;if(P.includes(e.code))e.preventDefault();
+      if((e.code==='KeyP')&&(gameState===GS.MISSION||_paused))togglePause();
+      if(e.code==='KeyM'&&gameState===GS.MISSION&&!_paused)_fullMapOpen?closeFullMap():openFullMap();
+      if(e.code==='Escape'){if(_fullMapOpen)closeFullMap();else if(gameState===GS.MISSION||_paused)togglePause();}
+    });
     window.addEventListener('keyup',e=>{this.keys[e.code]=false;});
     window.addEventListener('mousemove',e=>{this.mouse.nx=(e.clientX/window.innerWidth)*2-1;this.mouse.ny=-(e.clientY/window.innerHeight)*2+1;});
     window.addEventListener('mousedown',e=>{if(e.button===0){this.mouse.btn=true;e.preventDefault();}});
@@ -1003,7 +1197,7 @@ Joystick.init();
 // =====================================================================
 //  GAME STATE MACHINE
 // =====================================================================
-const GS = { MENU:0, CHAR:1, HUB:2, MISSION:3, DEAD:4 };
+const GS = { MENU:0, CHAR:1, HUB:2, MISSION:3, DEAD:4, SLOTS:5 };
 let gameState = GS.MENU;
 let gameRunning = false;
 
@@ -1011,11 +1205,14 @@ function setState(s) {
   gameState = s;
   gameRunning = (s === GS.MISSION);
   document.getElementById('main-menu').classList.toggle('on', s===GS.MENU);
+  document.getElementById('slot-screen').classList.toggle('on', s===GS.SLOTS);
   document.getElementById('char-creator').classList.toggle('on', s===GS.CHAR);
   document.getElementById('hub-screen').classList.toggle('on', s===GS.HUB);
   document.getElementById('hud').style.display = (s===GS.MISSION)?'block':'none';
   document.getElementById('btn-pause').style.display = (s===GS.MISSION)?'flex':'none';
   document.getElementById('pause-screen').classList.remove('on');
+  document.getElementById('fullmap-screen').classList.remove('on');
+  _fullMapOpen=false;
   if(IS_MOB && s===GS.MISSION){
     ['btn-roll','btn-reload','btn-inv','btn-hub'].forEach(id=>document.getElementById(id).style.display='flex');
   } else {
@@ -1706,7 +1903,20 @@ const Zone={
   _hud(){
     const sn=this.sectors[Math.min(this.zone-1,this.sectors.length-1)];
     document.getElementById('zone-name').textContent=`SECTOR ${sn} — ZONE ${String(this.zone).padStart(2,'0')}`;
-    document.getElementById('zone-sub').textContent=`KILLS ${Enemies.totalKills} · BOSS IN ${this.killsToNext-this.killsInZone}`;
+    const remaining=this.killsToNext-this.killsInZone;
+    const isBossZone=this.zone%3===2;
+    document.getElementById('zone-sub').textContent=
+      isBossZone?`BOSS ZONE NEXT · ${remaining} KILLS TO ADVANCE`:
+      this.zone%3===0?`POST-BOSS · ${remaining} KILLS TO ADVANCE`:
+      `${remaining} KILLS TO NEXT ZONE`;
+    const pct=Math.min(1,this.killsInZone/this.killsToNext)*100;
+    const fill=document.getElementById('zone-progress-fill');
+    const lbl=document.getElementById('zone-progress-lbl');
+    if(fill)fill.style.width=pct+'%';
+    if(lbl)lbl.textContent=`${this.killsInZone} / ${this.killsToNext}`;
+    // Flash bar orange when complete
+    if(fill&&pct>=100)fill.style.background='linear-gradient(90deg,#f39c12,#fff700)';
+    else if(fill)fill.style.background='linear-gradient(90deg,#e67e22,#f39c12)';
   },
 };
 
@@ -1941,15 +2151,18 @@ const Player={
     if(this.dodgeCd>0)this.dodgeCd-=dt;
     if(this.reloading){this.reloadTimer-=dt;UI.updateReloadBar(1-this.reloadTimer/this.reloadTotal);if(this.reloadTimer<=0){this.reloading=false;this.weapon.currentAmmo=this.weapon.magazine;UI.showReload(false);UI.updateWeaponHUD();}}
     if(this.dodging){this.dodgeTimer-=dt;this.mesh.position.addScaledVector(this.dodgeDir,15*dt);if(this.dodgeTimer<=0)this.dodging=false;}
+
+    // ── Movement inputs (hoisted so facing block can read them) ──
+    let mx=0,mz=0;
+    if(IS_MOB){mx=Input.moveX;mz=Input.moveZ;}
+    else{if(Input.down('KeyW')||Input.down('ArrowUp'))mz-=1;if(Input.down('KeyS')||Input.down('ArrowDown'))mz+=1;if(Input.down('KeyA')||Input.down('ArrowLeft'))mx-=1;if(Input.down('KeyD')||Input.down('ArrowRight'))mx+=1;}
+    const mag=Math.hypot(mx,mz);
+
     if(!this.dodging){
       const stats=Armor.getStats();
       const spd=C.PLAYER_SPD*(1+stats.spd+CharCreator.classBonus.speedBonus+this.bonusSpd);
-      let mx=0,mz=0;
-      if(IS_MOB){mx=Input.moveX;mz=Input.moveZ;}
-      else{if(Input.down('KeyW')||Input.down('ArrowUp'))mz-=1;if(Input.down('KeyS')||Input.down('ArrowDown'))mz+=1;if(Input.down('KeyA')||Input.down('ArrowLeft'))mx-=1;if(Input.down('KeyD')||Input.down('ArrowRight'))mx+=1;}
       const sprint=Input.down('ShiftLeft')||Input.down('ShiftRight');
       const smult=sprint?C.SPRINT:1;
-      const mag=Math.hypot(mx,mz);
       if(mag>.05){
         const nx=mx/mag,nz=mz/mag;
         const PAD=.55;
@@ -1972,10 +2185,9 @@ const Player={
         const doDodge=Input.down('Space')||(IS_MOB&&Input.mDodge);
         if(doDodge&&this.dodgeCd<=0){const dodgeCdMult=1-SkillTree.nodes.dodgeUp.lvl*.25;this.dodging=true;this.dodgeTimer=.22;this.dodgeCd=1.4*dodgeCdMult;this.dodgeDir.set(nx,0,nz);Input.mDodge=false;}
       } else {
-        // ── Dodge while stationary — dodge in facing direction ──
+        // ── Dodge while stationary ──
         const doDodge=Input.down('Space')||(IS_MOB&&Input.mDodge);
         if(doDodge&&this.dodgeCd<=0){const dodgeCdMult=1-SkillTree.nodes.dodgeUp.lvl*.25;this.dodging=true;this.dodgeTimer=.22;this.dodgeCd=1.4*dodgeCdMult;this.dodgeDir.copy(this.facing);Input.mDodge=false;}
-        // Return limbs to rest
         if(this._armL){this._armL.rotation.x*=.82;this._armR.rotation.x*=.82;}
         if(this._legL){this._legL.rotation.x*=.82;this._legR.rotation.x*=.82;}
       }
@@ -1989,8 +2201,30 @@ const Player={
     if(Input.down('KeyI'))InvUI.toggle();
     if(Input.down('KeyH')){GoToHub();}
     if(Input.down('KeyR')&&!this.reloading)this.startReload();
-    if(IS_MOB&&(Math.abs(Input.aimX)+Math.abs(Input.aimZ))>.2){this.facing.set(Input.aimX,0,Input.aimZ).normalize();this.mesh.rotation.y=Math.atan2(Input.aimX,Input.aimZ);}
-    else if(!IS_MOB){const mw=Input.world;const fdx=mw.x-this.mesh.position.x,fdz=mw.z-this.mesh.position.z;if(Math.abs(fdx)+Math.abs(fdz)>.1){this.facing.set(fdx,0,fdz).normalize();this.mesh.rotation.y=Math.atan2(fdx,fdz);}}
+    // ── Facing / Rotation ──
+    if(IS_MOB){
+      const aiming=(Math.abs(Input.aimX)+Math.abs(Input.aimZ))>.2;
+      const moving=mag>.05;
+      if(aiming){
+        // Right stick → face aim direction
+        this.facing.set(Input.aimX,0,Input.aimZ).normalize();
+        this.mesh.rotation.y=Math.atan2(Input.aimX,Input.aimZ);
+      } else if(moving){
+        // Left stick only → face movement direction
+        const tx=mx/Math.max(mag,.001),tz=mz/Math.max(mag,.001);
+        this.facing.set(tx,0,tz).normalize();
+        // Smooth rotation toward movement direction
+        const targetAngle=Math.atan2(tx,tz);
+        let diff=targetAngle-this.mesh.rotation.y;
+        while(diff>Math.PI)diff-=Math.PI*2;
+        while(diff<-Math.PI)diff+=Math.PI*2;
+        this.mesh.rotation.y+=diff*Math.min(1,dt*14);
+      }
+    } else {
+      // Desktop — face mouse cursor
+      const mw=Input.world;const fdx=mw.x-this.mesh.position.x,fdz=mw.z-this.mesh.position.z;
+      if(Math.abs(fdx)+Math.abs(fdz)>.1){this.facing.set(fdx,0,fdz).normalize();this.mesh.rotation.y=Math.atan2(fdx,fdz);}
+    }
     this.mesh.position.y=0;
     this.light.position.copy(this.mesh.position);this.light.position.y+=2;
   },
@@ -2271,10 +2505,10 @@ const CharCreator={
       else if(hair==='dreads'){ctx.fillStyle=hairCol;for(let i=0;i<5;i++){ctx.fillRect(28+i*7,24,5,18);}}
       else if(hair==='buzz'){ctx.fillStyle=hairCol;ctx.fillRect(28,6,34,6);}
     }
-    // Class badge
-    ctx.fillStyle='rgba(230,126,34,.22)';ctx.fillRect(28,52,34,12);
-    ctx.fillStyle='#e67e22';ctx.font='bold 7px Courier New';ctx.textAlign='center';
-    ctx.fillText(this.selectedClass.toUpperCase().slice(0,4),45,62);
+    // Vest badge — always says ZERO
+    ctx.fillStyle='rgba(230,126,34,.25)';ctx.fillRect(26,51,38,13);
+    ctx.fillStyle='#e67e22';ctx.font='bold 8px Courier New';ctx.textAlign='center';
+    ctx.fillText('ZERO',45,62);
   },
   apply(){
     const Cls=this.CLASSES[this.selectedClass];
@@ -2292,19 +2526,121 @@ const CharCreator={
 //  SAVE SYSTEM
 // =====================================================================
 const Save={
-  KEY:'agzero_v3',
-  save(){try{localStorage.setItem(this.KEY,JSON.stringify({player:Player.save(),armor:Armor.save(),zone:Zone.zone,kills:Enemies.totalKills,skillTree:Object.fromEntries(Object.entries(SkillTree.nodes).map(([k,v])=>[k,v.lvl])),skillPts:SkillTree.points,ts:Date.now()}));}catch(e){}},
-  load(){try{const d=JSON.parse(localStorage.getItem(this.KEY));return d;}catch(e){return null;}},
-  has(){return !!localStorage.getItem(this.KEY);},
+  BASE:'agzero_v3_slot',
+  activeSlot:1,
+  _key(slot){return this.BASE+(slot||this.activeSlot);},
+  save(){
+    try{
+      localStorage.setItem(this._key(),JSON.stringify({
+        player:Player.save(),armor:Armor.save(),
+        zone:Zone.zone,kills:Enemies.totalKills,
+        skillTree:Object.fromEntries(Object.entries(SkillTree.nodes).map(([k,v])=>[k,v.lvl])),
+        skillPts:SkillTree.points,
+        class:CharCreator.selectedClass,
+        level:Player.level,
+        ts:Date.now()
+      }));
+    }catch(e){}
+  },
+  load(slot){
+    try{return JSON.parse(localStorage.getItem(this._key(slot||this.activeSlot)));}catch(e){return null;}
+  },
+  has(slot){return !!localStorage.getItem(this._key(slot||this.activeSlot));},
+  slotInfo(slot){
+    const d=this.load(slot);
+    if(!d)return null;
+    return{
+      class:(d.class||'soldier').toUpperCase(),
+      level:d.level||1,
+      zone:d.zone||1,
+      kills:d.kills||0,
+      ts:d.ts?new Date(d.ts).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'Unknown',
+    };
+  },
+  delete(slot){try{localStorage.removeItem(this._key(slot));}catch(e){}},
 };
 
 // =====================================================================
 //  GAME FLOW
 // =====================================================================
 function _refreshMenu(){
-  const hs=Save.has();
-  document.getElementById('mb-continue').classList.toggle('hide',!hs);
+  let latest=null,latestTs=0;
+  for(let s=1;s<=3;s++){const d=Save.load(s);if(d&&(d.ts||0)>latestTs){latest=s;latestTs=d.ts||0;}}
+  document.getElementById('mb-continue').classList.toggle('hide',!latest);
 }
+
+function _loadSaveIntoGame(d){
+  if(d.player)Player.load(d.player);if(d.armor)Armor.load(d.armor);
+  Zone.zone=d.zone||1;Zone.killsToNext=~~(10*Math.pow(1.4,Zone.zone-1));
+  Enemies.totalKills=d.kills||0;SkillTree.points=d.skillPts||0;
+  if(d.skillTree)Object.entries(d.skillTree).forEach(([k,v])=>{if(SkillTree.nodes[k])SkillTree.nodes[k].lvl=v;});
+  Player.recalc();UI.updateWeaponHUD();Zone._hud();UI.credit(Player.credits);
+}
+
+// ── Slot picker ─────────────────────────────────────────────────────
+let _slotMode='new';
+function _openSlots(mode){
+  Audio.uiClick();_slotMode=mode;
+  document.getElementById('slot-sub').textContent=
+    mode==='new'?'CHOOSE A SLOT FOR YOUR NEW AGENT':'SELECT AN AGENT TO LOAD';
+  for(let s=1;s<=3;s++){
+    const card=document.getElementById(`slot-card-${s}`);
+    const info=document.getElementById(`slot-info-${s}`);
+    const del=document.getElementById(`slot-del-${s}`);
+    const d=Save.slotInfo(s);
+    if(d){
+      card.classList.remove('empty');
+      const cls={soldier:'🪖 SOLDIER',ghost:'👁 GHOST',medic:'⚕️ MEDIC',sniper:'🎯 SNIPER'}[d.class.toLowerCase()]||d.class;
+      info.innerHTML=`${cls} &nbsp;·&nbsp; LVL ${d.level} &nbsp;·&nbsp; ZONE ${d.zone}<br><span style="color:#556;font-size:10px">${d.ts}</span>`;
+      info.className='slot-info';
+      del.className='slot-del';
+    } else {
+      card.classList.add('empty');
+      info.innerHTML=mode==='new'?'[ EMPTY — START NEW AGENT ]':'[ EMPTY — CREATE NEW AGENT ]';
+      info.className='slot-info empty';
+      del.className='slot-del hidden';
+    }
+  }
+  setState(GS.SLOTS);
+}
+function slotPick(s){
+  Audio.uiClick();Save.activeSlot=s;
+  if(_slotMode==='new'){
+    _isNewAgent=true;
+    _startNewGame();setState(GS.CHAR);CharCreator._draw();
+  } else {
+    const d=Save.load(s);
+    if(!d){_isNewAgent=true;_startNewGame();setState(GS.CHAR);CharCreator._draw();return;}
+    _startNewGame();_loadSaveIntoGame(d);HubSystem.refresh();setState(GS.HUB);
+  }
+}
+function slotDelete(e,s){
+  e.stopPropagation();
+  if(!confirm(`Delete Slot ${s}? This cannot be undone.`))return;
+  Save.delete(s);_openSlots(_slotMode);_refreshMenu();
+}
+function slotCancel(){Audio.uiClick();setState(GS.MENU);}
+
+function menuNewGame(){_openSlots('new');}
+function menuLoad(){_openSlots('load');}
+function menuContinue(){
+  Audio.uiClick();
+  let latest=null,latestTs=0;
+  for(let s=1;s<=3;s++){const d=Save.load(s);if(d&&(d.ts||0)>latestTs){latest=s;latestTs=d.ts||0;}}
+  if(!latest)return;
+  Save.activeSlot=latest;
+  const d=Save.load();_startNewGame();_loadSaveIntoGame(d);setState(GS.MISSION);
+}
+
+// Tutorial flag — set when slot picked for new game, cleared after use
+let _isNewAgent=false;
+function ccConfirm(){
+  Audio.uiClick();CharCreator.apply();setState(GS.MISSION);
+  const showTut=_isNewAgent;_isNewAgent=false;
+  setTimeout(()=>Tutorial.start(showTut),400);
+}
+function redeployGame(){_isNewAgent=true;Audio.uiClick();_startNewGame();setState(GS.CHAR);CharCreator._draw();}
+function deathGoHub(){Audio.uiClick();_startNewGame();HubSystem.refresh();setState(GS.HUB);}
 
 function _startNewGame(){
   if(Player.mesh){scene.remove(Player.mesh);Player.mesh=null;}
@@ -2321,13 +2657,10 @@ function _startNewGame(){
   Player.bonusDmg=1;Player.bonusCrit=0;Player.bonusSpd=0;Player._classRegen=false;
   SkillTree.points=0;Object.values(SkillTree.nodes).forEach(n=>{n.lvl=0;});
   CharCreator.classBonus={speedBonus:0,cdBonus:0,regen:false};
-  Map3D.generate();
-  Player.init();
-  CharCreator.apply();
+  Map3D.generate();Player.init();CharCreator.apply();
   camera.position.copy(Player.mesh.position).add(CAM_OFF);
   _camLook.copy(Player.mesh.position);camera.lookAt(_camLook);
-  _spawnEnemies();
-  Zone._hud();UI.updateBars();UI.credit(0);
+  _spawnEnemies();Zone._hud();UI.updateBars();UI.credit(0);
 }
 
 function _startMission(){
@@ -2365,37 +2698,6 @@ function _die(){
 // =====================================================================
 let _flickT=0;
 function flicker(dt){_flickT+=dt;if(_flickT>.09){_flickT=0;scene.traverse(o=>{if(o.isPointLight&&o.userData.base)o.intensity=o.userData.base+(Math.random()-.5)*.2;});}}
-
-// =====================================================================
-//  GLOBAL ONCLICK FUNCTIONS (inline onclick — most reliable on iOS)
-// =====================================================================
-function menuNewGame(){Audio.uiClick();_startNewGame();setState(GS.CHAR);CharCreator._draw();}
-function menuContinue(){
-  Audio.uiClick();
-  const d=Save.load();if(!d)return;
-  _startNewGame();
-  if(d.player)Player.load(d.player);
-  if(d.armor)Armor.load(d.armor);
-  Zone.zone=d.zone||1;Zone.killsToNext=~~(10*Math.pow(1.4,Zone.zone-1));
-  Enemies.totalKills=d.kills||0;SkillTree.points=d.skillPts||0;
-  if(d.skillTree)Object.entries(d.skillTree).forEach(([k,v])=>{if(SkillTree.nodes[k])SkillTree.nodes[k].lvl=v;});
-  Player.recalc();UI.updateWeaponHUD();Zone._hud();UI.credit(Player.credits);
-  setState(GS.MISSION);
-}
-function menuLoad(){
-  const d=Save.load();
-  if(!d){const btn=document.getElementById('mb-load');const orig=btn.textContent;btn.textContent='NO SAVE FOUND';btn.style.color='#c0392b';setTimeout(()=>{btn.textContent=orig;btn.style.color='';},1800);return;}
-  _startNewGame();
-  if(d.player)Player.load(d.player);if(d.armor)Armor.load(d.armor);
-  Zone.zone=d.zone||1;Zone.killsToNext=~~(10*Math.pow(1.4,Zone.zone-1));
-  Enemies.totalKills=d.kills||0;SkillTree.points=d.skillPts||0;
-  if(d.skillTree)Object.entries(d.skillTree).forEach(([k,v])=>{if(SkillTree.nodes[k])SkillTree.nodes[k].lvl=v;});
-  Player.recalc();UI.updateWeaponHUD();Zone._hud();UI.credit(Player.credits);
-  HubSystem.refresh();setState(GS.HUB);
-}
-function ccConfirm(){Audio.uiClick();CharCreator.apply();setState(GS.MISSION);}
-function redeployGame(){Audio.uiClick();_startNewGame();setState(GS.CHAR);CharCreator._draw();}
-function deathGoHub(){Audio.uiClick();_startNewGame();HubSystem.refresh();setState(GS.HUB);}
 
 // ── FULL MAP ───────────────────────────────────────────────────────────
 let _fullMapOpen=false;
@@ -2812,8 +3114,7 @@ const Audio={
         this.ambGain=this.ctx.createGain();this.ambGain.gain.value=0.12;this.ambGain.connect(this.masterGain);
         // Start menu music after context is ready
         setTimeout(()=>this.startMenuMusic(),200);
-        // Start rain ambience
-        setTimeout(()=>this.startRain(),600);
+        // Rain removed — music only during gameplay
       }catch(e){}
     };
     document.addEventListener('pointerdown',wake,{once:true});
@@ -2944,16 +3245,22 @@ const Audio={
   },
 
   // ═══════════════════════════════════════════════════════════
-  //  IN-GAME MUSIC — Dark industrial electronic, 124BPM
-  //  Think Burial × NIN × early 2000s action game OST
+  //  IN-GAME MUSIC — 10 Spy / 007 / Agent themed tracks
+  //  Cycling procedural compositions: brass, strings, percussion
   // ═══════════════════════════════════════════════════════════
+  _trackIndex:0,
+  _TRACKS:[
+    'goldeneye','thunderball','silhouette','shadow_op','zero_hour',
+    'cold_front','last_asset','cipher','double_blind','extraction'
+  ],
+
   startMusic(){
     if(!this.ctx||this.musicPlaying)return;
     this.stopMenuMusic();
     this.musicPlaying=true;
     this.musicGain.gain.setValueAtTime(this.musicGain.gain.value,this.ctx.currentTime);
     this.musicGain.gain.linearRampToValueAtTime(0.22,this.ctx.currentTime+1.5);
-    this._sched();
+    this._playTrack(this._trackIndex);
   },
   stopMusic(){
     this.musicPlaying=false;
@@ -2962,139 +3269,379 @@ const Audio={
       this.musicGain.gain.setValueAtTime(this.musicGain.gain.value,this.ctx.currentTime);
       this.musicGain.gain.linearRampToValueAtTime(0,this.ctx.currentTime+1.5);
     }
-    // Return to menu music after fade
     setTimeout(()=>{
       if(this.ctx&&!this.musicPlaying){this.musicGain.gain.value=0.18;this.startMenuMusic();}
     },1800);
   },
-  _sched(){
+  _playTrack(idx){
     if(!this.ctx||!this.musicPlaying)return;
     this._r();
-    const BPM=124,beat=60/BPM;
-    const now=this.ctx.currentTime;
-    // 16-step industrial pattern
-    for(let s=0;s<16;s++){
-      const t=now+s*beat;
-      if(s%4===0)this._kick(t);
-      if(s===4||s===12)this._snare(t);
-      if(s===2||s===6||s===10||s===14)this._snare2(t); // ghost snares
-      if(s%2===1)this._hihat(t,s%4===3);
-      if(s%8===0)this._openHat(t+beat*.75);
-      if(s%4===0){
-        const notes=[41,41,36,43];this._bass(t,notes[(s/4)%4]*1.5,beat*3.8);
-      }
-    }
-    this._pad(now,beat*16);
-    if(Math.random()<.65)this._lead(now+beat*4,beat*8);
-    // Distorted industrial layer every 32 beats
-    if(Math.floor(now/((beat*32)))!==Math.floor((now+beat*16)/((beat*32)))){
-      this._industrial(now,beat*16);
-    }
-    this._schedTimer=setTimeout(()=>this._sched(),(beat*16-0.15)*1000);
+    const names=['GOLDENEYE','THUNDERBALL','SILHOUETTE','SHADOW OP','ZERO HOUR','COLD FRONT','LAST ASSET','CIPHER','DOUBLE BLIND','EXTRACTION'];
+    const tracks=[
+      ()=>this._track_goldeneye(),
+      ()=>this._track_thunderball(),
+      ()=>this._track_silhouette(),
+      ()=>this._track_shadow_op(),
+      ()=>this._track_zero_hour(),
+      ()=>this._track_cold_front(),
+      ()=>this._track_last_asset(),
+      ()=>this._track_cipher(),
+      ()=>this._track_double_blind(),
+      ()=>this._track_extraction(),
+    ];
+    // Flash track name
+    const sn=document.getElementById('skill-notify');
+    if(sn){sn.textContent='♪ '+names[idx];sn.style.opacity='1';setTimeout(()=>sn.style.opacity='0',2500);}
+    const dur=tracks[idx]();
+    this._schedTimer=setTimeout(()=>{
+      if(!this.musicPlaying)return;
+      this._trackIndex=(this._trackIndex+1)%10;
+      this._playTrack(this._trackIndex);
+    },(dur-0.2)*1000);
   },
 
-  _kick(t){
-    if(!this.ctx)return;
+  // shared helpers
+  _beat(bpm){return 60/bpm;},
+  _osc(type,freq,t,dur,vol,dest){
     const o=this.ctx.createOscillator(),g=this.ctx.createGain();
-    o.frequency.setValueAtTime(160,t);o.frequency.exponentialRampToValueAtTime(32,t+.14);
-    g.gain.setValueAtTime(1.5,t);g.gain.exponentialRampToValueAtTime(.001,t+.28);
-    o.connect(g);g.connect(this.musicGain);o.start(t);o.stop(t+.32);
+    o.type=type;o.frequency.value=freq;
+    g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(vol,t+Math.min(.04,dur*.1));
+    g.gain.setValueAtTime(vol*.9,t+dur*.85);g.gain.linearRampToValueAtTime(.001,t+dur);
+    o.connect(g);g.connect(dest);o.start(t);o.stop(t+dur+.05);
   },
-  _snare(t){
-    if(!this.ctx)return;
-    const sr=this.ctx.sampleRate;
-    const buf=this.ctx.createBuffer(1,~~(sr*.18),sr);const d=buf.getChannelData(0);
-    for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
-    const n=this.ctx.createBufferSource();n.buffer=buf;
-    const f=this.ctx.createBiquadFilter();f.type='bandpass';f.frequency.value=1200;f.Q.value=0.7;
-    const g=this.ctx.createGain();g.gain.setValueAtTime(.6,t);g.gain.exponentialRampToValueAtTime(.001,t+.18);
-    n.connect(f);f.connect(g);g.connect(this.musicGain);n.start(t);
-    const o=this.ctx.createOscillator(),g2=this.ctx.createGain();
-    o.type='triangle';o.frequency.value=220;g2.gain.setValueAtTime(.28,t);g2.gain.exponentialRampToValueAtTime(.001,t+.09);
-    o.connect(g2);g2.connect(this.musicGain);o.start(t);o.stop(t+.12);
-  },
-  _snare2(t){// ghost snare
-    if(!this.ctx)return;
-    const sr=this.ctx.sampleRate;
-    const buf=this.ctx.createBuffer(1,~~(sr*.06),sr);const d=buf.getChannelData(0);
-    for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
-    const n=this.ctx.createBufferSource();n.buffer=buf;
-    const f=this.ctx.createBiquadFilter();f.type='highpass';f.frequency.value=2000;
-    const g=this.ctx.createGain();g.gain.setValueAtTime(.08,t);g.gain.exponentialRampToValueAtTime(.001,t+.06);
-    n.connect(f);f.connect(g);g.connect(this.musicGain);n.start(t);
-  },
-  _hihat(t,accent){
-    if(!this.ctx)return;
-    const sr=this.ctx.sampleRate;
-    const buf=this.ctx.createBuffer(1,~~(sr*.05),sr);const d=buf.getChannelData(0);
-    for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
-    const n=this.ctx.createBufferSource();n.buffer=buf;
-    const f=this.ctx.createBiquadFilter();f.type='highpass';f.frequency.value=8000;
-    const g=this.ctx.createGain();g.gain.setValueAtTime(accent?.24:.1,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);
-    n.connect(f);f.connect(g);g.connect(this.musicGain);n.start(t);
-  },
-  _openHat(t){
-    if(!this.ctx)return;
-    const sr=this.ctx.sampleRate;
-    const buf=this.ctx.createBuffer(1,~~(sr*.14),sr);const d=buf.getChannelData(0);
-    for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
-    const n=this.ctx.createBufferSource();n.buffer=buf;
-    const f=this.ctx.createBiquadFilter();f.type='highpass';f.frequency.value=6000;
-    const g=this.ctx.createGain();g.gain.setValueAtTime(.12,t);g.gain.exponentialRampToValueAtTime(.001,t+.14);
-    n.connect(f);f.connect(g);g.connect(this.musicGain);n.start(t);
-  },
-  _bass(t,freq,dur){
-    if(!this.ctx)return;
+  _brass(freq,t,dur,vol,dest){
+    // Brassy tone: sawtooth + lowpass + slight distortion
     const o=this.ctx.createOscillator(),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain();
     o.type='sawtooth';o.frequency.value=freq;
-    f.type='lowpass';f.frequency.value=280;f.Q.value=3;
-    g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(.75,t+.02);
-    g.gain.setValueAtTime(.68,t+dur-.06);g.gain.linearRampToValueAtTime(.001,t+dur);
-    o.connect(f);f.connect(g);g.connect(this.musicGain);o.start(t);o.stop(t+dur+.05);
-    const sub=this.ctx.createOscillator(),sg=this.ctx.createGain();
-    sub.type='sine';sub.frequency.value=freq/2;
-    sg.gain.setValueAtTime(.001,t);sg.gain.linearRampToValueAtTime(.45,t+.02);sg.gain.setValueAtTime(.4,t+dur-.06);sg.gain.linearRampToValueAtTime(.001,t+dur);
-    sub.connect(sg);sg.connect(this.musicGain);sub.start(t);sub.stop(t+dur+.05);
+    f.type='lowpass';f.frequency.value=1800+freq*2;f.Q.value=1.2;
+    g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(vol,t+.06);
+    g.gain.setValueAtTime(vol*.85,t+dur-.08);g.gain.linearRampToValueAtTime(.001,t+dur);
+    o.connect(f);f.connect(g);g.connect(dest);o.start(t);o.stop(t+dur+.05);
+    // overtone
+    const o2=this.ctx.createOscillator(),g2=this.ctx.createGain();
+    o2.type='sine';o2.frequency.value=freq*2;
+    g2.gain.setValueAtTime(.001,t);g2.gain.linearRampToValueAtTime(vol*.2,t+.04);g2.gain.linearRampToValueAtTime(.001,t+dur);
+    o2.connect(g2);g2.connect(dest);o2.start(t);o2.stop(t+dur+.05);
   },
-  _pad(t,dur){
-    if(!this.ctx)return;
-    const chords=[[110,138,165],[98,123,147],[117,147,174],[92,116,138]];
-    const ch=chords[~~(Math.random()*chords.length)];
-    ch.forEach((freq,i)=>{
-      const o=this.ctx.createOscillator(),g=this.ctx.createGain(),dl=this.ctx.createDelay(.6),fb=this.ctx.createGain();
-      o.type=i===0?'sine':'triangle';o.frequency.value=freq;o.detune.value=(Math.random()-.5)*8;
-      fb.gain.value=.32;dl.connect(fb);fb.connect(dl);
-      g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(.05,t+2);g.gain.setValueAtTime(.045,t+dur-2);g.gain.linearRampToValueAtTime(.001,t+dur);
-      o.connect(g);g.connect(dl);g.connect(this.musicGain);dl.connect(this.musicGain);
-      o.start(t);o.stop(t+dur+.1);
+  _strings(freqs,t,dur,vol,dest){
+    freqs.forEach((freq,i)=>{
+      const o=this.ctx.createOscillator(),g=this.ctx.createGain(),vib=this.ctx.createOscillator(),vg=this.ctx.createGain();
+      o.type='sawtooth';o.frequency.value=freq;o.detune.value=(i%2?4:-4);
+      vib.frequency.value=5.5;vg.gain.value=5;vib.connect(vg);vg.connect(o.frequency);
+      g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(vol,t+.18);
+      g.gain.setValueAtTime(vol*.88,t+dur-.2);g.gain.linearRampToValueAtTime(.001,t+dur);
+      const f=this.ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=2200;
+      o.connect(f);f.connect(g);g.connect(dest);vib.start(t);o.start(t);o.stop(t+dur+.05);vib.stop(t+dur+.05);
     });
   },
-  _lead(t,dur){
-    if(!this.ctx)return;
-    const scale=[220,246,262,294,330,370,392,440];
-    const steps=8;const beatLen=dur/steps;
-    for(let i=0;i<steps;i++){
-      if(Math.random()<.3)continue;
-      const freq=scale[~~(Math.random()*scale.length)];
-      const st=t+i*beatLen;
-      const o=this.ctx.createOscillator(),g=this.ctx.createGain(),f=this.ctx.createBiquadFilter();
-      o.type='square';o.frequency.value=freq;o.detune.value=(Math.random()-.5)*15;
-      f.type='lowpass';f.frequency.value=1600+Math.random()*600;
-      g.gain.setValueAtTime(.001,st);g.gain.linearRampToValueAtTime(.038,st+.015);
-      g.gain.setValueAtTime(.032,st+beatLen*.7);g.gain.linearRampToValueAtTime(.001,st+beatLen*.9);
-      o.connect(f);f.connect(g);g.connect(this.musicGain);o.start(st);o.stop(st+beatLen);
-    }
+  _bass007(freq,t,dur,vol,dest){
+    // The classic walking bass feel
+    const o=this.ctx.createOscillator(),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain();
+    o.type='triangle';o.frequency.value=freq;
+    f.type='lowpass';f.frequency.value=400;f.Q.value=2;
+    g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(vol,t+.03);
+    g.gain.setValueAtTime(vol*.8,t+dur-.05);g.gain.linearRampToValueAtTime(.001,t+dur);
+    o.connect(f);f.connect(g);g.connect(dest);o.start(t);o.stop(t+dur+.05);
   },
-  _industrial(t,dur){
-    if(!this.ctx)return;
-    // Distorted metallic texture — industrial layer
-    const o=this.ctx.createOscillator(),dist=this.ctx.createWaveShaper(),g=this.ctx.createGain();
-    const curve=new Float32Array(256);for(let i=0;i<256;i++){const x=i*2/256-1;curve[i]=Math.tanh(x*6);}
-    dist.curve=curve;
-    o.type='sawtooth';o.frequency.value=55+Math.random()*20;
-    g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(.022,t+1);
-    g.gain.setValueAtTime(.018,t+dur-1);g.gain.linearRampToValueAtTime(.001,t+dur);
-    o.connect(dist);dist.connect(g);g.connect(this.musicGain);o.start(t);o.stop(t+dur);
+  _kik(t,dest){
+    const o=this.ctx.createOscillator(),g=this.ctx.createGain();
+    o.frequency.setValueAtTime(140,t);o.frequency.exponentialRampToValueAtTime(35,t+.18);
+    g.gain.setValueAtTime(1.3,t);g.gain.exponentialRampToValueAtTime(.001,t+.22);
+    o.connect(g);g.connect(dest);o.start(t);o.stop(t+.25);
+  },
+  _snr(t,dest,vol=.55){
+    const sr=this.ctx.sampleRate,buf=this.ctx.createBuffer(1,~~(sr*.16),sr),d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+    const n=this.ctx.createBufferSource(),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain();
+    n.buffer=buf;f.type='bandpass';f.frequency.value=1400;f.Q.value=.8;
+    g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+.16);
+    n.connect(f);f.connect(g);g.connect(dest);n.start(t);
+  },
+  _hat(t,dest,vol=.12){
+    const sr=this.ctx.sampleRate,buf=this.ctx.createBuffer(1,~~(sr*.04),sr),d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+    const n=this.ctx.createBufferSource(),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain();
+    n.buffer=buf;f.type='highpass';f.frequency.value=9000;
+    g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+.04);
+    n.connect(f);f.connect(g);g.connect(dest);n.start(t);
+  },
+  _rimshot(t,dest){
+    const o=this.ctx.createOscillator(),g=this.ctx.createGain();
+    o.type='triangle';o.frequency.setValueAtTime(900,t);o.frequency.exponentialRampToValueAtTime(200,t+.04);
+    g.gain.setValueAtTime(.35,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);
+    o.connect(g);g.connect(dest);o.start(t);o.stop(t+.06);
+  },
+  _pad007(freqs,t,dur,vol,dest){
+    const dl=this.ctx.createDelay(.55),fb=this.ctx.createGain();
+    fb.gain.value=.35;dl.connect(fb);fb.connect(dl);dl.connect(dest);
+    freqs.forEach(freq=>{
+      const o=this.ctx.createOscillator(),g=this.ctx.createGain();
+      o.type='sine';o.frequency.value=freq;o.detune.value=(Math.random()-.5)*8;
+      g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(vol,t+1.2);
+      g.gain.setValueAtTime(vol*.9,t+dur-1.2);g.gain.linearRampToValueAtTime(.001,t+dur);
+      o.connect(g);g.connect(dl);g.connect(dest);o.start(t);o.stop(t+dur+.1);
+    });
+  },
+
+  // ── TRACK 1: "Goldeneye" — Classic 007 big band swagger, 128BPM ──
+  _track_goldeneye(){
+    const B=this._beat(128),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    const bassLine=[55,55,49,52,55,58,55,52,55,55,49,52,58,55,52,49];
+    const brassNotes=[[220,277,330],[196,247,311],[208,261,329],[185,233,294]];
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      // Rhythm
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s%4===0)this._kik(st,D);
+        if(s===4||s===12)this._snr(st,D);
+        if(s%2===1)this._hat(st,D,s%4===3?.2:.1);
+        if(s%4===2)this._rimshot(st,D);
+      }
+      // Bass walk
+      const bFreq=bassLine[bar%bassLine.length];
+      this._bass007(bFreq,t,B*1.9,.7,D);this._bass007(bFreq*.75,t+B*2,B*1.9,.6,D);
+      // Brass stabs every 2 bars
+      if(bar%2===0){
+        const ch=brassNotes[(bar/2)%4];
+        ch.forEach(f=>this._brass(f,t+B*.5,B*.4,.055,D));
+        ch.forEach(f=>this._brass(f,t+B*2.5,B*.4,.05,D));
+      }
+      // Strings swell
+      if(bar%4===0)this._strings([330,415,494],t,B*4,.04,D);
+    }
+    return dur;
+  },
+
+  // ── TRACK 2: "Thunderball" — Dark minor tension, 110BPM ──
+  _track_thunderball(){
+    const B=this._beat(110),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    const minor=[110,123,138,147,165,185,196,220];
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s%8===0)this._kik(st,D);if(s%8===4){this._kik(st,D);this._kik(st+B*.5,D);}
+        if(s===5||s===13)this._snr(st,D,.7);
+        this._hat(st,D,.08);
+      }
+      // Ominous bass
+      const bIdx=bar%minor.length;
+      this._bass007(minor[bIdx]/2,t,B*3.8,.75,D);
+      // Tense string stabs
+      if(bar%2===0){[196,247,294].forEach(f=>this._strings([f],t+B*.25,B*.7,.045,D));}
+      // Dark pad
+      this._pad007([110,138,165],t,B*4,.03,D);
+      // Brass accent every 4 bars
+      if(bar%4===3)this._brass(220,t+B*3,B,.07,D);
+    }
+    return dur;
+  },
+
+  // ── TRACK 3: "Silhouette" — Sultry slow burn, 96BPM ──
+  _track_silhouette(){
+    const B=this._beat(96),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      // Half-time feel
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s===0||s===6)this._kik(st,D);
+        if(s===8)this._snr(st,D,.5);
+        if(s%2===0)this._hat(st,D,.09);
+      }
+      // Slow walking bass
+      const bassSeq=[82,82,73,77,82,87,82,77];
+      this._bass007(bassSeq[bar%8],t,B*3.5,.65,D);
+      // Silky strings
+      this._strings([165,196,247],t,B*4,.038,D);
+      if(bar%2===0)this._strings([247,311,370],t+B*2,B*2,.03,D);
+      // Muted brass
+      if(bar%4===1||bar%4===3)this._brass(220,t+B,B*.6,.04,D);
+      this._pad007([82,104,123],t,B*4,.025,D);
+    }
+    return dur;
+  },
+
+  // ── TRACK 4: "Shadow Op" — Tense action, 140BPM ──
+  _track_shadow_op(){
+    const B=this._beat(140),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s%4===0)this._kik(st,D);
+        if(s===4||s===12||s===14)this._snr(st,D);
+        if(s%2===1)this._hat(st,D,s%4===3?.22:.1);
+        if(s%8===6)this._rimshot(st,D);
+      }
+      // Driving bass
+      [65,65,49,58,65,73,65,58].forEach((f,i)=>i<2&&this._bass007(f,t+i*B*2,B*1.8,.7,D));
+      // Brass punches
+      if(bar%2===0){[294,370,440].forEach(f=>this._brass(f,t,B*.25,.06,D));}
+      if(bar%4===2){[247,311,370].forEach(f=>this._brass(f,t+B*2.5,B*.3,.055,D));}
+      // Action strings
+      if(bar%4===0)this._strings([330,415,494,587],t,B*4,.042,D);
+    }
+    return dur;
+  },
+
+  // ── TRACK 5: "Zero Hour" — Epic climax, 120BPM ──
+  _track_zero_hour(){
+    const B=this._beat(120),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s%4===0)this._kik(st,D);
+        if(s===4||s===12)this._snr(st,D,.65);
+        if(s%2===1)this._hat(st,D,.13);
+      }
+      // Heroic bass
+      const heroB=[73,73,65,69,73,82,73,65];
+      this._bass007(heroB[bar%8],t,B*3.9,.72,D);
+      // Full brass fanfare every 4 bars
+      if(bar%4===0){
+        [[330,415,494],[294,370,440],[349,440,523]].forEach((ch,ci)=>{
+          ch.forEach(f=>this._brass(f,t+ci*B,B*.8,.065,D));
+        });
+      }
+      // Soaring strings
+      this._strings([440,554,659],t,B*4,.045,D);
+      this._pad007([110,138,165,196],t,B*4,.032,D);
+    }
+    return dur;
+  },
+
+  // ── TRACK 6: "Cold Front" — Icy electronic spy, 118BPM ──
+  _track_cold_front(){
+    const B=this._beat(118),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s%4===0)this._kik(st,D);
+        if(s===4||s===12)this._snr(st,D,.5);
+        if(s%1===0)this._hat(st,D,.06);
+      }
+      // Cold synth bass
+      const cf=[55,55,41,46,55,62,55,49];
+      this._osc('sawtooth',cf[bar%8]/2,t,B*3.8,.35,D);
+      // Icy high synth lead
+      if(bar%2===0){
+        const iceNotes=[523,659,784,698,523,440];
+        iceNotes.forEach((f,i)=>this._osc('square',f,t+i*B*.66,B*.5,.025,D));
+      }
+      this._pad007([55,69,82,98],t,B*4,.03,D);
+      if(bar%4===0)this._strings([220,277,330],t,B*2,.035,D);
+    }
+    return dur;
+  },
+
+  // ── TRACK 7: "Last Asset" — Urgent chase, 132BPM ──
+  _track_last_asset(){
+    const B=this._beat(132),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s%4===0||s%4===3)this._kik(st,D);
+        if(s===4||s===12)this._snr(st,D,.6);
+        if(s%2===1)this._hat(st,D,.11);
+      }
+      const la=[73,73,55,62,65,73,69,62];
+      this._bass007(la[bar%8],t,B*1.7,.7,D);this._bass007(la[bar%8]*.75,t+B*2,B*1.7,.65,D);
+      // Urgent brass stabs
+      if(bar%2===0)[311,392,466].forEach(f=>this._brass(f,t,B*.2,.07,D));
+      if(bar%2===1)[294,370,440].forEach(f=>this._brass(f,t+B*3,B*.2,.06,D));
+      if(bar%4===0)this._strings([330,415,494],t,B*4,.04,D);
+      this._pad007([73,92,110],t,B*4,.022,D);
+    }
+    return dur;
+  },
+
+  // ── TRACK 8: "Cipher" — Mysterious slow intel, 90BPM ──
+  _track_cipher(){
+    const B=this._beat(90),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s===0||s===10)this._kik(st,D);
+        if(s===6||s===14)this._snr(st,D,.45);
+        if(s%4===2)this._hat(st,D,.08);
+      }
+      // Mysterious descending bass
+      const cipher=[82,77,73,69,82,77,73,65];
+      this._bass007(cipher[bar%8]/2,t,B*3.8,.6,D);
+      // Eerie synth
+      if(bar%2===0){[196,246,293].forEach((f,i)=>this._osc('sine',f,t+i*B*.9,B*.7,.032,D));}
+      this._pad007([82,103,123,146],t,B*4,.038,D);
+      // Sparse string
+      if(bar%4===0)this._strings([165,196,233],t+B,B*3,.03,D);
+    }
+    return dur;
+  },
+
+  // ── TRACK 9: "Double Blind" — Groovy spy funk, 115BPM ──
+  _track_double_blind(){
+    const B=this._beat(115),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s===0||s===6||s===10)this._kik(st,D);
+        if(s===4||s===12||s===14)this._snr(st,D,.55);
+        if(s%2===1)this._hat(st,D,s%4===1?.18:.09);
+      }
+      // Funky walking bass
+      const db=[82,82,73,77,82,87,92,87,82,77,73,69,82,77,73,65];
+      this._bass007(db[bar%16],t,B*.95,.68,D);this._bass007(db[(bar+1)%16],t+B,B*.95,.65,D);
+      this._bass007(db[(bar+2)%16],t+B*2,B*.95,.62,D);this._bass007(db[(bar+3)%16],t+B*3,B*.95,.6,D);
+      // Funky brass
+      if(bar%2===0)[330,415,494].forEach(f=>this._brass(f,t+B*.5,B*.3,.05,D));
+      if(bar%2===1)[311,392,466].forEach(f=>this._brass(f,t+B*2.5,B*.3,.048,D));
+      if(bar%4===0)this._strings([220,277,330],t,B*4,.035,D);
+    }
+    return dur;
+  },
+
+  // ── TRACK 10: "Extraction" — Full orchestral finale, 125BPM ──
+  _track_extraction(){
+    const B=this._beat(125),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s%4===0)this._kik(st,D);
+        if(s===4||s===12)this._snr(st,D,.7);
+        if(s===8)this._snr(st,D,.5);
+        if(s%2===1)this._hat(st,D,.14);
+        if(s%8===6)this._rimshot(st,D);
+      }
+      // Heroic bass + counter
+      const ex=[73,73,65,69,73,82,77,73];
+      this._bass007(ex[bar%8],t,B*3.8,.73,D);
+      this._bass007(ex[bar%8]/2,t+B*2,B*1.8,.5,D);
+      // Full brass every bar
+      const exBrass=bar%4===0?[330,415,494,587]:bar%4===1?[294,370,440,523]:bar%4===2?[349,440,523,659]:[311,392,466,587];
+      if(bar%2===0)exBrass.forEach(f=>this._brass(f,t,B*.5,.055,D));
+      // Sweeping strings
+      this._strings([440,554,659,784],t,B*4,.048,D);
+      this._strings([220,277,330,392],t+B*2,B*2,.04,D);
+      this._pad007([110,138,165,196,220],t,B*4,.028,D);
+    }
+    return dur;
   },
 
   // ═══════════════════════════════════════════════════════════
@@ -3327,6 +3874,170 @@ Particles.init();
 UI.init();
 Rain.init();
 CharCreator.init();
+// =====================================================================
+//  TUTORIAL SYSTEM
+// =====================================================================
+const Tutorial={
+  step:0,active:false,
+  STEPS:[
+    {
+      icon:'🕵️',title:'WELCOME, AGENT ZERO',
+      body:'You are an elite operative dropped into hostile territory. Eliminate enemies, collect powerful loot, and survive as long as possible.',
+      tip:'Tap NEXT or press Space to continue through this tutorial.',
+      spotlight:null,cardPos:'center',
+    },
+    {
+      icon:'🕹️',title:'MOVEMENT',
+      body:IS_MOB
+        ?'Use the LEFT joystick to move your agent. Touch and drag anywhere on the left half of the screen. Your character automatically faces the direction you move.'
+        :'Use WASD or arrow keys to move. Hold SHIFT to sprint. Your agent always faces your mouse cursor.',
+      tip:IS_MOB?'The left joystick appears wherever you first touch — no fixed position needed.':'Sprint uses more stamina but covers ground much faster.',
+      spotlight:null,cardPos:'center',
+    },
+    {
+      icon:'🎯',title:'AIMING & SHOOTING',
+      body:IS_MOB
+        ?'Use the RIGHT joystick to aim and auto-fire. Drag it toward any enemy — your agent shoots automatically in that direction.'
+        :'Move your mouse to aim. Left-click to shoot. Hit enemies in the head for 3× damage.',
+      tip:'HEADSHOTS deal 3× damage and trigger a screen flash. Aim high!',
+      spotlight:IS_MOB?'rj':null,cardPos:'center',
+    },
+    {
+      icon:'⚡',title:'DODGE ROLL',
+      body:IS_MOB
+        ?'Tap the ROLL button to dodge in your movement direction. You are completely invincible during a roll — use it to escape bullets.'
+        :'Press SPACE to dodge roll in your movement direction. You\'re invincible during the roll animation.',
+      tip:'Dodge has a ~1.4s cooldown. Upgrade it in the Skill Tree to reduce it by 25% per level.',
+      spotlight:'btn-roll',cardPos:'top',arrow:'up',
+    },
+    {
+      icon:'🔄',title:'RELOADING',
+      body:IS_MOB
+        ?'Tap the RELOAD button (↺) to reload manually. Your weapon auto-reloads when empty. Watch the reload bar at the bottom center.'
+        :'Press R to reload. Your weapon auto-reloads when empty. A bar shows reload progress.',
+      tip:'Reload between fights, not during them. SMGs reload fast — Shotguns and Snipers are slow.',
+      spotlight:'btn-reload',cardPos:'top',arrow:'up',
+    },
+    {
+      icon:'📊',title:'YOUR STATUS BARS',
+      body:'Bottom-left shows three vital bars:\n🔴 HEALTH — reaches zero and you\'re dead\n🔵 ARMOR — absorbs 30–60% of damage before health\n🟣 EXPERIENCE — fills up to earn skill points on level up',
+      tip:'Armor is your best friend. Equip better armor pieces from loot and the Hub shop.',
+      spotlight:'status-bars',cardPos:'top',arrow:'down',
+    },
+    {
+      icon:'⬡',title:'LOOT SYSTEM',
+      body:'Enemies drop colored loot diamonds — walk into them to pick up automatically. Rarity tiers from worst to best:\n⬜ Common  🟩 Uncommon  🔵 Rare  🟣 Epic  🟡 Legendary  🔴 Exotic',
+      tip:'Legendary and Exotic weapons have insane stats and unique names. Always pick up orange+ rarity.',
+      spotlight:'loot-log',cardPos:'bottom',arrow:'up',
+    },
+    {
+      icon:'🔧',title:'ACTIVE SKILLS',
+      body:'You have 4 skills on cooldown — use them constantly:\n🔧 DRONE — heals you over time\n⚡ EMP — stuns all nearby enemies\n💣 GRENADE — physics grenade, big AOE blast\n🛡 SHIELD — 75% damage reduction for 30 seconds',
+      tip:IS_MOB?'Tap the skill buttons at the bottom center to activate them.':'Press Q E F X to use skills. Never let them sit off cooldown!',
+      spotlight:IS_MOB?'mob-skills':'skill-bar',cardPos:'top',arrow:'down',
+    },
+    {
+      icon:'🗺️',title:'ZONE PROGRESSION',
+      body:'The orange kill bar (top-left, under the zone name) shows your progress. Kill enemies to fill it — when full you automatically advance to the next zone.\n\nEvery 3rd zone spawns a BOSS.',
+      tip:'Bosses drop 2 Legendary + 1 Exotic item guaranteed. They appear with a red HP bar at the top.',
+      spotlight:'zone-info',cardPos:'bottom',arrow:'up',
+    },
+    {
+      icon:'🗓️',title:'TACTICAL MAP',
+      body:'Tap the minimap (top-right) to open a full-screen tactical overview. It shows your position, all enemies, loot drops, chest locations, and room layouts.',
+      tip:'The map pauses the game automatically. Use it to spot loot before committing to a fight.',
+      spotlight:'minimap',cardPos:'bottom',arrow:'up',
+    },
+    {
+      icon:'🏙️',title:'SHADOW CITY HUB',
+      body:'Between missions, return to the Hub to upgrade your agent:\n🛒 MARKET — buy weapons & armor\n🌳 SKILLS — upgrade your skill tree\n📦 STASH — permanent loot storage\n🥊 ARENA — bet credits on fights\n🤝 MERCS — hire mercenaries for passive bonuses',
+      tip:IS_MOB?'Tap the HUB button (top-left) to return any time. Progress saves automatically.':'Press H during a mission to return to the Hub at any time.',
+      spotlight:IS_MOB?'btn-hub':null,cardPos:'center',
+    },
+    {
+      icon:'⏸',title:'PAUSE & SETTINGS',
+      body:'Tap the PAUSE button (⏸ top-left, next to zone name) to pause the game at any time. From the pause menu you can:\n💾 Save your game manually\n⚙ Adjust music and SFX volume\n⚙ Toggle performance mode for older devices',
+      tip:'The game also auto-saves every 90 seconds and when you return to the Hub.',
+      spotlight:'btn-pause',cardPos:'bottom',arrow:'up',
+    },
+    {
+      icon:'✅',title:'YOU\'RE READY, ZERO',
+      body:'That\'s everything you need to survive. Stay aggressive, upgrade constantly, and always grab the best loot.\n\nShadow City doesn\'t forgive hesitation.\n\nGood luck, Agent.',
+      tip:'',
+      spotlight:null,cardPos:'center',
+    },
+  ],
+
+  start(isNewGame){
+    if(!isNewGame)return;
+    this.step=0;this.active=true;
+    gameRunning=false;
+    document.getElementById('tutorial-screen').classList.add('on');
+    this._render();
+  },
+
+  _render(){
+    const s=this.STEPS[this.step],total=this.STEPS.length;
+    document.getElementById('tut-step-badge').textContent=`${String(this.step+1).padStart(2,'0')} / ${String(total).padStart(2,'0')}`;
+    document.getElementById('tut-icon').textContent=s.icon;
+    document.getElementById('tut-title').textContent=s.title;
+    // Replace \n with line breaks
+    const bodyEl=document.getElementById('tut-body');
+    bodyEl.innerHTML=s.body.replace(/\n/g,'<br>');
+    document.getElementById('tut-progress-fill').style.width=((this.step+1)/total*100)+'%';
+    document.getElementById('tut-next').textContent=this.step===total-1?'START MISSION  ▶':'NEXT  ›';
+    // Tip
+    const tipEl=document.getElementById('tut-tip');
+    if(s.tip){tipEl.innerHTML='💡 '+s.tip;tipEl.className='has-tip';}
+    else{tipEl.innerHTML='';tipEl.className='';}
+    // Card position
+    const card=document.getElementById('tut-card');
+    card.style.top='';card.style.bottom='';card.style.transform='translateX(-50%)';
+    if(s.cardPos==='center'){card.style.top='50%';card.style.transform='translateX(-50%) translateY(-50%)';}
+    else if(s.cardPos==='top'){card.style.top='calc(env(safe-area-inset-top,0px) + 10px)';}
+    else{card.style.bottom='calc(env(safe-area-inset-bottom,0px) + 10px)';}
+    // Spotlight
+    this._spotlight(s.spotlight,s.arrow);
+  },
+
+  _spotlight(targetId,arrowDir){
+    const sp=document.getElementById('tut-spotlight'),arrow=document.getElementById('tut-arrow');
+    if(!targetId){sp.classList.remove('on');arrow.style.display='none';return;}
+    const el=document.getElementById(targetId);
+    if(!el||el.style.display==='none'){sp.classList.remove('on');arrow.style.display='none';return;}
+    const r=el.getBoundingClientRect(),pad=10;
+    sp.style.left=(r.left-pad)+'px';sp.style.top=(r.top-pad)+'px';
+    sp.style.width=(r.width+pad*2)+'px';sp.style.height=(r.height+pad*2)+'px';
+    sp.classList.add('on');
+    if(arrowDir==='up'){
+      arrow.className='up';arrow.style.display='block';
+      arrow.style.left=(r.left+r.width/2-10)+'px';arrow.style.top=(r.bottom+pad+4)+'px';
+    } else if(arrowDir==='down'){
+      arrow.className='down';arrow.style.display='block';
+      arrow.style.left=(r.left+r.width/2-10)+'px';arrow.style.top=(r.top-pad-18)+'px';
+    } else {arrow.style.display='none';}
+  },
+
+  next(){
+    if(this.step<this.STEPS.length-1){this.step++;this._render();}
+    else this.finish();
+  },
+
+  finish(){
+    this.active=false;
+    document.getElementById('tutorial-screen').classList.remove('on');
+    document.getElementById('tut-spotlight').classList.remove('on');
+    document.getElementById('tut-arrow').style.display='none';
+    gameRunning=true;Audio.uiClick();
+    const wb=document.getElementById('wave-banner');
+    if(wb){wb.textContent='GOOD LUCK, ZERO';wb.style.display='block';wb.style.animation='none';void wb.offsetWidth;wb.style.animation='waveflash 2.4s ease forwards';setTimeout(()=>wb.style.display='none',2400);}
+  },
+};
+function tutNext(){Tutorial.next();}
+function tutSkip(){Tutorial.finish();}
+// Space bar also advances tutorial
+window.addEventListener('keydown',e=>{if(Tutorial.active&&(e.code==='Space'||e.code==='Enter')){e.preventDefault();Tutorial.next();}},true);
+
 Audio.init();
 
 // Menu background scene - minimal light, no crash risk
