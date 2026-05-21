@@ -387,22 +387,58 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:#000;
 .bitem .bname{font-weight:bold;margin-bottom:2px}
 
 /* ──────────────────────────────────────────────────────
-   DEATH SCREEN
+   FATE-STYLE DEATH SCREEN
 ────────────────────────────────────────────────────── */
-#death-screen{background:rgba(0,0,0,.97);z-index:200;pointer-events:auto;
-  position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center}
+#death-screen{background:rgba(0,0,0,.96);z-index:200;pointer-events:auto;
+  position:fixed;inset:0;display:none;flex-direction:column;align-items:center;
+  justify-content:flex-start;padding-top:max(env(safe-area-inset-top,0px),30px);
+  overflow-y:auto}
 #death-screen.on{display:flex}
-.death-title{font-family:'Courier New',monospace;font-size:clamp(26px,7vw,44px);
-  letter-spacing:7px;color:#cc1100;text-shadow:0 0 38px #ff2200;text-align:center}
-.death-stats{font-family:'Courier New',monospace;font-size:10px;color:#333;margin-top:16px;
-  letter-spacing:4px;text-align:center}
-.death-btn{margin-top:24px;font-family:'Courier New',monospace;font-size:10px;
-  color:#e67e22;letter-spacing:4px;cursor:pointer;text-align:center;
-  border:1px solid rgba(230,126,34,.35);padding:14px 30px;
-  background:rgba(230,126,34,.06);-webkit-tap-highlight-color:transparent;transition:background .15s}
-.death-btn:hover,.death-btn:active{background:rgba(230,126,34,.18)}
-.death-sub{margin-top:10px;font-family:'Courier New',monospace;font-size:8px;color:#334;
-  letter-spacing:3px;cursor:pointer;padding:9px 18px;-webkit-tap-highlight-color:transparent}
+
+/* Red vignette bleed */
+#death-screen::before{content:'';position:fixed;inset:0;pointer-events:none;
+  box-shadow:inset 0 0 120px rgba(180,0,0,.35);z-index:0}
+
+.death-inner{position:relative;z-index:1;width:100%;max-width:380px;
+  padding:0 20px 40px;display:flex;flex-direction:column;align-items:center}
+
+.death-skull{font-size:52px;margin-bottom:8px;filter:drop-shadow(0 0 18px rgba(200,0,0,.7))}
+.death-title{font-family:'Courier New',monospace;font-size:clamp(28px,7vw,46px);
+  letter-spacing:8px;color:#cc1100;text-shadow:0 0 38px #ff2200;text-align:center;
+  margin-bottom:4px}
+.death-zone-line{font-size:11px;letter-spacing:3px;color:#556;margin-bottom:22px;text-align:center}
+
+/* Penalty box */
+.death-penalty-box{width:100%;border:1px solid rgba(200,0,0,.3);background:rgba(120,0,0,.12);
+  padding:16px;margin-bottom:16px}
+.death-penalty-title{font-size:10px;letter-spacing:3px;color:#cc3300;margin-bottom:12px}
+.death-penalty-row{display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:8px;font-size:12px;letter-spacing:1px}
+.death-penalty-label{color:#8899aa}
+.death-penalty-val{color:#e74c3c;font-weight:bold}
+.death-penalty-val.kept{color:#2ecc71}
+.death-penalty-val.warn{color:#f39c12}
+
+/* Gravestone notice */
+.death-grave-box{width:100%;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02);
+  padding:14px;margin-bottom:20px;text-align:center}
+.death-grave-icon{font-size:26px;margin-bottom:6px}
+.death-grave-title{font-size:11px;letter-spacing:3px;color:#8899aa;margin-bottom:4px}
+.death-grave-desc{font-size:11px;color:#556;letter-spacing:.5px;line-height:1.7}
+
+/* Action buttons */
+.death-actions{width:100%;display:flex;flex-direction:column;gap:10px}
+.death-btn-main{padding:16px;border:1px solid rgba(230,126,34,.4);background:rgba(230,126,34,.1);
+  color:#e67e22;font-family:'Courier New',monospace;font-size:13px;letter-spacing:3px;
+  cursor:pointer;text-align:center;width:100%;-webkit-tap-highlight-color:transparent;
+  transition:all .15s}
+.death-btn-main:hover,.death-btn-main:active{background:rgba(230,126,34,.22)}
+.death-btn-revive{border-color:rgba(46,204,113,.4);background:rgba(46,204,113,.08);color:#2ecc71}
+.death-btn-revive:hover{background:rgba(46,204,113,.2)}
+.death-btn-revive:disabled{opacity:.35;cursor:not-allowed}
+.death-btn-secondary{padding:12px;border:1px solid rgba(255,255,255,.08);background:transparent;
+  color:#556;font-family:'Courier New',monospace;font-size:11px;letter-spacing:3px;
+  cursor:pointer;text-align:center;width:100%;-webkit-tap-highlight-color:transparent}
 
 /* ──────────────────────────────────────────────────────
    MOBILE LAYOUT
@@ -507,9 +543,11 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:#000;
 #bag-count{font-size:11px!important;color:#8899aa!important}
 
 /* Death screen */
-.death-stats{font-size:14px!important;color:#8899aa!important}
-.death-btn{font-size:14px!important;padding:18px 36px!important}
-.death-sub{font-size:13px!important;color:#8899aa!important}
+.death-zone-line{font-size:13px!important;color:#8899aa!important}
+.death-penalty-title{font-size:13px!important}
+.death-penalty-row{font-size:13px!important}
+.death-grave-title{font-size:13px!important}
+.death-grave-desc{font-size:12px!important}
 
 /* ══════════════════════════════════════════════════════
    PAUSE SCREEN
@@ -720,6 +758,25 @@ input[type=range]::-webkit-slider-thumb{
 }
 .slot-del:hover{color:#e74c3c}
 .slot-del.hidden{display:none}
+/* ══════════════════════════════════════════════════════
+   LOGIN REWARD & DAILY CHALLENGE
+══════════════════════════════════════════════════════ */
+.lr-item{display:flex;align-items:center;gap:10px;padding:10px 12px;
+  border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
+.lr-item-icon{font-size:22px;flex-shrink:0}
+.lr-item-text{flex:1;text-align:left}
+.lr-item-name{font-size:12px;letter-spacing:1px;color:#bcc8d4;margin-bottom:2px}
+.lr-item-val{font-size:13px;font-weight:bold;letter-spacing:1px}
+.daily-mod{padding:10px 12px;border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.03);display:flex;gap:10px;align-items:flex-start}
+.daily-mod-icon{font-size:18px;flex-shrink:0;margin-top:1px}
+.daily-mod-name{font-size:12px;letter-spacing:2px;color:#ffd700;margin-bottom:2px}
+.daily-mod-desc{font-size:11px;color:#8899aa;letter-spacing:.5px}
+.streak-pip{display:inline-block;width:18px;height:18px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.15);margin:2px;vertical-align:middle;font-size:10px;
+  line-height:18px;text-align:center}
+.streak-pip.done{background:#ffd700;border-color:#ffd700;color:#000}
+.streak-pip.today{background:rgba(255,215,0,.3);border-color:#ffd700}
 </style>
 </head>
 <body>
@@ -736,6 +793,20 @@ input[type=range]::-webkit-slider-thumb{
     <button class="mbtn accent hide" id="mb-continue" onclick="menuContinue()">▶&nbsp; CONTINUE</button>
     <button class="mbtn" id="mb-new" onclick="menuNewGame()">NEW MISSION</button>
     <button class="mbtn" id="mb-load" onclick="menuLoad()">LOAD SAVE</button>
+  </div>
+</div>
+
+<!-- LOGIN REWARD POPUP -->
+<div id="login-reward" class="overlay" style="z-index:200;background:rgba(0,0,0,.96)">
+  <div class="scanlines"></div>
+  <div style="position:relative;z-index:1;text-align:center;padding:28px 24px;max-width:320px;border:1px solid rgba(255,215,0,.3);background:rgba(5,5,12,.98)">
+    <div id="lr-streak-badge" style="font-size:10px;letter-spacing:3px;color:#ffd700;margin-bottom:8px"></div>
+    <div style="font-size:44px;margin-bottom:10px" id="lr-icon">🎁</div>
+    <div style="font-size:18px;letter-spacing:5px;color:#ffd700;margin-bottom:6px;text-shadow:0 0 20px rgba(255,215,0,.4)">DAILY REWARD</div>
+    <div style="font-size:12px;letter-spacing:2px;color:#8899aa;margin-bottom:20px" id="lr-sub">Welcome back, Zero</div>
+    <div id="lr-rewards" style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px"></div>
+    <div style="font-size:11px;color:#556;letter-spacing:2px;margin-bottom:18px" id="lr-next">Next reward in 24 hours</div>
+    <button class="mbtn" style="width:100%;border-color:rgba(255,215,0,.4);color:#ffd700;font-size:14px" onclick="claimLoginReward()">✦ CLAIM REWARD</button>
   </div>
 </div>
 
@@ -890,6 +961,7 @@ input[type=range]::-webkit-slider-thumb{
     <div class="shop-grid" id="mercs-grid"></div>
     <div style="margin-top:10px;font-size:7px;color:#334" id="active-merc-display"></div>
   </div>
+
 </div>
 
 <!-- HUD -->
@@ -983,8 +1055,34 @@ input[type=range]::-webkit-slider-thumb{
   <div class="pause-btns">
     <button class="pbtn primary" onclick="togglePause()">▶ &nbsp;RESUME</button>
     <button class="pbtn" onclick="pauseSave()">💾 &nbsp;SAVE GAME</button>
+    <button class="pbtn" id="pbtn-daily" onclick="togglePauseDaily()" style="color:#ffd700;border-color:rgba(255,215,0,.3)">⭐ &nbsp;DAILY CHALLENGE</button>
     <button class="pbtn" id="settings-toggle" onclick="togglePauseSettings()">⚙ &nbsp;SETTINGS</button>
     <button class="pbtn danger" onclick="pauseToMenu()">✕ &nbsp;RETURN TO MENU</button>
+  </div>
+
+  <!-- Daily info panel inside pause -->
+  <div id="pause-daily" style="display:none;width:260px;margin-top:16px;border-top:1px solid rgba(255,255,255,.08);padding-top:20px">
+    <div style="font-size:10px;letter-spacing:3px;color:#ffd700;margin-bottom:4px;text-align:center" id="pause-daily-date"></div>
+    <div style="font-size:11px;letter-spacing:2px;color:#8899aa;text-align:center;margin-bottom:10px">TODAY'S MODIFIERS</div>
+    <div id="pause-daily-mods" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>
+
+    <!-- Goal explanation -->
+    <div style="border:1px solid rgba(255,215,0,.15);background:rgba(255,215,0,.04);padding:12px;margin-bottom:12px">
+      <div style="font-size:10px;letter-spacing:3px;color:#ffd700;margin-bottom:8px">🎯 DAILY GOAL</div>
+      <div style="font-size:11px;color:#bcc8d4;line-height:1.9;letter-spacing:.5px">
+        Survive as many zones as possible and rack up kills. Everyone worldwide plays the same map with the same modifiers today.<br><br>
+        <span style="color:#ffd700">SCORE = Kills × 100 + Zone × 500</span><br><br>
+        Beat your personal best. Resets at midnight UTC.
+      </div>
+    </div>
+
+    <div id="pause-daily-score" style="display:none;text-align:center;padding:10px;border:1px solid rgba(255,215,0,.2);background:rgba(255,215,0,.04);margin-bottom:10px">
+      <div style="font-size:9px;letter-spacing:3px;color:#ffd700">YOUR BEST TODAY</div>
+      <div style="font-size:22px;color:#fff;letter-spacing:2px" id="pause-daily-score-val">—</div>
+      <div style="font-size:9px;color:#556;letter-spacing:1px" id="pause-daily-score-info"></div>
+    </div>
+    <div id="pause-daily-active-notice" style="display:none;font-size:11px;letter-spacing:2px;color:#2ecc71;text-align:center;padding:8px">⭐ DAILY RUN ACTIVE</div>
+    <button id="pause-daily-play-btn" class="pbtn" style="color:#ffd700;border-color:rgba(255,215,0,.35);margin-top:4px" onclick="pauseStartDaily()">▶ &nbsp;PLAY TODAY'S CHALLENGE</button>
   </div>
   <div id="pause-settings">
     <div class="setting-row">
@@ -1045,10 +1143,57 @@ input[type=range]::-webkit-slider-thumb{
 
 <!-- Death Screen -->
 <div id="death-screen">
-  <div class="death-title">AGENT DOWN</div>
-  <div class="death-stats" id="death-stats"></div>
-  <button class="death-btn" id="btn-redeploy" onclick="redeployGame()">▶&nbsp; REDEPLOY</button>
-  <div class="death-sub" id="btn-hub-from-death" onclick="deathGoHub()">RETURN TO HUB</div>
+  <div class="death-inner">
+    <div class="death-skull">💀</div>
+    <div class="death-title">AGENT DOWN</div>
+    <div class="death-zone-line" id="death-zone-line">ZONE 1 · 0 KILLS · LVL 1</div>
+
+    <!-- XP/Credits penalty -->
+    <div class="death-penalty-box">
+      <div class="death-penalty-title">⚠ FIELD CASUALTIES</div>
+      <div class="death-penalty-row">
+        <span class="death-penalty-label">CREDITS LOST</span>
+        <span class="death-penalty-val" id="dp-credits">–0 CR</span>
+      </div>
+      <div class="death-penalty-row">
+        <span class="death-penalty-label">XP LOST</span>
+        <span class="death-penalty-val" id="dp-xp">–0 XP</span>
+      </div>
+      <div class="death-penalty-row">
+        <span class="death-penalty-label">LEVEL</span>
+        <span class="death-penalty-val kept" id="dp-level">KEPT</span>
+      </div>
+      <div class="death-penalty-row">
+        <span class="death-penalty-label">GEAR & WEAPONS</span>
+        <span class="death-penalty-val kept">KEPT</span>
+      </div>
+    </div>
+
+    <!-- Gravestone loot notice -->
+    <div class="death-grave-box" id="death-grave-box" style="display:none">
+      <div class="death-grave-icon">🪦</div>
+      <div class="death-grave-title">GRAVESTONE MARKED</div>
+      <div class="death-grave-desc" id="death-grave-desc">
+        Your dropped loot has been marked on the tactical map.
+        Return to the zone to recover it.
+      </div>
+    </div>
+
+    <div class="death-actions">
+      <!-- Pay to revive in place -->
+      <button class="death-btn-main death-btn-revive" id="death-btn-revive" onclick="deathRevive()">
+        ✦ REVIVE IN PLACE — <span id="death-revive-cost">500 CR</span>
+      </button>
+      <!-- Return to hub (FATE-style town return) -->
+      <button class="death-btn-main" onclick="deathReturnToHub()">
+        🏙 EVACUATE TO SHADOW CITY
+      </button>
+      <!-- Start completely fresh -->
+      <button class="death-btn-secondary" onclick="redeployGame()">
+        ↺ REDEPLOY NEW AGENT
+      </button>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1124,8 +1269,8 @@ const camera = new THREE.PerspectiveCamera(52, window.innerWidth/window.innerHei
 const CAM_OFF = new THREE.Vector3(0, 24, 18);
 let _camLook = new THREE.Vector3();
 const clock  = new THREE.Clock();
-const _gPlane= new THREE.Plane(new THREE.Vector3(0,1,0), 0);
 const _ray   = new THREE.Raycaster();
+const _gPlaneNormal = new THREE.Vector3(0,1,0);
 
 // ── Object Pool ────────────────────────────────────────────────────────
 class Pool {
@@ -1155,7 +1300,13 @@ const Input = {
     window.addEventListener('contextmenu',e=>e.preventDefault());
   },
   down(c){return !!this.keys[c];},
-  updateWorld(){_ray.setFromCamera({x:this.mouse.nx,y:this.mouse.ny},camera);_ray.ray.intersectPlane(_gPlane,this.world);},
+  updateWorld(){
+    _ray.setFromCamera({x:this.mouse.nx,y:this.mouse.ny},camera);
+    // Manual ray-plane intersection at y=0 (replaces THREE.Plane which isn't in r128)
+    const ro=_ray.ray.origin,rd=_ray.ray.direction;
+    const t=rd.y!==0?-ro.y/rd.y:0;
+    this.world.set(ro.x+rd.x*t,0,ro.z+rd.z*t);
+  },
   firing(){return this.mouse.btn||this.mAiming;},
 };
 Input.init();
@@ -1226,10 +1377,11 @@ function setState(s) {
 // =====================================================================
 const Map3D = {
   group:null, collidables:[], coverPts:[], spawnPts:[], rooms:[], grid:null,
-  lights:[],
+  lights:[], furniture:[], // furniture[] = solid AABB boxes for collision
 
   generate(){
     this.collidables=[]; this.coverPts=[]; this.spawnPts=[]; this.rooms=[];
+    this.furniture=[];
     Loot.chests=[];
     this.lights.forEach(l=>scene.remove(l)); this.lights=[];
     if(this.group)scene.remove(this.group);
@@ -1300,44 +1452,104 @@ const Map3D = {
   _furniture(room,off){
     const rx=off+room.x*C.CELL,rz=off+room.z*C.CELL,rw=room.w*C.CELL,rh=room.h*C.CELL;
     const cx=rx+rw/2,cz=rz+rh/2;
-    const add=(geo,col,x,y,z,ry=0)=>{const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));m.position.set(x,y,z);m.rotation.y=ry;this.group.add(m);return m;};
+    const add=(geo,col,x,y,z,ry=0)=>{
+      const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));
+      m.position.set(x,y,z);m.rotation.y=ry;this.group.add(m);return m;
+    };
+    // solid() — registers a piece as a collidable cover object
+    const solid=(geo,col,x,y,z,ry=0)=>{
+      const m=add(geo,col,x,y,z,ry);
+      m.updateMatrixWorld(true);
+      m.geometry.computeBoundingBox();
+      const bb=m.geometry.boundingBox.clone().applyMatrix4(m.matrixWorld);
+      // Expand bb slightly for reliable collision at character edges
+      bb.expandByScalar(0.15);
+      m.userData.solidBB=bb;
+      this.furniture.push(m);
+      return m;
+    };
     const cov=(x,z)=>this.coverPts.push(new THREE.Vector3(x,0,z));
+
     if(room.type==='start'){add(new THREE.BoxGeometry(1,.8,1),0x2a1a0a,cx,.4,cz);return;}
+
     if(room.type==='office'){
       for(let i=0;i<2+~~(Math.random()*3);i++){
         const fx=rx+1.5+Math.random()*(rw-3),fz=rz+1.5+Math.random()*(rh-3),ry=~~(Math.random()*4)*Math.PI/2;
-        add(new THREE.BoxGeometry(2.2,.08,.95),0x3a2800,fx,.76,fz,ry);
+        // Desk top — solid cover
+        solid(new THREE.BoxGeometry(2.2,.78,.95),0x3a2800,fx,.39,fz,ry);
+        // Monitor — small, not solid
         add(new THREE.BoxGeometry(.05,.55,.42),0x080812,fx+Math.cos(ry+Math.PI/2)*.2,1.1,fz+Math.sin(ry+Math.PI/2)*.2,ry);
         cov(fx,fz);
       }
-      for(let i=0;i<1+~~(Math.random()*3);i++){const fx=rx+.5+Math.random()*(rw-1),fz=rz+.5+Math.random()*(rh-1);add(new THREE.BoxGeometry(.55,1.35,.5),0x2a2a2a,fx,.675,fz);cov(fx,fz);}
+      for(let i=0;i<1+~~(Math.random()*3);i++){
+        const fx=rx+.5+Math.random()*(rw-1),fz=rz+.5+Math.random()*(rh-1);
+        solid(new THREE.BoxGeometry(.55,1.35,.5),0x2a2a2a,fx,.675,fz);
+        cov(fx,fz);
+      }
     }
     else if(room.type==='warehouse'){
-      for(let i=0;i<3+~~(Math.random()*5);i++){const s=.8+Math.random()*.6;const fx=rx+.8+Math.random()*(rw-1.6),fz=rz+.8+Math.random()*(rh-1.6);add(new THREE.BoxGeometry(s,s,s),0x5a3a1a,fx,s/2,fz,Math.random()*Math.PI);cov(fx,fz);}
-      for(let i=0;i<2+~~(Math.random()*3);i++){const fx=rx+.5+Math.random()*(rw-1),fz=rz+.5+Math.random()*(rh-1);add(new THREE.CylinderGeometry(.32,.35,1.05,10),0x223311,fx,.525,fz);}
+      for(let i=0;i<3+~~(Math.random()*5);i++){
+        const s=.8+Math.random()*.6;
+        const fx=rx+.8+Math.random()*(rw-1.6),fz=rz+.8+Math.random()*(rh-1.6);
+        solid(new THREE.BoxGeometry(s,s,s),0x5a3a1a,fx,s/2,fz,Math.random()*Math.PI);
+        cov(fx,fz);
+      }
+      for(let i=0;i<2+~~(Math.random()*3);i++){
+        const fx=rx+.5+Math.random()*(rw-1),fz=rz+.5+Math.random()*(rh-1);
+        solid(new THREE.CylinderGeometry(.32,.35,1.05,10),0x223311,fx,.525,fz);
+      }
     }
     else if(room.type==='garage'){
       const vx=rx+2+Math.random()*(rw-4),vz=rz+2+Math.random()*(rh-4),ry=Math.random()<.5?0:Math.PI/2;
-      add(new THREE.BoxGeometry(4.2,1.1,2),0x2a2a2a,vx,.55,vz,ry);
-      add(new THREE.BoxGeometry(2,.6,1.8),0x222222,vx,1.4,vz,ry);cov(vx,vz);
-      for(let i=0;i<2+~~(Math.random()*4);i++){const fx=rx+.5+Math.random()*(rw-1),fz=rz+.5+Math.random()*(rh-1);add(new THREE.CylinderGeometry(.28,.3,.9,10),0x1a1a0a,fx,.45,fz);}
+      // Car body — big solid cover
+      solid(new THREE.BoxGeometry(4.2,1.1,2),0x2a2a2a,vx,.55,vz,ry);
+      solid(new THREE.BoxGeometry(2,.6,1.8),0x222222,vx,1.4,vz,ry);
+      cov(vx,vz);
+      for(let i=0;i<2+~~(Math.random()*4);i++){
+        const fx=rx+.5+Math.random()*(rw-1),fz=rz+.5+Math.random()*(rh-1);
+        solid(new THREE.CylinderGeometry(.28,.3,.9,10),0x1a1a0a,fx,.45,fz);
+      }
     }
     else if(room.type==='subway'){
-      for(let i=0;i<2+~~(Math.random()*3);i++){const bx=rx+1+Math.random()*(rw-2),bz=rz+1+Math.random()*(rh-2);add(new THREE.BoxGeometry(2.4,.12,.55),0x2a2222,bx,.65,bz);cov(bx,bz);}
-      for(let i=0;i<2+~~(Math.random()*2);i++){const px=rx+Math.random()*rw,pz=rz+Math.random()*rh;add(new THREE.CylinderGeometry(.2,.22,C.WALL_H,8),0x222230,px,C.WALL_H/2,pz);cov(px,pz);}
+      for(let i=0;i<2+~~(Math.random()*3);i++){
+        const bx=rx+1+Math.random()*(rw-2),bz=rz+1+Math.random()*(rh-2);
+        // Benches — solid
+        solid(new THREE.BoxGeometry(2.4,.55,.55),0x2a2222,bx,.275,bz);
+        cov(bx,bz);
+      }
+      for(let i=0;i<2+~~(Math.random()*2);i++){
+        const px=rx+Math.random()*rw,pz=rz+Math.random()*rh;
+        solid(new THREE.CylinderGeometry(.2,.22,C.WALL_H,8),0x222230,px,C.WALL_H/2,pz);
+        cov(px,pz);
+      }
     }
     else if(room.type==='rooftop'){
-      for(let i=0;i<2+~~(Math.random()*3);i++){const hx=rx+1+Math.random()*(rw-2),hz=rz+1+Math.random()*(rh-2);const w=1.2+Math.random()*1.4,d=.9+Math.random();add(new THREE.BoxGeometry(w,1.1,d),0x2a2a2a,hx,.55,hz);cov(hx,hz);}
-      add(new THREE.CylinderGeometry(.8,.9,2,12),0x333322,cx,1,cz);cov(cx,cz);
-      for(let i=0;i<2+~~(Math.random()*3);i++){const bx=rx+1+Math.random()*(rw-2),bz=rz+1+Math.random()*(rh-2);add(new THREE.BoxGeometry(1.5,.85,.3),0x2a2a30,bx,.425,bz,Math.random()*Math.PI);cov(bx,bz);}
+      for(let i=0;i<2+~~(Math.random()*3);i++){
+        const hx=rx+1+Math.random()*(rw-2),hz=rz+1+Math.random()*(rh-2);
+        const w=1.2+Math.random()*1.4,d=.9+Math.random();
+        solid(new THREE.BoxGeometry(w,1.1,d),0x2a2a2a,hx,.55,hz);
+        cov(hx,hz);
+      }
+      solid(new THREE.CylinderGeometry(.8,.9,2,12),0x333322,cx,1,cz);
+      cov(cx,cz);
+      for(let i=0;i<2+~~(Math.random()*3);i++){
+        const bx=rx+1+Math.random()*(rw-2),bz=rz+1+Math.random()*(rh-2);
+        solid(new THREE.BoxGeometry(1.5,.85,.3),0x2a2a30,bx,.425,bz,Math.random()*Math.PI);
+        cov(bx,bz);
+      }
     }
     else if(room.type==='lab'){
-      // Lab equipment
-      for(let i=0;i<3+~~(Math.random()*3);i++){const tx=rx+1+Math.random()*(rw-2),tz=rz+1+Math.random()*(rh-2);add(new THREE.BoxGeometry(1.2,.1,.7),0x334433,tx,.82,tz);add(new THREE.CylinderGeometry(.08,.08,.4,6),0x004444,tx,.62,tz);}
-      // Server racks
-      const sx=rx+.4,sz=rz+.4;add(new THREE.BoxGeometry(.6,2.2,.9),0x111a11,sx,1.1,sz);cov(sx,sz);
-      add(new THREE.BoxGeometry(.6,2.2,.9),0x111a11,sx,1.1,sz+1.1);
-      // Glowing tanks
+      for(let i=0;i<3+~~(Math.random()*3);i++){
+        const tx=rx+1+Math.random()*(rw-2),tz=rz+1+Math.random()*(rh-2);
+        // Lab tables — solid
+        solid(new THREE.BoxGeometry(1.2,.75,.7),0x334433,tx,.375,tz);
+        add(new THREE.CylinderGeometry(.08,.08,.4,6),0x004444,tx,.62,tz);
+      }
+      // Server racks — solid tall cover
+      const sx=rx+.4,sz=rz+.4;
+      solid(new THREE.BoxGeometry(.6,2.2,.9),0x111a11,sx,1.1,sz);
+      solid(new THREE.BoxGeometry(.6,2.2,.9),0x111a11,sx,1.1,sz+1.1);
+      cov(sx,sz);
       const tank=add(new THREE.CylinderGeometry(.3,.3,1.4,10),0x002244,cx,0.7,cz);
       const gl=new THREE.PointLight(0x0088ff,2,4);gl.position.set(cx,1,cz);scene.add(gl);this.lights.push(gl);
     }
@@ -1352,6 +1564,16 @@ const Map3D = {
   },
 
   hitWall(p){for(const w of this.collidables){if(!w.userData.bb){w.geometry.computeBoundingBox();w.userData.bb=w.geometry.boundingBox.clone().applyMatrix4(w.matrixWorld);}if(w.userData.bb.containsPoint(p))return true;}return false;},
+
+  hitFurniture(x,z){
+    // Fast 2D AABB check — only tests XZ plane at character waist height
+    const y=0.5;
+    for(const f of this.furniture){
+      const bb=f.userData.solidBB;
+      if(bb&&x>=bb.min.x&&x<=bb.max.x&&z>=bb.min.z&&z<=bb.max.z&&y>=bb.min.y&&y<=bb.max.y)return true;
+    }
+    return false;
+  },
 
   isFloor(wx,wz){const G=C.GRID,off=-(G/2)*C.CELL;const gx=~~((wx-off)/C.CELL),gz=~~((wz-off)/C.CELL);if(gx<0||gx>=G||gz<0||gz>=G)return false;return this.grid[gz][gx]===1;},
 };
@@ -1744,9 +1966,9 @@ const Enemies = {
           if(dist>5){
             const prevX=ep.x,prevZ=ep.z;
             ep.x+=dx/dist*spd*dt;
-            if(!Map3D.isFloor(ep.x,ep.z))ep.x=prevX;
+            if(!Map3D.isFloor(ep.x,ep.z)||Map3D.hitFurniture(ep.x,ep.z))ep.x=prevX;
             ep.z+=dz/dist*spd*dt;
-            if(!Map3D.isFloor(ep.x,ep.z))ep.z=prevZ;
+            if(!Map3D.isFloor(ep.x,ep.z)||Map3D.hitFurniture(ep.x,ep.z))ep.z=prevZ;
           }
           else e.state='attack';
           if(e.stateTimer>3+Math.random()*2&&Map3D.coverPts.length>0){
@@ -1758,8 +1980,8 @@ const Enemies = {
           const cdx=e.coverTarget.x-ep.x,cdz=e.coverTarget.z-ep.z,cd=Math.sqrt(cdx*cdx+cdz*cdz);
           if(cd>.6){
             const prevX=ep.x,prevZ=ep.z;
-            ep.x+=cdx/cd*spd*dt;if(!Map3D.isFloor(ep.x,ep.z))ep.x=prevX;
-            ep.z+=cdz/cd*spd*dt;if(!Map3D.isFloor(ep.x,ep.z))ep.z=prevZ;
+            ep.x+=cdx/cd*spd*dt;if(!Map3D.isFloor(ep.x,ep.z)||Map3D.hitFurniture(ep.x,ep.z))ep.x=prevX;
+            ep.z+=cdz/cd*spd*dt;if(!Map3D.isFloor(ep.x,ep.z)||Map3D.hitFurniture(ep.x,ep.z))ep.z=prevZ;
           }
           if(e.stateTimer>2.5+Math.random()*2){e.state='attack';e.stateTimer=0;}
         }
@@ -2168,9 +2390,15 @@ const Player={
         const PAD=.55;
         const prevX=this.mesh.position.x,prevZ=this.mesh.position.z;
         this.mesh.position.x+=nx*spd*smult*dt;
-        if(!Map3D.isFloor(this.mesh.position.x+nx*PAD,this.mesh.position.z)||!Map3D.isFloor(this.mesh.position.x-nx*PAD,this.mesh.position.z))this.mesh.position.x=prevX;
+        if(!Map3D.isFloor(this.mesh.position.x+nx*PAD,this.mesh.position.z)||
+           !Map3D.isFloor(this.mesh.position.x-nx*PAD,this.mesh.position.z)||
+           Map3D.hitFurniture(this.mesh.position.x,this.mesh.position.z))
+          this.mesh.position.x=prevX;
         this.mesh.position.z+=nz*spd*smult*dt;
-        if(!Map3D.isFloor(this.mesh.position.x,this.mesh.position.z+nz*PAD)||!Map3D.isFloor(this.mesh.position.x,this.mesh.position.z-nz*PAD))this.mesh.position.z=prevZ;
+        if(!Map3D.isFloor(this.mesh.position.x,this.mesh.position.z+nz*PAD)||
+           !Map3D.isFloor(this.mesh.position.x,this.mesh.position.z-nz*PAD)||
+           Map3D.hitFurniture(this.mesh.position.x,this.mesh.position.z))
+          this.mesh.position.z=prevZ;
         // ── Walking Animation ──
         this._walkT+=dt*(sprint?2.2:1.5);
         const swing=Math.sin(this._walkT*5.5)*(sprint?.42:.28);
@@ -2629,13 +2857,16 @@ function menuContinue(){
   for(let s=1;s<=3;s++){const d=Save.load(s);if(d&&(d.ts||0)>latestTs){latest=s;latestTs=d.ts||0;}}
   if(!latest)return;
   Save.activeSlot=latest;
-  const d=Save.load();_startNewGame();_loadSaveIntoGame(d);setState(GS.MISSION);
+  const d=Save.load();_startNewGame();_loadSaveIntoGame(d);
+  LoginReward.applyPending();
+  setState(GS.MISSION);
 }
 
 // Tutorial flag — set when slot picked for new game, cleared after use
 let _isNewAgent=false;
 function ccConfirm(){
   Audio.uiClick();CharCreator.apply();setState(GS.MISSION);
+  LoginReward.applyPending();
   const showTut=_isNewAgent;_isNewAgent=false;
   setTimeout(()=>Tutorial.start(showTut),400);
 }
@@ -2680,18 +2911,109 @@ function _spawnEnemies(){
 
 function GoToHub(){
   if(gameState!==GS.MISSION)return;
+  if(_isDailyRun){DailyChallenge.recordScore(Enemies.totalKills,Zone.zone);_isDailyRun=false;}
   Save.save();_refreshMenu();
-  Audio.stopMusic();
-  HubSystem.refresh();
-  setState(GS.HUB);
+  Audio.stopMusic();HubSystem.refresh();setState(GS.HUB);
 }
 
+// ── FATE-style death penalties ─────────────────────────────────────
+let _deathDrops=[]; // items dropped at death location, retrievable
+
 function _die(){
+  if(!gameRunning)return;
   gameRunning=false;
-  document.getElementById('hud').style.display='none';
-  document.getElementById('death-stats').textContent=`ZONE ${Zone.zone}  ·  KILLS ${Enemies.totalKills}  ·  LVL ${Player.level}`;
+  Audio.stopMusic();
+  if(_isDailyRun){DailyChallenge.recordScore(Enemies.totalKills,Zone.zone);_isDailyRun=false;}
+
+  // ── Calculate penalties (FATE-style: lose % of XP and credits, keep gear) ──
+  const xpLost=~~(Player.xp*0.35);       // lose 35% current XP
+  const credLost=~~(Player.credits*0.25); // lose 25% credits
+
+  // Apply penalty (keep level, keep gear)
+  Player.xp=Math.max(0,Player.xp-xpLost);
+  Player.credits=Math.max(0,Player.credits-credLost);
+  UI.credit(Player.credits);
+
+  // ── Drop 1 random bag item at death location as gravestone loot ──
+  _deathDrops=[];
+  const dropCandidates=[...Player.weaponBag,...Armor.bag].filter(Boolean);
+  if(dropCandidates.length>0&&Player.mesh){
+    const dropped=dropCandidates[~~(Math.random()*dropCandidates.length)];
+    _deathDrops.push(dropped);
+    // Spawn a glowing gravestone marker in the world
+    const g=new THREE.Mesh(
+      new THREE.BoxGeometry(.5,1.2,.2),
+      new THREE.MeshLambertMaterial({color:0x222244})
+    );
+    g.position.copy(Player.mesh.position);g.position.y=.6;scene.add(g);
+    const gl=new THREE.PointLight(0x8844ff,.8,5);
+    gl.position.copy(Player.mesh.position);gl.position.y=1.5;scene.add(gl);
+    g.userData.isGrave=true;
+  }
+
+  // ── Revive cost scales with zone ──
+  const reviveCost=Math.min(9999,200+Zone.zone*150);
+
+  // ── Populate death screen ──
+  document.getElementById('death-zone-line').textContent=
+    `ZONE ${Zone.zone}  ·  ${Enemies.totalKills} KILLS  ·  LVL ${Player.level}`;
+  document.getElementById('dp-credits').textContent=credLost>0?`–${credLost} CR`:'NONE';
+  document.getElementById('dp-xp').textContent=xpLost>0?`–${xpLost} XP`:'NONE';
+  document.getElementById('dp-level').textContent=`LVL ${Player.level} KEPT`;
+
+  const graveBox=document.getElementById('death-grave-box');
+  const graveDesc=document.getElementById('death-grave-desc');
+  if(_deathDrops.length>0){
+    graveBox.style.display='block';
+    graveDesc.textContent=`${_deathDrops[0].name} dropped at your position. Marked on the map — evacuate and return to recover it.`;
+  } else graveBox.style.display='none';
+
+  const revBtn=document.getElementById('death-btn-revive');
+  const costSpan=document.getElementById('death-revive-cost');
+  costSpan.textContent=`${reviveCost} CR`;
+  revBtn.disabled=Player.credits<reviveCost;
+  revBtn.onclick=()=>deathRevive(reviveCost);
+  if(Player.credits<reviveCost)revBtn.title='NOT ENOUGH CREDITS';
+
   setState(GS.DEAD);
 }
+
+function deathRevive(cost){
+  // FATE: pay credits to resurrect in place with full health
+  Audio.uiClick();
+  if(Player.credits<cost)return;
+  Player.credits-=cost;
+  Player.hp=Player.maxHp;
+  Player.armor=Player.maxArmor;
+  UI.credit(Player.credits);UI.updateBars();
+  setState(GS.MISSION);
+  gameRunning=true;
+  setTimeout(()=>Audio.startMusic(),300);
+  // Flash green
+  const wb=document.getElementById('wave-banner');
+  if(wb){wb.textContent='✦ REVIVED';wb.style.display='block';wb.style.animation='none';void wb.offsetWidth;wb.style.animation='waveflash 1.8s ease forwards';setTimeout(()=>wb.style.display='none',1800);}
+  Save.save();
+}
+
+function deathReturnToHub(){
+  // FATE: return to town — keep character, gear, penalties already applied
+  Audio.uiClick();
+  // Clean up dropped items from scene (gravestone stays as loot to find)
+  Enemies.list.forEach(e=>scene.remove(e.mesh));Enemies.list=[];
+  if(Boss.active){scene.remove(Boss.active.mesh);Boss.active=null;
+    document.getElementById('boss-bar').style.display='none';}
+  // Reset zone kill counter but keep zone number (FATE: you don't lose dungeon progress)
+  Zone.killsInZone=0;
+  // Regenerate map to fresh state
+  Map3D.generate();
+  Player.init();CharCreator.apply();
+  camera.position.copy(Player.mesh.position).add(CAM_OFF);
+  _camLook.copy(Player.mesh.position);camera.lookAt(_camLook);
+  HubSystem.refresh();setState(GS.HUB);
+  Save.save();_refreshMenu();
+}
+
+function deathGoHub(){deathReturnToHub();} // legacy alias
 
 // =====================================================================
 //  LIGHT FLICKER
@@ -2800,8 +3122,13 @@ function togglePause(){
   _paused=!_paused;
   gameRunning=!_paused;
   document.getElementById('pause-screen').classList.toggle('on',_paused);
-  if(_paused){Audio.stopMusic();document.getElementById('pause-settings').classList.remove('on');document.getElementById('settings-toggle').textContent='⚙  SETTINGS';}
-  else{setTimeout(()=>Audio.startMusic(),200);}
+  if(_paused){
+    Audio.stopMusic();
+    document.getElementById('pause-settings').classList.remove('on');
+    document.getElementById('settings-toggle').textContent='⚙  SETTINGS';
+    document.getElementById('pause-daily').style.display='none';
+    document.getElementById('pbtn-daily').textContent='⭐  DAILY CHALLENGE';
+  } else {setTimeout(()=>Audio.startMusic(),200);}
 }
 function pauseSave(){
   Audio.uiClick();
@@ -2810,9 +3137,42 @@ function pauseSave(){
   msg.style.opacity='1';
   setTimeout(()=>msg.style.opacity='0',2200);
 }
+function togglePauseDaily(){
+  Audio.uiClick();
+  const panel=document.getElementById('pause-daily');
+  const on=panel.style.display==='none';
+  // Close settings if open
+  document.getElementById('pause-settings').classList.remove('on');
+  document.getElementById('settings-toggle').textContent='⚙  SETTINGS';
+  panel.style.display=on?'block':'none';
+  document.getElementById('pbtn-daily').textContent=on?'⭐  HIDE DAILY':'⭐  DAILY CHALLENGE';
+  if(!on)return;
+  // Populate
+  const mods=DailyChallenge.todayMods();
+  const rec=DailyChallenge.todayRecord();
+  const d=new Date();
+  document.getElementById('pause-daily-date').textContent=
+    d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}).toUpperCase()+' · UTC';
+  const mc=document.getElementById('pause-daily-mods');mc.innerHTML='';
+  mods.forEach(m=>{
+    const el=document.createElement('div');el.className='daily-mod';
+    el.innerHTML=`<div class="daily-mod-icon">${m.icon}</div><div><div class="daily-mod-name">${m.name}</div><div class="daily-mod-desc">${m.desc}</div></div>`;
+    mc.appendChild(el);
+  });
+  const sb=document.getElementById('pause-daily-score');
+  if(rec){
+    sb.style.display='block';
+    document.getElementById('pause-daily-score-val').textContent=rec.score.toLocaleString();
+    document.getElementById('pause-daily-score-info').textContent=`ZONE ${rec.zone} · ${rec.kills} KILLS`;
+  } else sb.style.display='none';
+  document.getElementById('pause-daily-active-notice').style.display=_isDailyRun?'block':'none';
+}
 function togglePauseSettings(){
   Audio.uiClick();
   const s=document.getElementById('pause-settings');
+  // Close daily panel if open
+  document.getElementById('pause-daily').style.display='none';
+  document.getElementById('pbtn-daily').textContent='⭐  DAILY CHALLENGE';
   const on=s.classList.toggle('on');
   document.getElementById('settings-toggle').textContent=on?'⚙  HIDE SETTINGS':'⚙  SETTINGS';
 }
@@ -3033,9 +3393,8 @@ const _origRefresh=HubSystem.refresh.bind(HubSystem);
 HubSystem.refresh=function(){_origRefresh();this.renderArena();this.renderMercs();};
 
 // =====================================================================
-//  MENU BUTTON WIRING — JS fallback for non-mobile (click events)
+//  MENU BUTTON WIRING
 // =====================================================================
-// Hub tabs (these are inside the overlay, use pointerup for reliability)
 document.querySelectorAll('.hub-tab').forEach(tab=>{
   tab.addEventListener('pointerup',e=>{
     e.stopPropagation();
@@ -3103,25 +3462,38 @@ const Audio={
   _nextStep:0,
 
   init(){
-    // Wake AudioContext on first interaction (iOS requires gesture)
     const wake=()=>{
-      if(this.ctx)return;
+      if(this.ctx){
+        // Already created - just resume if suspended (iOS suspends on background)
+        if(this.ctx.state==='suspended')this.ctx.resume().then(()=>{
+          if(!this.menuPlaying&&!this.musicPlaying)this.startMenuMusic();
+        });
+        return;
+      }
       try{
         this.ctx=new(window.AudioContext||window.webkitAudioContext)();
         this.masterGain=this.ctx.createGain();this.masterGain.gain.value=0.85;this.masterGain.connect(this.ctx.destination);
         this.musicGain=this.ctx.createGain();this.musicGain.gain.value=0.18;this.musicGain.connect(this.masterGain);
         this.sfxGain=this.ctx.createGain();this.sfxGain.gain.value=0.6;this.sfxGain.connect(this.masterGain);
         this.ambGain=this.ctx.createGain();this.ambGain.gain.value=0.12;this.ambGain.connect(this.masterGain);
-        // Start menu music after context is ready
-        setTimeout(()=>this.startMenuMusic(),200);
-        // Rain removed — music only during gameplay
+        setTimeout(()=>this.startMenuMusic(),100);
       }catch(e){}
     };
-    document.addEventListener('pointerdown',wake,{once:true});
-    document.addEventListener('keydown',wake,{once:true});
+    // Listen on every interaction (not just first) — iOS suspends AudioContext on page hide
+    document.addEventListener('pointerdown',wake);
+    document.addEventListener('keydown',wake);
+    document.addEventListener('visibilitychange',()=>{
+      if(document.visibilityState==='visible'&&this.ctx?.state==='suspended')this.ctx.resume();
+    });
   },
 
-  _r(){if(this.ctx?.state==='suspended')this.ctx.resume();},
+  _r(){
+    if(!this.ctx)return;
+    if(this.ctx.state==='suspended')this.ctx.resume().then(()=>{
+      if(gameRunning&&!this.musicPlaying)this.startMusic();
+      else if(!gameRunning&&!this.menuPlaying)this.startMenuMusic();
+    });
+  },
 
   // ═══════════════════════════════════════════════════════════
   //  MENU MUSIC — DJ Screw / Chopped-and-Screwed atmosphere
@@ -4038,6 +4410,200 @@ function tutSkip(){Tutorial.finish();}
 // Space bar also advances tutorial
 window.addEventListener('keydown',e=>{if(Tutorial.active&&(e.code==='Space'||e.code==='Enter')){e.preventDefault();Tutorial.next();}},true);
 
+
+// =====================================================================
+//  SEEDED RNG (Mulberry32) — deterministic random for daily challenge
+// =====================================================================
+let _rngSeed=0;
+function _seedRng(seed){_rngSeed=seed>>>0;}
+function _rng(){
+  _rngSeed+=0x6D2B79F5;
+  let t=_rngSeed;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);
+  return((t^t>>>14)>>>0)/4294967296;
+}
+function _todaySeed(){
+  const d=new Date();
+  // Seed = YYYYMMDD as integer — same for all players on same calendar day (UTC)
+  return parseInt(`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}`);
+}
+function _todayKey(){
+  const d=new Date();
+  return`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+}
+
+// =====================================================================
+//  DAILY CHALLENGE
+// =====================================================================
+const DAILY_MODS=[
+  {id:'double_elites',icon:'💀',name:'ELITE SURGE',desc:'All enemies spawn as Elites. Brutal.',
+    apply(){Enemies._dailyEliteAll=true;}},
+  {id:'no_healing',icon:'🩸',name:'NO MEDIC',desc:'Healing Drone skill disabled. No regen.',
+    apply(){Skills._dailyNoHeal=true;}},
+  {id:'speed_demon',icon:'⚡',name:'SPEED DEMON',desc:'All enemies move 50% faster.',
+    apply(){Enemies._dailySpeedMult=1.5;}},
+  {id:'loot_fever',icon:'💰',name:'LOOT FEVER',desc:'Double loot drops. Every enemy drops gear.',
+    apply(){Loot._dailyDouble=true;}},
+  {id:'one_shot',icon:'💥',name:'GLASS CANNON',desc:'You deal 3× damage but have 40 max HP.',
+    apply(){Player.maxHp=40;Player.hp=40;Player.bonusDmg=3;}},
+  {id:'fog_of_war',icon:'🌫️',name:'BLACKOUT',desc:'Minimap disabled. Trust your instincts.',
+    apply(){document.getElementById('minimap').style.visibility='hidden';}},
+  {id:'ammo_scarce',icon:'🔫',name:'AMMO CRISIS',desc:'All weapons have 50% magazine size.',
+    apply(){if(Player.weapon)Player.weapon.magazine=Math.max(1,~~(Player.weapon.magazine*.5));}},
+  {id:'boss_rush',icon:'👹',name:'BOSS RUSH',desc:'Boss spawns every zone instead of every 3rd.',
+    apply(){Zone._dailyBossEvery=1;}},
+  {id:'dark_market',icon:'🛒',name:'DARK MARKET',desc:'Hub prices halved. Stock up cheap.',
+    apply(){HubSystem._dailyDiscount=0.5;}},
+  {id:'exotic_only',icon:'🔴',name:'EXOTIC CACHE',desc:'Chests guaranteed to contain Exotic gear.',
+    apply(){Loot._dailyExoticChests=true;}},
+];
+
+const DailyChallenge={
+  KEY:'az_daily',
+  _todayMods:null,
+
+  todayMods(){
+    if(this._todayMods)return this._todayMods;
+    _seedRng(_todaySeed());
+    // Pick 2 random mods using seeded RNG — same worldwide
+    const pool=[...DAILY_MODS];
+    const picks=[];
+    while(picks.length<2&&pool.length){
+      const i=~~(_rng()*pool.length);
+      picks.push(pool.splice(i,1)[0]);
+    }
+    this._todayMods=picks;
+    return picks;
+  },
+
+  load(){try{return JSON.parse(localStorage.getItem(this.KEY))||{};}catch{return {};}},
+  save(data){try{localStorage.setItem(this.KEY,JSON.stringify(data));}catch{}},
+
+  todayRecord(){const d=this.load();return d[_todayKey()]||null;},
+
+  recordScore(kills,zone){
+    const d=this.load();const key=_todayKey();
+    const prev=d[key];
+    const score=kills*100+zone*500;
+    if(!prev||score>prev.score){
+      d[key]={score,kills,zone,ts:Date.now()};
+    }
+    // Prune old keys (keep 30 days)
+    const keys=Object.keys(d).sort();
+    while(keys.length>30)delete d[keys.shift()];
+    this.save(d);
+  },
+
+  openScreen(){
+    // Daily challenge now lives in the pause menu — this is a no-op
+  },
+
+  start(){
+    _paused=false;
+    document.getElementById('pause-screen').classList.remove('on');
+    Save.activeSlot=1;
+    _isNewAgent=false;
+    _isDailyRun=true;
+    _startNewGame();
+    this.todayMods().forEach(m=>{try{m.apply();}catch(e){}});
+    setState(GS.MISSION);
+    const mods=this.todayMods();
+    const wb=document.getElementById('wave-banner');
+    if(wb){wb.textContent=`⭐ DAILY: ${mods.map(m=>m.name).join(' + ')}`;wb.style.display='block';wb.style.animation='none';void wb.offsetWidth;wb.style.animation='waveflash 3s ease forwards';setTimeout(()=>wb.style.display='none',3000);}
+  },
+};
+
+let _isDailyRun=false;
+
+function pauseStartDaily(){
+  Audio.uiClick();
+  DailyChallenge.start();
+  setTimeout(()=>Audio.startMusic(),350);
+}
+
+// =====================================================================
+//  LOGIN REWARD
+// =====================================================================
+const LoginReward={
+  KEY:'az_login',
+  REWARDS:[
+    {day:1, icon:'💰', name:'CREDITS BONUS',   val:'+200 CR',   color:'#f1c40f', apply(){Player.credits+=200;}},
+    {day:2, icon:'🔫', name:'RARE WEAPON',      val:'RARE DROP', color:'#3498db', apply(){Player.pickupWeapon(Loot.genWeapon('RARE'));}},
+    {day:3, icon:'💰', name:'CREDITS BONUS',   val:'+500 CR',   color:'#f1c40f', apply(){Player.credits+=500;}},
+    {day:4, icon:'🛡', name:'EPIC ARMOR PIECE', val:'EPIC DROP', color:'#9b59b6', apply(){Armor.equip(Loot.genArmor('EPIC'));}},
+    {day:5, icon:'💰', name:'CREDITS BONUS',   val:'+1000 CR',  color:'#f1c40f', apply(){Player.credits+=1000;}},
+    {day:6, icon:'⚡', name:'LEGENDARY WEAPON', val:'LEGENDARY', color:'#f39c12', apply(){Player.pickupWeapon(Loot.genWeapon('LEGENDARY'));}},
+    {day:7, icon:'🔴', name:'EXOTIC DROP',      val:'EXOTIC',    color:'#e74c3c', apply(){Player.pickupWeapon(Loot.genWeapon('EXOTIC'));Player.credits+=2000;}},
+  ],
+
+  load(){try{return JSON.parse(localStorage.getItem(this.KEY));}catch{return null;}},
+  save(d){try{localStorage.setItem(this.KEY,JSON.stringify(d));}catch{}},
+
+  check(){
+    const today=_todayKey();
+    const d=this.load()||{lastLogin:'',streak:0};
+    // Already claimed today
+    if(d.lastLogin===today)return;
+    // Check if streak continues (within 48h window to be generous)
+    const last=d.lastLogin?new Date(d.lastLogin):null;
+    const now=new Date();
+    const daysDiff=last?Math.round((now-last)/(1000*60*60*24)):999;
+    if(daysDiff<=2)d.streak=Math.min(7,(d.streak||0)+1);
+    else d.streak=1;
+    d.lastLogin=today;d.pendingReward=true;d.pendingStreak=d.streak;
+    this.save(d);
+    // Show popup after a short delay
+    setTimeout(()=>this._show(d.pendingStreak),900);
+  },
+
+  _show(streak){
+    const rewardDef=this.REWARDS[(streak-1)%7];
+    // Streak pips
+    const badge=document.getElementById('lr-streak-badge');
+    let pips='';
+    for(let i=1;i<=7;i++){
+      const cls=i<streak?'done':i===streak?'today':'';
+      pips+=`<span class="streak-pip ${cls}">${i<streak?'✓':i===streak?'★':i}</span>`;
+    }
+    badge.innerHTML=`DAY STREAK &nbsp;${pips}`;
+    document.getElementById('lr-icon').textContent=rewardDef.icon;
+    const streakLabel=streak===7?'🎉 PERFECT WEEK! ':streak>3?'🔥 ON FIRE! ':'';
+    document.getElementById('lr-sub').textContent=`${streakLabel}Day ${streak} streak — keep it up, Zero`;
+    document.getElementById('lr-next').textContent='Come back tomorrow to continue your streak';
+    // Reward items
+    const rc=document.getElementById('lr-rewards');rc.innerHTML='';
+    const bonus=[rewardDef];
+    if(streak%7===0)bonus.push({icon:'🎁',name:'WEEKLY BONUS',val:'+3000 CR',color:'#ffd700'});
+    bonus.forEach(r=>{
+      const el=document.createElement('div');el.className='lr-item';
+      el.innerHTML=`<div class="lr-item-icon">${r.icon}</div><div class="lr-item-text"><div class="lr-item-name">${r.name}</div></div><div class="lr-item-val" style="color:${r.color||'#fff'}">${r.val}</div>`;
+      rc.appendChild(el);
+    });
+    document.getElementById('login-reward').classList.add('on');
+    this._pendingRewardDef=rewardDef;
+    this._pendingStreak=streak;
+  },
+
+  claim(){
+    document.getElementById('login-reward').classList.remove('on');
+    Audio.uiClick();
+    const d=this.load()||{};d.pendingReward=false;this.save(d);
+    // Store pending reward to apply when game starts (Player not ready yet at menu)
+    this._pendingApply=this._pendingRewardDef;
+    this._pendingApplyStreak=this._pendingStreak;
+  },
+
+  // Called by _startNewGame / ccConfirm to apply deferred reward
+  applyPending(){
+    if(!this._pendingApply)return;
+    try{this._pendingApply.apply();}catch(e){}
+    if(this._pendingApplyStreak%7===0)try{Player.credits+=3000;}catch(e){}
+    this._pendingApply=null;
+    UI.credit&&UI.credit(Player.credits);
+  },
+};
+
+function claimLoginReward(){LoginReward.claim();}
+
 Audio.init();
 
 // Menu background scene - minimal light, no crash risk
@@ -4046,6 +4612,8 @@ camera.position.set(0,12,10);camera.lookAt(0,0,0);
 
 loop();
 _refreshMenu();
+// Check login reward on load (after short delay for context)
+setTimeout(()=>LoginReward.check(),1200);
 
 window.addEventListener('resize',()=>{
   camera.aspect=window.innerWidth/window.innerHeight;
