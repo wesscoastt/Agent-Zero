@@ -1,41 +1,50 @@
-const CACHE = 'agent-zero-v1';
-const ASSETS = [
-  './',
+const CACHE = 'agent-zero-v2';
+const STATIC = [
   './index.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
   './icon-180.png',
-  'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'
+  './icon-32.png',
 ];
 
-// Install — cache all assets
+// Install — pre-cache local files only (no external CDN — those cause redirect issues on iOS)
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then(c => c.addAll(STATIC))
+      .then(() => self.skipWaiting())
   );
 });
 
-// Activate — delete old caches
+// Activate — clear old caches
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
-// Fetch — cache first, network fallback
+// Fetch — critical iOS fix: never intercept navigation requests or cross-origin requests
 self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url);
+
+  // Let the browser handle: navigations, cross-origin (CDN), non-GET
+  if (e.request.mode === 'navigate') return;
+  if (url.origin !== self.location.origin) return;
+  if (e.request.method !== 'GET') return;
+
+  // Cache-first for same-origin static assets
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
-      return fetch(e.request).then(res => {
-        if (!res || res.status !== 200 || res.type === 'opaque') return res;
-        const clone = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
+      return fetch(e.request, { redirect: 'follow' }).then(res => {
+        // Only cache clean 200 responses — never opaque or redirected
+        if (!res || res.status !== 200 || res.type !== 'basic') return res;
+        caches.open(CACHE).then(c => c.put(e.request, res.clone()));
         return res;
-      }).catch(() => caches.match('./index.html'));
+      }).catch(() => cached || new Response('', { status: 404 }));
     })
   );
 });
