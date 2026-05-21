@@ -2502,18 +2502,22 @@ const Player={
       for(let i=0;i<6;i++){const p=box(.12,.1,.1,0x1a1a1a);p.position.set((i%2===0?-.18:.18),1.02+(~~(i/2))*.16,.38);root.add(p);}
     }
 
-    // ── ZERO badge — canvas texture on the front of every armor type ──
+    // ── ZERO badge — on the front of every armor type (-Z is forward after +PI rotation) ──
     try{
       const bc=document.createElement('canvas');bc.width=64;bc.height=20;
       const bx2=bc.getContext('2d');
-      bx2.fillStyle='rgba(180,90,0,0.55)';bx2.fillRect(0,0,64,20);
+      bx2.fillStyle='rgba(180,90,0,0.6)';bx2.fillRect(0,0,64,20);
       bx2.fillStyle='#e67e22';bx2.font='bold 13px "Courier New",monospace';bx2.textAlign='center';bx2.textBaseline='middle';
       bx2.fillText('ZERO',32,10);
       const bt=new THREE.CanvasTexture(bc);
-      const bm=new THREE.MeshBasicMaterial({map:bt,transparent:true});
-      const badgeZ=barmor==='light'?.38:barmor==='medium'?.42:.44;
-      const badge=new THREE.Mesh(new THREE.PlaneGeometry(.5,.16),bm);
-      badge.position.set(0,1.06,badgeZ);root.add(badge);
+      // DoubleSide so it shows regardless of face direction
+      // Rotate Y by PI so it faces -Z (the character's front after +PI mesh rotation)
+      const bm=new THREE.MeshBasicMaterial({map:bt,transparent:true,side:THREE.DoubleSide});
+      const badgeZ=barmor==='light'?-.32:barmor==='medium'?-.36:-.38;
+      const badge=new THREE.Mesh(new THREE.PlaneGeometry(.52,.17),bm);
+      badge.position.set(0,1.06,badgeZ);
+      badge.rotation.y=Math.PI; // face toward -Z (character's front)
+      root.add(badge);
     }catch(e){}
 
     // ── Arm groups (pivot at shoulder) ──
