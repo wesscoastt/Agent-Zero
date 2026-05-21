@@ -228,8 +228,8 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:#000;
 #xfill{background:linear-gradient(90deg,#4a1a8b,#9b59b6)}
 #lvl-badge{position:absolute;bottom:calc(var(--sB) + 212px);
   left:calc(var(--sL) + 8px);color:#e67e22;font-size:7px;letter-spacing:2px}
-#credits-hud{position:absolute;bottom:calc(var(--sB) + 212px);
-  left:calc(var(--sL) + 108px);color:#f1c40f;font-size:7px;letter-spacing:1px}
+#credits-hud{position:absolute;bottom:calc(var(--sB) + 196px);
+  left:calc(var(--sL) + 8px);color:#f1c40f;font-size:7px;letter-spacing:1px}
 
 /* ── BOTTOM-CENTER: Weapon HUD ── */
 #weapon-hud{position:absolute;bottom:calc(var(--sB) + 10px);
@@ -777,10 +777,48 @@ input[type=range]::-webkit-slider-thumb{
   line-height:18px;text-align:center}
 .streak-pip.done{background:#ffd700;border-color:#ffd700;color:#000}
 .streak-pip.today{background:rgba(255,215,0,.3);border-color:#ffd700}
+/* ══ STYLE SYSTEM ══ */
+.style-section-lbl{font-size:10px;letter-spacing:3px;color:#556;margin-bottom:8px}
+.style-options{display:flex;flex-wrap:wrap;gap:6px}
+.style-opt{width:34px;height:34px;border:2px solid rgba(255,255,255,.1);cursor:pointer;
+  border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:15px;
+  -webkit-tap-highlight-color:transparent;transition:all .15s}
+.style-opt.sel{border-color:#ff88cc;box-shadow:0 0 8px rgba(255,136,204,.4)}
+/* ══ BATTLE PASS ══ */
+.pass-tier-row{display:flex;align-items:center;gap:0}
+.pass-tier-num{width:30px;text-align:center;font-size:10px;color:#445;flex-shrink:0}
+.pass-tier-reward{flex:1;border:1px solid rgba(255,255,255,.07);padding:9px 11px;
+  display:flex;align-items:center;gap:10px;min-height:50px}
+.pass-tier-reward.unlocked{border-color:rgba(255,215,0,.3);background:rgba(255,215,0,.04)}
+.pass-tier-reward.claimed{border-color:rgba(46,204,113,.2);background:rgba(46,204,113,.03)}
+.pass-tier-reward.locked{opacity:.4}
+.pass-tier-icon{font-size:20px;flex-shrink:0}
+.pass-tier-name{font-size:11px;letter-spacing:.5px;color:#bcc8d4;flex:1;line-height:1.5}
+.pass-tier-claim{padding:5px 10px;border:1px solid rgba(255,215,0,.45);background:rgba(255,215,0,.1);
+  color:#ffd700;font-family:'Courier New',monospace;font-size:10px;letter-spacing:2px;
+  cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pass-tier-claimed-badge{font-size:10px;color:#2ecc71;letter-spacing:2px}
+.pass-connector{width:2px;background:rgba(255,255,255,.05);height:6px;margin:0 0 0 14px}
 </style>
 </head>
 <body>
 <canvas id="canvas"></canvas>
+
+<!-- AUDIO UNLOCK — must be first thing user taps on iOS -->
+<div id="audio-unlock" style="
+  position:fixed;inset:0;z-index:9999;background:#000;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'Courier New',monospace;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+" onclick="unlockAudio()">
+  <div style="font-size:clamp(40px,10vw,72px);letter-spacing:14px;color:#fff;font-weight:900;
+    text-shadow:0 0 60px rgba(230,126,34,.6);margin-bottom:8px">AGENT<br>ZERO</div>
+  <div style="width:100px;height:1px;background:linear-gradient(90deg,transparent,rgba(230,126,34,.7),transparent);margin:18px auto"></div>
+  <div style="font-size:13px;letter-spacing:4px;color:#e67e22;margin-bottom:32px">TACTICAL LOOTER-SHOOTER</div>
+  <div id="au-tap" style="font-size:13px;letter-spacing:5px;color:rgba(255,255,255,.5);
+    animation:aupulse 1.6s ease infinite">▶ &nbsp;TAP TO START</div>
+  <style>@keyframes aupulse{0%,100%{opacity:.4}50%{opacity:1}}</style>
+</div>
 
 <!-- MAIN MENU -->
 <div id="main-menu" class="overlay on">
@@ -807,6 +845,36 @@ input[type=range]::-webkit-slider-thumb{
     <div id="lr-rewards" style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px"></div>
     <div style="font-size:11px;color:#556;letter-spacing:2px;margin-bottom:18px" id="lr-next">Next reward in 24 hours</div>
     <button class="mbtn" style="width:100%;border-color:rgba(255,215,0,.4);color:#ffd700;font-size:14px" onclick="claimLoginReward()">✦ CLAIM REWARD</button>
+  </div>
+</div>
+
+<!-- ═══════════════ STORY INTRO ═══════════════ -->
+<div id="story-screen" style="
+  position:fixed;inset:0;z-index:190;
+  background:#000;display:none;
+  flex-direction:column;align-items:center;justify-content:center;
+  font-family:'Courier New',monospace;pointer-events:auto;
+  overflow:hidden;
+">
+  <!-- Scanline texture -->
+  <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.18) 2px,rgba(0,0,0,.18) 4px);pointer-events:none;z-index:1"></div>
+  <!-- Vignette -->
+  <div style="position:absolute;inset:0;box-shadow:inset 0 0 120px rgba(0,0,0,.85);pointer-events:none;z-index:1"></div>
+
+  <div id="story-inner" style="position:relative;z-index:2;width:100%;max-width:420px;padding:0 28px;text-align:center;transition:opacity .5s ease">
+    <div id="story-panel-num" style="font-size:9px;letter-spacing:4px;color:#334;margin-bottom:20px"></div>
+    <div id="story-icon" style="font-size:56px;margin-bottom:18px;filter:drop-shadow(0 0 24px rgba(230,126,34,.5))"></div>
+    <div id="story-title" style="font-size:clamp(14px,4vw,20px);letter-spacing:6px;color:#e67e22;margin-bottom:18px;text-shadow:0 0 30px rgba(230,126,34,.4);text-transform:uppercase"></div>
+    <div id="story-body" style="font-size:clamp(12px,3vw,14px);color:#bcc8d4;line-height:2;letter-spacing:.5px;margin-bottom:28px"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+      <button id="story-skip" style="background:transparent;border:none;color:#334;font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;cursor:pointer;padding:8px 0" onclick="StoryIntro.skip()">SKIP ›</button>
+      <div id="story-dots" style="display:flex;gap:6px"></div>
+      <button id="story-next" style="background:rgba(230,126,34,.1);border:1px solid rgba(230,126,34,.35);color:#e67e22;font-family:'Courier New',monospace;font-size:12px;letter-spacing:3px;cursor:pointer;padding:10px 20px;-webkit-tap-highlight-color:transparent" onclick="StoryIntro.next()">NEXT ›</button>
+    </div>
+    <!-- Progress line -->
+    <div style="margin-top:20px;height:1px;background:rgba(255,255,255,.06)">
+      <div id="story-progress" style="height:100%;background:rgba(230,126,34,.5);transition:width .4s ease;width:0%"></div>
+    </div>
   </div>
 </div>
 
@@ -915,6 +983,10 @@ input[type=range]::-webkit-slider-thumb{
     <div class="hub-title">⬡ SHADOW CITY HUB</div>
     <div class="hub-credits">💰 <span id="hub-credits-val">0</span> CR</div>
   </div>
+  <!-- Battle Pass notice — shown when pass not yet purchased -->
+  <div id="pass-notice-bar" style="display:none;background:rgba(255,215,0,.08);border-bottom:1px solid rgba(255,215,0,.2);padding:8px 14px;font-size:11px;color:#ffd700;letter-spacing:2px;cursor:pointer;-webkit-tap-highlight-color:transparent" onclick="hubGoToPass()">
+    ⭐ BATTLE PASS AVAILABLE — 50 TIERS OF LOOT · TAP TO VIEW →
+  </div>
   <div id="hub-tabs">
     <div class="hub-tab active" data-panel="intel">INTEL</div>
     <div class="hub-tab" data-panel="market">MARKET</div>
@@ -923,6 +995,8 @@ input[type=range]::-webkit-slider-thumb{
     <div class="hub-tab" data-panel="stash">STASH</div>
     <div class="hub-tab" data-panel="arena">ARENA</div>
     <div class="hub-tab" data-panel="mercs">MERCS</div>
+    <div class="hub-tab" data-panel="style" style="color:#ff88cc">✦ STYLE</div>
+    <div class="hub-tab" data-panel="pass" style="color:#ffd700">⭐ PASS</div>
   </div>
   <div id="hub-intel" class="hub-panel active">
     <div class="hub-section-title">MISSION TERMINAL</div>
@@ -960,6 +1034,50 @@ input[type=range]::-webkit-slider-thumb{
     </div>
     <div class="shop-grid" id="mercs-grid"></div>
     <div style="margin-top:10px;font-size:7px;color:#334" id="active-merc-display"></div>
+  </div>
+
+  <!-- ═══ STYLE / COSMETICS ═══ -->
+  <div id="hub-style" class="hub-panel">
+    <div class="hub-section-title" style="color:#ff88cc">✦ OPERATIVE STYLE</div>
+    <div style="font-size:11px;color:#8899aa;letter-spacing:1px;margin-bottom:14px">COSMETIC ONLY — NO GAMEPLAY EFFECT</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+      <!-- Preview -->
+      <div style="flex-shrink:0">
+        <canvas id="style-preview" width="90" height="120" style="background:#0a0a18;border:1px solid rgba(255,136,204,.2)"></canvas>
+        <div style="font-size:9px;letter-spacing:2px;color:#ff88cc;text-align:center;margin-top:4px">PREVIEW</div>
+      </div>
+      <div style="flex:1;min-width:160px">
+        <div class="style-section-lbl">UNIFORM COLOR</div>
+        <div id="style-colors" class="style-options"></div>
+        <div class="style-section-lbl" style="margin-top:12px">HELMET</div>
+        <div id="style-helmet-opts" class="style-options"></div>
+        <div class="style-section-lbl" style="margin-top:12px">EMOTE</div>
+        <div id="style-emotes" class="style-options"></div>
+      </div>
+    </div>
+    <button class="hub-btn" style="margin-top:16px;border-color:rgba(255,136,204,.4);color:#ff88cc" onclick="StyleSystem.applyToPlayer()">✦ APPLY STYLE</button>
+  </div>
+
+  <!-- ═══ BATTLE PASS ═══ -->
+  <div id="hub-pass" class="hub-panel">
+    <div class="hub-section-title" style="color:#ffd700">⭐ AGENT ZERO BATTLE PASS</div>
+    <div id="pass-status-bar" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div id="pass-tier-lbl" style="font-size:12px;letter-spacing:2px;color:#ffd700"></div>
+        <div id="pass-owned-lbl" style="font-size:11px;color:#8899aa"></div>
+      </div>
+      <div style="height:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,215,0,.15)">
+        <div id="pass-xp-bar" style="height:100%;background:linear-gradient(90deg,#e67e22,#ffd700);width:0%;transition:width .4s"></div>
+      </div>
+      <div style="font-size:10px;color:#556;margin-top:4px;letter-spacing:1px" id="pass-xp-lbl"></div>
+    </div>
+    <div id="pass-buy-banner" style="display:none;border:1px solid rgba(255,215,0,.3);background:rgba(255,215,0,.06);padding:14px;margin-bottom:14px;text-align:center">
+      <div style="font-size:14px;letter-spacing:3px;color:#ffd700;margin-bottom:8px">SEASON 1 PASS</div>
+      <div style="font-size:11px;color:#8899aa;margin-bottom:12px;line-height:1.8">50 tiers of exclusive cosmetics, weapons & armor<br>Unlocks immediately upon purchase</div>
+      <div style="font-size:22px;color:#ffd700;letter-spacing:2px;margin-bottom:12px">2,500 CR</div>
+      <button class="hub-btn" style="border-color:rgba(255,215,0,.5);color:#ffd700;font-size:13px" onclick="BattlePass.buy()">⭐ PURCHASE PASS</button>
+    </div>
+    <div id="pass-tracks" style="display:flex;flex-direction:column;gap:8px"></div>
   </div>
 
 </div>
@@ -1022,6 +1140,7 @@ input[type=range]::-webkit-slider-thumb{
     <div class="fml"><div class="fml-dot" style="background:#ff0000"></div><span style="color:#aaa">BOSS</span></div>
     <div class="fml"><div class="fml-dot" style="background:#ff9800"></div><span style="color:#aaa">LOOT</span></div>
     <div class="fml"><div class="fml-dot" style="background:#ff8800;border-radius:0"></div><span style="color:#aaa">CHEST</span></div>
+    <div class="fml"><div class="fml-dot" style="background:#8844ff"></div><span style="color:#aaa">GRAVE</span></div>
   </div>
   <button id="fullmap-close" onclick="closeFullMap()">✕ &nbsp;CLOSE MAP</button>
 </div>
@@ -1087,13 +1206,13 @@ input[type=range]::-webkit-slider-thumb{
   <div id="pause-settings">
     <div class="setting-row">
       <span class="setting-lbl">MUSIC VOL</span>
-      <input type="range" id="s-music" min="0" max="100" value="22" oninput="setMusicVol(this.value)">
-      <span class="setting-val" id="s-music-val">22</span>
+      <input type="range" id="s-music" min="0" max="100" value="55" oninput="setMusicVol(this.value)">
+      <span class="setting-val" id="s-music-val">55</span>
     </div>
     <div class="setting-row">
       <span class="setting-lbl">SFX VOL</span>
-      <input type="range" id="s-sfx" min="0" max="100" value="60" oninput="setSfxVol(this.value)">
-      <span class="setting-val" id="s-sfx-val">60</span>
+      <input type="range" id="s-sfx" min="0" max="100" value="70" oninput="setSfxVol(this.value)">
+      <span class="setting-val" id="s-sfx-val">70</span>
     </div>
     <div class="setting-row">
       <span class="setting-lbl">PERFORMANCE</span>
@@ -1103,6 +1222,12 @@ input[type=range]::-webkit-slider-thumb{
   </div>
   <div class="pause-save-msg" id="pause-save-msg">✓ GAME SAVED</div>
 </div>
+<!-- FIRE button — dedicated shoot button, below ROLL -->
+<button id="btn-fire" class="mob-btn" style="display:none;width:64px;height:64px;font-size:26px;
+  right:calc(var(--sR) + 16px);bottom:calc(var(--sB) + 218px);
+  border-color:rgba(255,60,0,.55);background:rgba(160,20,0,.3);color:#ff4400;
+  border-radius:50%">🔫</button>
+
 <div id="lj" class="joyouter"><div class="joyinner"></div></div>
 <div id="rj" class="joyouter"><div class="joyinner"></div></div>
 
@@ -1204,13 +1329,9 @@ input[type=range]::-webkit-slider-thumb{
 // =====================================================================
 const IS_MOB = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
-// ── touchstart: only block canvas, let all HTML elements fire normally
-document.addEventListener('touchstart', e => {
-  if (e.target.id === 'canvas') e.preventDefault();
-}, { passive: false });
-document.addEventListener('touchmove', e => {
-  if (e.target.id === 'canvas') e.preventDefault();
-}, { passive: false });
+// ── Prevent scroll on canvas only — use CSS touch-action instead of JS
+// (JS passive:false touchstart on document blocks iOS AudioContext unlock)
+// touch-action:none is already set on body in CSS above
 
 // ── Constants ─────────────────────────────────────────────────────────
 const C = {
@@ -1285,7 +1406,7 @@ class Pool {
 // ── Input ──────────────────────────────────────────────────────────────
 const Input = {
   keys:{}, mouse:{nx:0,ny:0,btn:false}, world:new THREE.Vector3(),
-  moveX:0, moveZ:0, aimX:0, aimZ:0, mAiming:false, mDodge:false,
+  moveX:0, moveZ:0, aimX:0, aimZ:0, mAiming:false, mDodge:false, mFire:false,
   init(){
     const P=['Space','KeyR','KeyF','KeyE','KeyQ','KeyX','KeyI','KeyH','KeyP','KeyM','Escape'];
     window.addEventListener('keydown',e=>{this.keys[e.code]=true;if(P.includes(e.code))e.preventDefault();
@@ -1307,7 +1428,7 @@ const Input = {
     const t=rd.y!==0?-ro.y/rd.y:0;
     this.world.set(ro.x+rd.x*t,0,ro.z+rd.z*t);
   },
-  firing(){return this.mouse.btn||this.mAiming;},
+  firing(){return this.mouse.btn||this.mFire;},
 };
 Input.init();
 
@@ -1322,6 +1443,9 @@ const Joystick = {
     // Mobile button wiring via click (reliable on iOS)
     document.getElementById('btn-roll').addEventListener('pointerdown',e=>{e.stopPropagation();Input.mDodge=true;});
     document.getElementById('btn-roll').addEventListener('pointerup',()=>Input.mDodge=false);
+    document.getElementById('btn-fire').addEventListener('pointerdown',e=>{e.stopPropagation();Input.mFire=true;});
+    document.getElementById('btn-fire').addEventListener('pointerup',()=>Input.mFire=false);
+    document.getElementById('btn-fire').addEventListener('pointercancel',()=>Input.mFire=false);
     document.getElementById('btn-reload').addEventListener('click',()=>Player.startReload());
     document.getElementById('btn-inv').addEventListener('click',()=>InvUI.toggle());
     document.getElementById('btn-hub').addEventListener('click',()=>GoToHub());
@@ -1365,9 +1489,9 @@ function setState(s) {
   document.getElementById('fullmap-screen').classList.remove('on');
   _fullMapOpen=false;
   if(IS_MOB && s===GS.MISSION){
-    ['btn-roll','btn-reload','btn-inv','btn-hub'].forEach(id=>document.getElementById(id).style.display='flex');
+    ['btn-roll','btn-reload','btn-inv','btn-hub','btn-fire'].forEach(id=>document.getElementById(id).style.display='flex');
   } else {
-    ['btn-roll','btn-reload','btn-inv','btn-hub'].forEach(id=>document.getElementById(id).style.display='none');
+    ['btn-roll','btn-reload','btn-inv','btn-hub','btn-fire'].forEach(id=>document.getElementById(id).style.display='none');
   }
   document.getElementById('death-screen').classList.toggle('on', s===GS.DEAD);
 }
@@ -1431,10 +1555,32 @@ const Map3D = {
       }
     }
     for(const r of this.rooms){
-      const sp=off+(r.x+r.w/2)*C.CELL,sz=off+(r.z+r.h/2)*C.CELL;
-      if(r.type!=='start')this.spawnPts.push(new THREE.Vector3(sp,0,sz));
+      const cx=off+(r.x+r.w/2)*C.CELL,cz=off+(r.z+r.h/2)*C.CELL;
+      // Add multiple candidate spawn points per room (center + 4 quadrants)
+      const candidates=[
+        new THREE.Vector3(cx,0,cz),
+        new THREE.Vector3(off+(r.x+r.w*.25)*C.CELL,0,off+(r.z+r.h*.25)*C.CELL),
+        new THREE.Vector3(off+(r.x+r.w*.75)*C.CELL,0,off+(r.z+r.h*.25)*C.CELL),
+        new THREE.Vector3(off+(r.x+r.w*.25)*C.CELL,0,off+(r.z+r.h*.75)*C.CELL),
+        new THREE.Vector3(off+(r.x+r.w*.75)*C.CELL,0,off+(r.z+r.h*.75)*C.CELL),
+      ];
+      if(r.type!=='start'){
+        // Only add spawn points not inside furniture (checked after _furniture runs)
+        // Store candidates — filter after _furniture call below
+        r._spawnCandidates=candidates;
+      }
       this._furniture(r,off);
-      if(r.type!=='start'&&Math.random()<0.6)this._chest(sp+(Math.random()-.5)*C.CELL,sz+(Math.random()-.5)*C.CELL);
+      // Now filter candidates against placed furniture
+      if(r._spawnCandidates){
+        for(const pt of r._spawnCandidates){
+          if(!this.hitFurniture(pt.x,pt.z))this.spawnPts.push(pt);
+        }
+        // Always guarantee at least one spawn per non-start room
+        if(!this.spawnPts.find(p=>Math.abs(p.x-cx)<C.CELL&&Math.abs(p.z-cz)<C.CELL)){
+          this.spawnPts.push(candidates[0]); // fallback: center even if in furniture
+        }
+      }
+      if(r.type!=='start'&&Math.random()<0.6)this._chest(cx+(Math.random()-.5)*C.CELL,cz+(Math.random()-.5)*C.CELL);
     }
     // Lights
     const amb=new THREE.AmbientLight(0x485868,3.2);scene.add(amb);this.lights.push(amb);
@@ -1588,8 +1734,21 @@ const Loot = {
   ARMOR_ICONS:{helmet:'⛑',chest:'🦺',gloves:'🧤',kneepads:'🦵',backpack:'🎒'},
 
   rollRarity(boost=0){
-    const w=[...RAR_WEIGHTS];
-    w[w.length-1]+=boost*3;
+    // Zone-gated rarity: better loot only drops in higher zones
+    const z=Zone?Zone.zone||1:1;
+    // Base weights per zone tier
+    // Zone 1-2: almost no Epic+, Zone 5+: Rare common, Zone 10+: Epic possible, Zone 15+: Legendary
+    const epicUnlock=Math.max(0,(z-8)/12);      // 0 until zone 8, ramps up
+    const legUnlock=Math.max(0,(z-14)/16);      // 0 until zone 14
+    const exoticUnlock=Math.max(0,(z-20)/20);   // 0 until zone 20
+    const w=[
+      Math.max(5, 55-z*1.8),           // COMMON — decreases with zone
+      Math.max(10, 30-z*.6),           // UNCOMMON
+      Math.max(8, 10+z*.5),            // RARE — increases
+      Math.max(0, epicUnlock*12)+boost*2,  // EPIC
+      Math.max(0, legUnlock*6)+boost,      // LEGENDARY
+      Math.max(0, exoticUnlock*2),         // EXOTIC
+    ];
     const total=w.reduce((a,b)=>a+b,0);
     let r=Math.random()*total;
     for(let i=0;i<RAR_KEYS.length;i++){r-=w[i];if(r<=0)return RAR_KEYS[i];}
@@ -1920,6 +2079,7 @@ const Enemies = {
 
   _kill(e){
     e.alive=false;scene.remove(e.mesh);this.totalKills++;
+    BattlePass.addXP(e.elite?30:10); // elites give 3x BP XP
     Player.gainXP(e.T.xp);
     Player.credits+=~~(e.T.cr*(1+Zone.zone*.1));
     UI.credit(Player.credits);
@@ -2106,6 +2266,7 @@ const Zone={
     this.killsInZone++;
     if(this.killsInZone>=this.killsToNext&&!Boss.active){
       this.killsInZone=0;this.zone++;this.killsToNext=~~(this.killsToNext*1.4);
+    BattlePass.addXP(500); // bonus XP for clearing a zone
       // Every 3 zones: boss
       if(this.zone%3===0&&Map3D.spawnPts.length>0){
         const sp=Map3D.spawnPts[~~(Math.random()*Map3D.spawnPts.length)];
@@ -2840,6 +3001,7 @@ function slotPick(s){
     const d=Save.load(s);
     if(!d){_isNewAgent=true;_startNewGame();setState(GS.CHAR);CharCreator._draw();return;}
     _startNewGame();_loadSaveIntoGame(d);HubSystem.refresh();setState(GS.HUB);
+    Audio.stopMusic(); // ensure game music stops if somehow playing
   }
 }
 function slotDelete(e,s){
@@ -2859,6 +3021,7 @@ function menuContinue(){
   Save.activeSlot=latest;
   const d=Save.load();_startNewGame();_loadSaveIntoGame(d);
   LoginReward.applyPending();
+  setTimeout(()=>Audio.startMusic(),350);
   setState(GS.MISSION);
 }
 
@@ -2867,6 +3030,7 @@ let _isNewAgent=false;
 function ccConfirm(){
   Audio.uiClick();CharCreator.apply();setState(GS.MISSION);
   LoginReward.applyPending();
+  setTimeout(()=>Audio.startMusic(),350);
   const showTut=_isNewAgent;_isNewAgent=false;
   setTimeout(()=>Tutorial.start(showTut),400);
 }
@@ -2913,11 +3077,13 @@ function GoToHub(){
   if(gameState!==GS.MISSION)return;
   if(_isDailyRun){DailyChallenge.recordScore(Enemies.totalKills,Zone.zone);_isDailyRun=false;}
   Save.save();_refreshMenu();
-  Audio.stopMusic();HubSystem.refresh();setState(GS.HUB);
+  Audio.stopMusic(); // fades gameGain, then auto-starts menu music after 1.2s
+  HubSystem.refresh();setState(GS.HUB);
 }
 
 // ── FATE-style death penalties ─────────────────────────────────────
 let _deathDrops=[]; // items dropped at death location, retrievable
+let _gravePos=null; // world position of last gravestone
 
 function _die(){
   if(!gameRunning)return;
@@ -2940,6 +3106,7 @@ function _die(){
   if(dropCandidates.length>0&&Player.mesh){
     const dropped=dropCandidates[~~(Math.random()*dropCandidates.length)];
     _deathDrops.push(dropped);
+    _gravePos=Player.mesh.position.clone();
     // Spawn a glowing gravestone marker in the world
     const g=new THREE.Mesh(
       new THREE.BoxGeometry(.5,1.2,.2),
@@ -2979,32 +3146,25 @@ function _die(){
 }
 
 function deathRevive(cost){
-  // FATE: pay credits to resurrect in place with full health
   Audio.uiClick();
   if(Player.credits<cost)return;
   Player.credits-=cost;
-  Player.hp=Player.maxHp;
-  Player.armor=Player.maxArmor;
+  Player.hp=Player.maxHp;Player.armor=Player.maxArmor;
   UI.credit(Player.credits);UI.updateBars();
-  setState(GS.MISSION);
-  gameRunning=true;
+  setState(GS.MISSION);gameRunning=true;
   setTimeout(()=>Audio.startMusic(),300);
-  // Flash green
   const wb=document.getElementById('wave-banner');
   if(wb){wb.textContent='✦ REVIVED';wb.style.display='block';wb.style.animation='none';void wb.offsetWidth;wb.style.animation='waveflash 1.8s ease forwards';setTimeout(()=>wb.style.display='none',1800);}
   Save.save();
 }
 
 function deathReturnToHub(){
-  // FATE: return to town — keep character, gear, penalties already applied
   Audio.uiClick();
-  // Clean up dropped items from scene (gravestone stays as loot to find)
+  Audio.stopMusic();
   Enemies.list.forEach(e=>scene.remove(e.mesh));Enemies.list=[];
   if(Boss.active){scene.remove(Boss.active.mesh);Boss.active=null;
     document.getElementById('boss-bar').style.display='none';}
-  // Reset zone kill counter but keep zone number (FATE: you don't lose dungeon progress)
   Zone.killsInZone=0;
-  // Regenerate map to fresh state
   Map3D.generate();
   Player.init();CharCreator.apply();
   camera.position.copy(Player.mesh.position).add(CAM_OFF);
@@ -3013,7 +3173,7 @@ function deathReturnToHub(){
   Save.save();_refreshMenu();
 }
 
-function deathGoHub(){deathReturnToHub();} // legacy alias
+function deathGoHub(){deathReturnToHub();}
 
 // =====================================================================
 //  LIGHT FLICKER
@@ -3102,6 +3262,16 @@ function _drawFullMap(){
     ctx.fillText('B',bx,bz+4);
   }
 
+  // Gravestone
+  if(_gravePos){
+    const gx=((_gravePos.x-off)/C.CELL)*cellSize;
+    const gz=((_gravePos.z-off)/C.CELL)*cellSize;
+    ctx.fillStyle='#8844ff';ctx.strokeStyle='#fff';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(gx,gz,7,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font='bold 9px serif';ctx.textAlign='center';
+    ctx.fillText('🪦',gx,gz+3);
+  }
+
   // Player
   const px=(Player.mesh.position.x-off)/C.CELL*cellSize;
   const pz=(Player.mesh.position.z-off)/C.CELL*cellSize;
@@ -3185,11 +3355,13 @@ function pauseToMenu(){
 }
 function setMusicVol(v){
   document.getElementById('s-music-val').textContent=v;
-  if(Audio.musicGain)Audio.musicGain.gain.value=v/450;
+  const vol=v/100*0.42;
+  if(Audio.gameGain&&Audio.musicPlaying)Audio.gameGain.gain.value=vol;
+  if(Audio.menuGain&&Audio.menuPlaying)Audio.menuGain.gain.value=vol*1.2;
 }
 function setSfxVol(v){
   document.getElementById('s-sfx-val').textContent=v;
-  if(Audio.sfxGain)Audio.sfxGain.gain.value=v/100;
+  if(Audio.sfxGain)Audio.sfxGain.gain.value=v/100; // 0–1 range
 }
 function setPerfMode(v){
   const high=v==='0'||v===0;
@@ -3390,7 +3562,30 @@ HubSystem.renderMercs=function(){
 
 // Extend HubSystem.refresh to include new tabs
 const _origRefresh=HubSystem.refresh.bind(HubSystem);
-HubSystem.refresh=function(){_origRefresh();this.renderArena();this.renderMercs();};
+HubSystem.refresh=function(){
+  _origRefresh();
+  this.renderArena();
+  this.renderMercs();
+  if(typeof BattlePass!=='undefined'){
+    BattlePass.renderHub();
+    // Show top banner if pass not owned
+    const nb=document.getElementById('pass-notice-bar');
+    if(nb)nb.style.display=BattlePass.load().owned?'none':'block';
+  }
+  if(typeof StyleSystem!=='undefined')StyleSystem.render();
+};
+
+function hubGoToPass(){
+  // Programmatically click the PASS tab
+  document.querySelectorAll('.hub-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.hub-panel').forEach(p=>p.classList.remove('active'));
+  const tab=document.querySelector('.hub-tab[data-panel="pass"]');
+  const panel=document.getElementById('hub-pass');
+  if(tab)tab.classList.add('active');
+  if(panel)panel.classList.add('active');
+  if(typeof BattlePass!=='undefined')BattlePass.renderHub();
+  Audio.uiClick();
+}
 
 // =====================================================================
 //  MENU BUTTON WIRING
@@ -3404,6 +3599,8 @@ document.querySelectorAll('.hub-tab').forEach(tab=>{
     document.getElementById('hub-'+tab.dataset.panel).classList.add('active');
     if(tab.dataset.panel==='arena')HubSystem.renderArena();
     if(tab.dataset.panel==='mercs')HubSystem.renderMercs();
+    if(tab.dataset.panel==='pass')BattlePass.renderHub();
+    if(tab.dataset.panel==='style')StyleSystem.render();
   });
 });
 
@@ -3456,164 +3653,241 @@ function loop(){
 //  AUDIO SYSTEM — Web Audio API (procedural synth, no samples needed)
 // =====================================================================
 const Audio={
-  ctx:null,masterGain:null,musicGain:null,sfxGain:null,ambGain:null,
-  musicPlaying:false,menuPlaying:false,rainPlaying:false,
-  _schedTimer:null,_menuTimer:null,_rainNode:null,_rainGain:null,
+  ctx:null,masterGain:null,
+  menuGain:null,   // menu music only
+  gameGain:null,   // in-game tracks only
+  sfxGain:null,
+  musicPlaying:false,menuPlaying:false,
+  _schedTimer:null,_menuTimer:null,
   _nextStep:0,
+  // Expose musicGain as alias for game gain (legacy references in track functions)
+  get musicGain(){return this.gameGain;},
 
   init(){
-    const wake=()=>{
-      if(this.ctx){
-        // Already created - just resume if suspended (iOS suspends on background)
-        if(this.ctx.state==='suspended')this.ctx.resume().then(()=>{
-          if(!this.menuPlaying&&!this.musicPlaying)this.startMenuMusic();
-        });
-        return;
-      }
+    const setup=()=>{
+      if(this.ctx)return;
       try{
         this.ctx=new(window.AudioContext||window.webkitAudioContext)();
-        this.masterGain=this.ctx.createGain();this.masterGain.gain.value=0.85;this.masterGain.connect(this.ctx.destination);
-        this.musicGain=this.ctx.createGain();this.musicGain.gain.value=0.18;this.musicGain.connect(this.masterGain);
-        this.sfxGain=this.ctx.createGain();this.sfxGain.gain.value=0.6;this.sfxGain.connect(this.masterGain);
-        this.ambGain=this.ctx.createGain();this.ambGain.gain.value=0.12;this.ambGain.connect(this.masterGain);
-        setTimeout(()=>this.startMenuMusic(),100);
-      }catch(e){}
+        this.masterGain=this.ctx.createGain();
+        this.masterGain.gain.value=0.92;
+        this.masterGain.connect(this.ctx.destination);
+        // Menu music chain — completely separate
+        this.menuGain=this.ctx.createGain();
+        this.menuGain.gain.value=0;
+        this.menuGain.connect(this.masterGain);
+        // Game music chain — completely separate
+        this.gameGain=this.ctx.createGain();
+        this.gameGain.gain.value=0;
+        this.gameGain.connect(this.masterGain);
+        // SFX chain
+        this.sfxGain=this.ctx.createGain();
+        this.sfxGain.gain.value=0.85;
+        this.sfxGain.connect(this.masterGain);
+        // iOS unlock: silent 1-sample buffer
+        const buf=this.ctx.createBuffer(1,1,22050);
+        const src=this.ctx.createBufferSource();
+        src.buffer=buf;src.connect(this.ctx.destination);src.start(0);
+        const go=()=>{this.startMenuMusic();};
+        if(this.ctx.state==='suspended')this.ctx.resume().then(go);else setTimeout(go,50);
+      }catch(e){console.warn('Audio setup failed:',e);}
     };
-    // Listen on every interaction (not just first) — iOS suspends AudioContext on page hide
-    document.addEventListener('pointerdown',wake);
-    document.addEventListener('keydown',wake);
+    this._setup=setup;
+    const desk=()=>{if(!this.ctx){setup();document.getElementById('audio-unlock')?.remove();}};
+    document.addEventListener('keydown',desk,{once:true,passive:true});
+    document.addEventListener('click',desk,{once:true,passive:true});
     document.addEventListener('visibilitychange',()=>{
       if(document.visibilityState==='visible'&&this.ctx?.state==='suspended')this.ctx.resume();
     });
   },
 
-  _r(){
-    if(!this.ctx)return;
-    if(this.ctx.state==='suspended')this.ctx.resume().then(()=>{
-      if(gameRunning&&!this.musicPlaying)this.startMusic();
-      else if(!gameRunning&&!this.menuPlaying)this.startMenuMusic();
-    });
-  },
+  _r(){if(this.ctx?.state==='suspended')this.ctx.resume();},
 
   // ═══════════════════════════════════════════════════════════
-  //  MENU MUSIC — DJ Screw / Chopped-and-Screwed atmosphere
-  //  Slow 68BPM, pitched-down dark hip-hop, vinyl texture
+  //  MENU MUSIC — uses menuGain, never touches gameGain
   // ═══════════════════════════════════════════════════════════
   startMenuMusic(){
     if(!this.ctx||this.menuPlaying)return;
-    this.menuPlaying=true;this._schedMenu();
+    this._r();
+    this.menuPlaying=true;
+    // Fade IN menu gain on its own node
+    this.menuGain.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.menuGain.gain.setValueAtTime(0,this.ctx.currentTime);
+    this.menuGain.gain.linearRampToValueAtTime(0.32,this.ctx.currentTime+1.8);
+    this._schedMenu();
   },
   stopMenuMusic(){
+    if(!this.menuPlaying)return;
     this.menuPlaying=false;
-    if(this._menuTimer)clearTimeout(this._menuTimer);
+    if(this._menuTimer){clearTimeout(this._menuTimer);this._menuTimer=null;}
+    if(this.ctx){
+      this.menuGain.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.menuGain.gain.setValueAtTime(this.menuGain.gain.value,this.ctx.currentTime);
+      this.menuGain.gain.linearRampToValueAtTime(0,this.ctx.currentTime+0.8);
+    }
   },
   _schedMenu(){
     if(!this.ctx||!this.menuPlaying)return;
     this._r();
-    const BPM=68,beat=60/BPM;
+    const B=60/92; // 92 BPM — cinematic march tempo
     const now=this.ctx.currentTime;
-    const bars=4,steps=bars*4;
-    // Heavy slow kick pattern — 1, 2.5, 3
-    const kickSteps=[0,2,4,6,8,10,14];
-    for(const s of kickSteps)this._screwKick(now+s*beat);
-    // Snare on 5 and 13 (half-time feel)
-    this._screwSnare(now+4*beat);this._screwSnare(now+12*beat);
-    // Sub bass riff — slow, heavy, pitched down
-    const bassNotes=[36,36,31,33,36,36,38,36]; // MIDI-style freq mapping
-    const bassFreqs=[65.4,65.4,46.2,55,65.4,65.4,69.3,65.4];
-    bassFreqs.forEach((f,i)=>this._screwBass(now+i*beat*2,f,beat*1.8));
-    // Chopped atmospheric pad
-    this._screwPad(now,beat*steps);
-    // Vinyl crackle texture
-    this._vinyl(now,beat*steps);
-    // Occasional ghostly lead
-    if(Math.random()<.6)this._screwLead(now+beat*6,beat*10);
-    // Loop
-    this._menuTimer=setTimeout(()=>this._schedMenu(),(beat*steps-0.2)*1000);
-  },
-  _screwKick(t){
-    if(!this.ctx)return;
-    const o=this.ctx.createOscillator(),g=this.ctx.createGain();
-    o.frequency.setValueAtTime(90,t);o.frequency.exponentialRampToValueAtTime(28,t+.35);
-    g.gain.setValueAtTime(1.6,t);g.gain.exponentialRampToValueAtTime(.001,t+.45);
-    o.connect(g);g.connect(this.musicGain);o.start(t);o.stop(t+.5);
-    // Sub thump
-    const s=this.ctx.createOscillator(),sg=this.ctx.createGain();
-    s.type='sine';s.frequency.setValueAtTime(55,t);s.frequency.exponentialRampToValueAtTime(20,t+.3);
-    sg.gain.setValueAtTime(.9,t);sg.gain.exponentialRampToValueAtTime(.001,t+.4);
-    s.connect(sg);sg.connect(this.musicGain);s.start(t);s.stop(t+.45);
-  },
-  _screwSnare(t){
-    if(!this.ctx)return;
-    const sr=this.ctx.sampleRate;
-    const buf=this.ctx.createBuffer(1,~~(sr*.28),sr);const d=buf.getChannelData(0);
-    for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
-    const n=this.ctx.createBufferSource();n.buffer=buf;
-    const f=this.ctx.createBiquadFilter();f.type='bandpass';f.frequency.value=800;f.Q.value=0.5;
-    const g=this.ctx.createGain();g.gain.setValueAtTime(.5,t);g.gain.exponentialRampToValueAtTime(.001,t+.28);
-    n.connect(f);f.connect(g);g.connect(this.musicGain);n.start(t);
-    const o=this.ctx.createOscillator(),og=this.ctx.createGain();
-    o.type='triangle';o.frequency.value=180;og.gain.setValueAtTime(.22,t);og.gain.exponentialRampToValueAtTime(.001,t+.14);
-    o.connect(og);og.connect(this.musicGain);o.start(t);o.stop(t+.18);
-  },
-  _screwBass(t,freq,dur){
-    if(!this.ctx)return;
-    // Pitched-down sawtooth with heavy low-pass — the "chopped" bass sound
-    const o=this.ctx.createOscillator(),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain();
-    o.type='sawtooth';o.frequency.value=freq;o.detune.value=-600; // pitched down = chopped effect
-    f.type='lowpass';f.frequency.value=200;f.Q.value=3.5;
-    g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(.85,t+.04);
-    g.gain.setValueAtTime(.78,t+dur-.08);g.gain.linearRampToValueAtTime(.001,t+dur);
-    o.connect(f);f.connect(g);g.connect(this.musicGain);o.start(t);o.stop(t+dur+.05);
-    // Sub
-    const sub=this.ctx.createOscillator(),sg=this.ctx.createGain();
-    sub.type='sine';sub.frequency.value=freq/2;sub.detune.value=-600;
-    sg.gain.setValueAtTime(.001,t);sg.gain.linearRampToValueAtTime(.5,t+.04);
-    sg.gain.setValueAtTime(.45,t+dur-.08);sg.gain.linearRampToValueAtTime(.001,t+dur);
-    sub.connect(sg);sg.connect(this.musicGain);sub.start(t);sub.stop(t+dur+.05);
-  },
-  _screwPad(t,dur){
-    if(!this.ctx)return;
-    // Dark minor chord, very slow attack, lots of reverb-like delay
-    [[82,98,116],[73,87,110],[69,82,103]].forEach(chord=>{
-      chord.forEach(freq=>{
-        const o=this.ctx.createOscillator(),dl=this.ctx.createDelay(1.5),fb=this.ctx.createGain(),g=this.ctx.createGain();
-        o.type='sine';o.frequency.value=freq;o.detune.value=(Math.random()-.5)*12;
-        fb.gain.value=0.4;dl.delayTime.value=0.6;dl.connect(fb);fb.connect(dl);
-        g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(.038,t+4);
-        g.gain.setValueAtTime(.033,t+dur-4);g.gain.linearRampToValueAtTime(.001,t+dur);
-        o.connect(g);g.connect(dl);g.connect(this.musicGain);dl.connect(this.musicGain);
-        o.start(t);o.stop(t+dur+.1);
+    const bars=16,dur=B*4*bars;
+    const D=this.menuGain; // ← menu uses its own dedicated gain node
+
+    // ── Epic orchestral kick/snare march ──
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      // Timpani-style kick on 1 and 3
+      this._timpani(t,D);
+      this._timpani(t+B*2,D);
+      // Snare crack on 2 and 4
+      if(bar>1){this._orchSnare(t+B,D);this._orchSnare(t+B*3,D);}
+      // Hi-hat / cymbal on every beat after bar 2
+      if(bar>2){for(let s=0;s<4;s++)this._cymbal(t+s*B,D,s===3);}
+    }
+
+    // ── Walking spy bass line (classic 007 chromatic descent) ──
+    const bassLine=[98,98,87,92,98,98,92,87, 82,82,73,77,82,82,77,73];
+    for(let i=0;i<bars;i++){
+      const f=bassLine[i%bassLine.length];
+      this._spyBass(now+i*B*4,f,B*3.85,D);
+      this._spyBass(now+i*B*4+B*2,f*.75,B*1.85,D);
+    }
+
+    // ── Big brass fanfare — enters at bar 4 ──
+    const brassChords=[
+      [330,415,494,587],[294,370,440,523],[349,440,523,659],
+      [311,392,466,587],[330,415,494,587],[370,466,554,659],
+      [294,370,440,523],[330,415,494,587]
+    ];
+    for(let i=0;i<8;i++){
+      const t=now+(i+4)*B*4;
+      const ch=brassChords[i%brassChords.length];
+      // Stab on beat 1
+      ch.forEach(f=>this._brassNote(f,t,B*.6,D,.07));
+      // Echo stab on beat 3
+      if(i%2===0)ch.forEach(f=>this._brassNote(f,t+B*2.5,B*.35,D,.045));
+    }
+
+    // ── Soaring strings — enter at bar 2, swell through ──
+    const stringChords=[
+      [330,415,494],[294,370,440],[349,440,523],[311,392,466],
+      [440,554,659],[392,494,587],[330,415,494],[294,370,440]
+    ];
+    for(let i=0;i<8;i++){
+      const t=now+(i+2)*B*4;
+      this._orchStrings(stringChords[i%stringChords.length],t,B*4,D,.05+i*.004);
+    }
+
+    // ── Heroic solo horn melody (the "007 theme" feel) — bar 8 ──
+    const hornMelody=[494,523,494,440,392,440,494,523,587,659,587,523,494,440,523,494];
+    for(let i=0;i<hornMelody.length;i++){
+      const st=now+(8*B*4)+(i*B*.9);
+      if(st<now+dur-B)this._hornNote(hornMelody[i],st,B*.75,D);
+    }
+
+    // ── Atmospheric string tremolo underneath ──
+    [[165,196,233],[147,185,220],[155,196,247],[138,174,220]].forEach((ch,ci)=>{
+      const t=now+ci*B*4;
+      ch.forEach(f=>{
+        const o=this.ctx.createOscillator(),g=this.ctx.createGain();
+        o.type='sawtooth';o.frequency.value=f;o.detune.value=(Math.random()-.5)*6;
+        g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(.022,t+1.5);
+        g.gain.setValueAtTime(.018,t+B*4-1.5);g.gain.linearRampToValueAtTime(.001,t+B*4);
+        const flt=this.ctx.createBiquadFilter();flt.type='lowpass';flt.frequency.value=2400;
+        o.connect(flt);flt.connect(g);g.connect(D);o.start(t);o.stop(t+B*4+.1);
       });
     });
+
+    this._menuTimer=setTimeout(()=>this._schedMenu(),(dur-0.3)*1000);
   },
-  _vinyl(t,dur){
+
+  _timpani(t,dest){
     if(!this.ctx)return;
-    // Vinyl crackle — filtered noise at very low volume
-    const sr=this.ctx.sampleRate,len=~~(sr*dur);
-    const buf=this.ctx.createBuffer(1,len,sr);const d=buf.getChannelData(0);
-    for(let i=0;i<len;i++)d[i]=Math.random()<.003?(Math.random()*2-1)*0.6:0;
-    const n=this.ctx.createBufferSource();n.buffer=buf;
-    const f=this.ctx.createBiquadFilter();f.type='bandpass';f.frequency.value=3000;f.Q.value=0.3;
-    const g=this.ctx.createGain();g.gain.value=0.08;
-    n.connect(f);f.connect(g);g.connect(this.musicGain);n.start(t);
+    const o=this.ctx.createOscillator(),g=this.ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(80,t);o.frequency.exponentialRampToValueAtTime(45,t+.35);
+    g.gain.setValueAtTime(1.8,t);g.gain.exponentialRampToValueAtTime(.001,t+.55);
+    o.connect(g);g.connect(dest);o.start(t);o.stop(t+.6);
+    // Body noise
+    const sr=this.ctx.sampleRate,buf=this.ctx.createBuffer(1,~~(sr*.1),sr),d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+    const n=this.ctx.createBufferSource(),f=this.ctx.createBiquadFilter(),ng=this.ctx.createGain();
+    n.buffer=buf;f.type='lowpass';f.frequency.value=200;
+    ng.gain.setValueAtTime(.5,t);ng.gain.exponentialRampToValueAtTime(.001,t+.12);
+    n.connect(f);f.connect(ng);ng.connect(dest);n.start(t);
   },
-  _screwLead(t,dur){
+  _orchSnare(t,dest){
     if(!this.ctx)return;
-    // Slow ghostly melody — sounds like a distant chopped vocal
-    const scale=[165,185,196,220,246];
-    const steps=6;const stepLen=dur/steps;
-    for(let i=0;i<steps;i++){
-      if(Math.random()<.4)continue;
-      const freq=scale[~~(Math.random()*scale.length)];
-      const st=t+i*stepLen;
-      const o=this.ctx.createOscillator(),g=this.ctx.createGain(),f=this.ctx.createBiquadFilter();
-      o.type='sine';o.frequency.value=freq;o.detune.value=(Math.random()-.5)*30;
-      f.type='lowpass';f.frequency.value=900;
-      g.gain.setValueAtTime(.001,st);g.gain.linearRampToValueAtTime(.045,st+.3);
-      g.gain.setValueAtTime(.04,st+stepLen*.7);g.gain.linearRampToValueAtTime(.001,st+stepLen*.9);
-      o.connect(f);f.connect(g);g.connect(this.musicGain);o.start(st);o.stop(st+stepLen);
-    }
+    const sr=this.ctx.sampleRate,buf=this.ctx.createBuffer(1,~~(sr*.12),sr),d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+    const n=this.ctx.createBufferSource(),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain();
+    n.buffer=buf;f.type='bandpass';f.frequency.value=1800;f.Q.value=.6;
+    g.gain.setValueAtTime(.6,t);g.gain.exponentialRampToValueAtTime(.001,t+.12);
+    n.connect(f);f.connect(g);g.connect(dest);n.start(t);
+    // Crack tone
+    const o=this.ctx.createOscillator(),og=this.ctx.createGain();
+    o.type='triangle';o.frequency.value=280;og.gain.setValueAtTime(.28,t);og.gain.exponentialRampToValueAtTime(.001,t+.06);
+    o.connect(og);og.connect(dest);o.start(t);o.stop(t+.08);
+  },
+  _cymbal(t,dest,crash=false){
+    if(!this.ctx)return;
+    const sr=this.ctx.sampleRate,len=~~(sr*(crash?.22:.06)),buf=this.ctx.createBuffer(1,len,sr),d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+    const n=this.ctx.createBufferSource(),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain();
+    n.buffer=buf;f.type='highpass';f.frequency.value=crash?5000:9000;
+    g.gain.setValueAtTime(crash?.28:.08,t);g.gain.exponentialRampToValueAtTime(.001,t+len/sr);
+    n.connect(f);f.connect(g);g.connect(dest);n.start(t);
+  },
+  _spyBass(t,freq,dur,dest){
+    if(!this.ctx)return;
+    const o=this.ctx.createOscillator(),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain();
+    o.type='sawtooth';o.frequency.value=freq;
+    f.type='lowpass';f.frequency.value=320;f.Q.value=2.5;
+    g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(.9,t+.025);
+    g.gain.setValueAtTime(.8,t+dur-.08);g.gain.linearRampToValueAtTime(.001,t+dur);
+    o.connect(f);f.connect(g);g.connect(dest);o.start(t);o.stop(t+dur+.05);
+    const sub=this.ctx.createOscillator(),sg=this.ctx.createGain();
+    sub.type='sine';sub.frequency.value=freq/2;
+    sg.gain.setValueAtTime(.001,t);sg.gain.linearRampToValueAtTime(.5,t+.025);sg.gain.setValueAtTime(.45,t+dur-.08);sg.gain.linearRampToValueAtTime(.001,t+dur);
+    sub.connect(sg);sg.connect(dest);sub.start(t);sub.stop(t+dur+.05);
+  },
+  _brassNote(freq,t,dur,dest,vol){
+    if(!this.ctx)return;
+    const o=this.ctx.createOscillator(),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain();
+    o.type='sawtooth';o.frequency.value=freq;o.detune.value=(Math.random()-.5)*8;
+    f.type='lowpass';f.frequency.value=2200+freq;f.Q.value=1.2;
+    g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(vol,t+.06);
+    g.gain.setValueAtTime(vol*.88,t+dur-.07);g.gain.linearRampToValueAtTime(.001,t+dur);
+    o.connect(f);f.connect(g);g.connect(dest);o.start(t);o.stop(t+dur+.05);
+    // Brass harmonic overtone
+    const o2=this.ctx.createOscillator(),g2=this.ctx.createGain();
+    o2.type='sine';o2.frequency.value=freq*2;
+    g2.gain.setValueAtTime(.001,t);g2.gain.linearRampToValueAtTime(vol*.22,t+.04);g2.gain.linearRampToValueAtTime(.001,t+dur);
+    o2.connect(g2);g2.connect(dest);o2.start(t);o2.stop(t+dur+.05);
+  },
+  _orchStrings(freqs,t,dur,dest,vol){
+    if(!this.ctx)return;
+    freqs.forEach((freq,i)=>{
+      const o=this.ctx.createOscillator(),g=this.ctx.createGain();
+      const vib=this.ctx.createOscillator(),vg=this.ctx.createGain();
+      o.type='sawtooth';o.frequency.value=freq;o.detune.value=(i%2?5:-5);
+      vib.frequency.value=6;vg.gain.value=7;vib.connect(vg);vg.connect(o.frequency);
+      const flt=this.ctx.createBiquadFilter();flt.type='lowpass';flt.frequency.value=3000;
+      g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(vol,t+.5);
+      g.gain.setValueAtTime(vol*.9,t+dur-.5);g.gain.linearRampToValueAtTime(.001,t+dur);
+      o.connect(flt);flt.connect(g);g.connect(dest);
+      vib.start(t);o.start(t);o.stop(t+dur+.05);vib.stop(t+dur+.05);
+    });
+  },
+  _hornNote(freq,t,dur,dest){
+    if(!this.ctx)return;
+    const o=this.ctx.createOscillator(),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain();
+    o.type='sawtooth';o.frequency.value=freq;
+    f.type='lowpass';f.frequency.value=1800;f.Q.value=2;
+    const vib=this.ctx.createOscillator(),vg=this.ctx.createGain();
+    vib.frequency.value=5;vg.gain.value=6;vib.connect(vg);vg.connect(o.frequency);
+    g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(.08,t+.08);
+    g.gain.setValueAtTime(.07,t+dur-.08);g.gain.linearRampToValueAtTime(.001,t+dur);
+    o.connect(f);f.connect(g);g.connect(dest);vib.start(t);o.start(t);o.stop(t+dur+.05);vib.stop(t+dur+.05);
   },
 
   // ═══════════════════════════════════════════════════════════
@@ -3628,22 +3902,28 @@ const Audio={
 
   startMusic(){
     if(!this.ctx||this.musicPlaying)return;
-    this.stopMenuMusic();
+    this.stopMenuMusic(); // fades menuGain down on its own chain
     this.musicPlaying=true;
-    this.musicGain.gain.setValueAtTime(this.musicGain.gain.value,this.ctx.currentTime);
-    this.musicGain.gain.linearRampToValueAtTime(0.22,this.ctx.currentTime+1.5);
+    // Start game music on gameGain — completely independent of menuGain
+    this.gameGain.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.gameGain.gain.setValueAtTime(0,this.ctx.currentTime);
+    this.gameGain.gain.linearRampToValueAtTime(0.26,this.ctx.currentTime+1.0);
     this._playTrack(this._trackIndex);
   },
   stopMusic(){
     this.musicPlaying=false;
-    if(this._schedTimer)clearTimeout(this._schedTimer);
+    if(this._schedTimer){clearTimeout(this._schedTimer);this._schedTimer=null;}
     if(this.ctx){
-      this.musicGain.gain.setValueAtTime(this.musicGain.gain.value,this.ctx.currentTime);
-      this.musicGain.gain.linearRampToValueAtTime(0,this.ctx.currentTime+1.5);
+      this.gameGain.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.gameGain.gain.setValueAtTime(this.gameGain.gain.value,this.ctx.currentTime);
+      this.gameGain.gain.linearRampToValueAtTime(0,this.ctx.currentTime+1.0);
     }
     setTimeout(()=>{
-      if(this.ctx&&!this.musicPlaying){this.musicGain.gain.value=0.18;this.startMenuMusic();}
-    },1800);
+      if(!this.musicPlaying&&this.ctx){
+        this.gameGain.gain.value=0;
+        this.startMenuMusic();
+      }
+    },1200);
   },
   _playTrack(idx){
     if(!this.ctx||!this.musicPlaying)return;
@@ -4400,19 +4680,328 @@ const Tutorial={
     document.getElementById('tutorial-screen').classList.remove('on');
     document.getElementById('tut-spotlight').classList.remove('on');
     document.getElementById('tut-arrow').style.display='none';
+    Audio.uiClick();
+    // Launch story intro after a brief pause
+    setTimeout(()=>StoryIntro.start(true),400);
+  },
+};
+function tutNext(){Tutorial.next();}
+function tutSkip(){Tutorial.finish();}
+// Space/Enter advances tutorial or story
+window.addEventListener('keydown',e=>{
+  if(Tutorial.active&&(e.code==='Space'||e.code==='Enter')){e.preventDefault();Tutorial.next();}
+  if(StoryIntro.active&&(e.code==='Space'||e.code==='Enter')){e.preventDefault();StoryIntro.next();}
+},true);
+
+
+// =====================================================================
+//  STYLE SYSTEM — cosmetic apparel with helmet toggle
+// =====================================================================
+const StyleSystem={
+  KEY:'az_style',
+  colors:['#1a2a5a','#2a1a1a','#1a3a1a','#2a2a2a','#3a1a3a','#1a3a3a','#4a3a1a','#000000'],
+  colorNames:['NAVY','CRIMSON','RANGER','STEALTH','VIOLET','TEAL','DESERT','SHADOW'],
+  helmetOpts:[{id:'on',label:'🪖',name:'HELMET ON'},{id:'off',label:'👤',name:'HIDE HELMET'},{id:'beret',label:'🎩',name:'BERET'},{id:'hood',label:'🥷',name:'HOOD'}],
+  emotes:[{id:'salute',icon:'🫡',name:'SALUTE'},{id:'wave',icon:'👋',name:'WAVE'},{id:'point',icon:'👉',name:'POINT'},{id:'thumbs',icon:'👍',name:'THUMBS UP'},{id:'nod',icon:'🫡',name:'NOD'},{id:'cross',icon:'🤜',name:'FIST BUMP'},{id:'reload',icon:'🔧',name:'RELOAD FLEX'},{id:'scan',icon:'🔭',name:'SCAN'}],
+  sel:{color:0,helmet:'on',emote:'salute'},
+  _unlocked:{colors:[0,1,2,3],helmets:['on','off'],emotes:['salute','wave']},
+
+  load(){try{const d=JSON.parse(localStorage.getItem(this.KEY));if(d){this.sel=d.sel||this.sel;this._unlocked=d.unlocked||this._unlocked;}}catch{}},
+  save(){try{localStorage.setItem(this.KEY,JSON.stringify({sel:this.sel,unlocked:this._unlocked}));}catch{}},
+
+  unlock(type,id){
+    if(type==='color'&&!this._unlocked.colors.includes(id))this._unlocked.colors.push(id);
+    if(type==='helmet'&&!this._unlocked.helmets.includes(id))this._unlocked.helmets.push(id);
+    if(type==='emote'&&!this._unlocked.emotes.includes(id))this._unlocked.emotes.push(id);
+    this.save();
+  },
+
+  render(){
+    this.load();
+    // Colors
+    const cc=document.getElementById('style-colors');if(!cc)return;
+    cc.innerHTML='';
+    this.colors.forEach((col,i)=>{
+      const el=document.createElement('div');el.className='style-opt'+(i===this.sel.color?' sel':'');
+      el.style.background=col;
+      if(!this._unlocked.colors.includes(i)){el.style.opacity='.3';el.title='LOCKED — GET FROM BATTLE PASS';}
+      el.onclick=()=>{if(!this._unlocked.colors.includes(i))return;this.sel.color=i;this.render();this._drawPreview();};
+      cc.appendChild(el);
+    });
+    // Helmet
+    const hc=document.getElementById('style-helmet-opts');hc.innerHTML='';
+    this.helmetOpts.forEach(h=>{
+      const el=document.createElement('div');el.className='style-opt'+(this.sel.helmet===h.id?' sel':'');
+      el.textContent=h.label;el.title=h.name;
+      if(!this._unlocked.helmets.includes(h.id)){el.style.opacity='.3';el.title='LOCKED';}
+      el.onclick=()=>{if(!this._unlocked.helmets.includes(h.id))return;this.sel.helmet=h.id;this.render();this._drawPreview();};
+      hc.appendChild(el);
+    });
+    // Emotes
+    const ec=document.getElementById('style-emotes');ec.innerHTML='';
+    this.emotes.forEach(e=>{
+      const el=document.createElement('div');el.className='style-opt'+(this.sel.emote===e.id?' sel':'');
+      el.textContent=e.icon;el.title=e.name;
+      if(!this._unlocked.emotes.includes(e.id)){el.style.opacity='.3';el.title='LOCKED';}
+      el.onclick=()=>{if(!this._unlocked.emotes.includes(e.id))return;this.sel.emote=e.id;this.render();this._drawPreview();};
+      ec.appendChild(el);
+    });
+    this._drawPreview();
+  },
+
+  _drawPreview(){
+    const cv=document.getElementById('style-preview');if(!cv)return;
+    const ctx=cv.getContext('2d');
+    ctx.fillStyle='#0a0a18';ctx.fillRect(0,0,90,120);
+    const col=this.colors[this.sel.color]||'#1a2a5a';
+    // Body
+    ctx.fillStyle=col;ctx.fillRect(30,50,30,35);
+    // Head
+    ctx.fillStyle='#c8a882';ctx.fillRect(32,25,26,24);
+    // Glasses
+    ctx.fillStyle='#111';ctx.fillRect(33,31,9,7);ctx.fillRect(48,31,9,7);
+    // Helmet
+    if(this.sel.helmet==='on'){ctx.fillStyle='#2a2a2a';ctx.fillRect(30,20,30,12);}
+    else if(this.sel.helmet==='beret'){ctx.fillStyle='#1a3a2a';ctx.fillRect(30,20,30,9);ctx.fillRect(25,22,40,4);}
+    else if(this.sel.helmet==='hood'){ctx.fillStyle=col;ctx.fillRect(28,18,34,14);}
+    // Arms
+    ctx.fillStyle=col;ctx.fillRect(18,50,14,28);ctx.fillRect(58,50,14,28);
+    // Legs
+    ctx.fillStyle='#1a1a2a';ctx.fillRect(30,85,13,25);ctx.fillRect(47,85,13,25);
+    // "ZERO" badge
+    ctx.fillStyle='rgba(230,126,34,.3)';ctx.fillRect(30,60,30,12);
+    ctx.fillStyle='#e67e22';ctx.font='bold 8px monospace';ctx.textAlign='center';
+    ctx.fillText('ZERO',45,70);
+    // Emote icon
+    const emote=this.emotes.find(e=>e.id===this.sel.emote);
+    if(emote){ctx.font='18px serif';ctx.textAlign='center';ctx.fillText(emote.icon,45,115);}
+  },
+
+  applyToPlayer(){
+    if(!Player.mesh)return;
+    const col=this.colors[this.sel.color]||'#1a2a5a';
+    const c=parseInt(col.replace('#',''),16);
+    // Update player mesh vest color
+    Player.mesh.traverse(m=>{
+      if(m.isMesh&&m.userData.isVest)m.material.color.set(c);
+      if(m.isMesh&&m.userData.isHelmet){m.visible=this.sel.helmet!=='off';}
+    });
+    this.save();
+    Audio.uiClick();
+    const wb=document.getElementById('wave-banner');
+    if(wb){wb.textContent='✦ STYLE APPLIED';wb.style.display='block';wb.style.animation='none';void wb.offsetWidth;wb.style.animation='waveflash 1.5s ease forwards';setTimeout(()=>wb.style.display='none',1500);}
+  },
+};
+
+// =====================================================================
+//  BATTLE PASS — 50-tier seasonal progression for in-game credits
+// =====================================================================
+const BattlePass={
+  KEY:'az_pass_s1',
+  COST:2500,
+  TIERS:[
+    {t:1,  icon:'🎽', name:'Operative Tee — Navy',        type:'style', data:{color:0}},
+    {t:2,  icon:'💰', name:'+500 Credits',                type:'credits', data:{amt:500}},
+    {t:3,  icon:'🔫', name:'APEX Ghost SMG [UNCOMMON]',   type:'weapon', data:{rar:'UNCOMMON',wtype:'SMG'}},
+    {t:4,  icon:'🎩', name:'Beret Helmet Style',          type:'helmet', data:{id:'beret'}},
+    {t:5,  icon:'💰', name:'+750 Credits',                type:'credits', data:{amt:750}},
+    {t:6,  icon:'🛡', name:'SPECTER Vest [UNCOMMON]',     type:'armor',  data:{rar:'UNCOMMON',slot:'chest'}},
+    {t:7,  icon:'👋', name:'Wave Emote',                  type:'emote',  data:{id:'wave'}},
+    {t:8,  icon:'💰', name:'+1000 Credits',               type:'credits', data:{amt:1000}},
+    {t:9,  icon:'🎽', name:'Operative Tee — Crimson',     type:'style',  data:{color:1}},
+    {t:10, icon:'🔫', name:'GHOST Phantom AR [RARE]',     type:'weapon', data:{rar:'RARE',wtype:'Assault Rifle'}},
+    {t:11, icon:'💰', name:'+1000 Credits',               type:'credits', data:{amt:1000}},
+    {t:12, icon:'👉', name:'Point Emote',                 type:'emote',  data:{id:'point'}},
+    {t:13, icon:'🪖', name:'Ranger Helmet [GREEN]',       type:'helmet', data:{id:'on',col:'ranger'}},
+    {t:14, icon:'💰', name:'+1500 Credits',               type:'credits', data:{amt:1500}},
+    {t:15, icon:'🛡', name:'IRONCLAD Kneepads [RARE]',   type:'armor',  data:{rar:'RARE',slot:'kneepads'}},
+    {t:16, icon:'🎽', name:'Stealth Uniform',             type:'style',  data:{color:3}},
+    {t:17, icon:'💰', name:'+1500 Credits',               type:'credits', data:{amt:1500}},
+    {t:18, icon:'👍', name:'Thumbs Up Emote',             type:'emote',  data:{id:'thumbs'}},
+    {t:19, icon:'🔫', name:'VECTOR Storm LMG [RARE]',    type:'weapon', data:{rar:'RARE',wtype:'LMG'}},
+    {t:20, icon:'💰', name:'+2000 Credits',               type:'credits', data:{amt:2000}},
+    {t:21, icon:'🎽', name:'Violet Shadow Uniform',       type:'style',  data:{color:4}},
+    {t:22, icon:'🛡', name:'NULL-13 Helmet [EPIC]',       type:'armor',  data:{rar:'EPIC',slot:'helmet'}},
+    {t:23, icon:'💰', name:'+2000 Credits',               type:'credits', data:{amt:2000}},
+    {t:24, icon:'🔭', name:'Scan Emote',                  type:'emote',  data:{id:'scan'}},
+    {t:25, icon:'🔫', name:'CLASSIFIED Revolver [EPIC]', type:'weapon', data:{rar:'EPIC',wtype:'Revolver'}},
+    {t:26, icon:'💰', name:'+2500 Credits',               type:'credits', data:{amt:2500}},
+    {t:27, icon:'🎽', name:'Teal Operative Uniform',      type:'style',  data:{color:5}},
+    {t:28, icon:'🥷', name:'Hood Style — Unlocked',       type:'helmet', data:{id:'hood'}},
+    {t:29, icon:'💰', name:'+2500 Credits',               type:'credits', data:{amt:2500}},
+    {t:30, icon:'🛡', name:'SPECTER Chest Rig [EPIC]',   type:'armor',  data:{rar:'EPIC',slot:'chest'}},
+    {t:31, icon:'🤜', name:'Fist Bump Emote',             type:'emote',  data:{id:'cross'}},
+    {t:32, icon:'💰', name:'+3000 Credits',               type:'credits', data:{amt:3000}},
+    {t:33, icon:'🔫', name:'APEX Wraith Sniper [EPIC]',  type:'weapon', data:{rar:'EPIC',wtype:'Sniper Rifle'}},
+    {t:34, icon:'🎽', name:'Desert OPS Uniform',          type:'style',  data:{color:6}},
+    {t:35, icon:'💰', name:'+3000 Credits',               type:'credits', data:{amt:3000}},
+    {t:36, icon:'🛡', name:'GHOST Gloves [EPIC]',         type:'armor',  data:{rar:'EPIC',slot:'gloves'}},
+    {t:37, icon:'🔧', name:'Reload Flex Emote',           type:'emote',  data:{id:'reload'}},
+    {t:38, icon:'💰', name:'+4000 Credits',               type:'credits', data:{amt:4000}},
+    {t:39, icon:'🔫', name:'SENTINEL Shotgun [LEGENDARY]',type:'weapon', data:{rar:'LEGENDARY',wtype:'Shotgun'}},
+    {t:40, icon:'🎽', name:'Shadow Black Uniform',        type:'style',  data:{color:7}},
+    {t:41, icon:'💰', name:'+4000 Credits',               type:'credits', data:{amt:4000}},
+    {t:42, icon:'🛡', name:'IRONCLAD Backpack [LEGENDARY]',type:'armor', data:{rar:'LEGENDARY',slot:'backpack'}},
+    {t:43, icon:'💰', name:'+5000 Credits',               type:'credits', data:{amt:5000}},
+    {t:44, icon:'🔫', name:'NULL-13 Plasma Rifle [LEGENDARY]',type:'weapon',data:{rar:'LEGENDARY',wtype:'Plasma Rifle'}},
+    {t:45, icon:'🎩', name:'Elite Operative Beret',       type:'helmet', data:{id:'beret'}},
+    {t:46, icon:'💰', name:'+5000 Credits',               type:'credits', data:{amt:5000}},
+    {t:47, icon:'🛡', name:'CLASSIFIED Full Armor Set [LEGENDARY]',type:'armor',data:{rar:'LEGENDARY',slot:'chest'}},
+    {t:48, icon:'💰', name:'+7500 Credits',               type:'credits', data:{amt:7500}},
+    {t:49, icon:'🔫', name:'CLASSIFIED Exotic AR [EXOTIC]',type:'weapon',data:{rar:'EXOTIC',wtype:'Assault Rifle'}},
+    {t:50, icon:'🏆', name:'AGENT ZERO TITLE + 10,000 CR',type:'grand',  data:{amt:10000}},
+  ],
+
+  load(){try{return JSON.parse(localStorage.getItem(this.KEY))||{owned:false,xp:0,claimed:{}};}catch{return{owned:false,xp:0,claimed:{}};}},
+  save(d){try{localStorage.setItem(this.KEY,JSON.stringify(d));}catch{}},
+
+  currentTier(){const d=this.load();return Math.min(50,1+Math.floor(d.xp/1000));},
+  addXP(amt){const d=this.load();d.xp=(d.xp||0)+amt;this.save(d);},
+
+  buy(){
+    if(Player.credits<this.COST){const el=document.getElementById('pass-buy-banner');if(el){const orig=el.querySelector('button').textContent;el.querySelector('button').textContent='NOT ENOUGH CR';setTimeout(()=>el.querySelector('button').textContent=orig,1800);}return;}
+    Player.credits-=this.COST;UI.credit(Player.credits);
+    const d=this.load();d.owned=true;this.save(d);
+    Audio.pickup();Save.save();this.renderHub();
+  },
+
+  claimReward(tier){
+    const d=this.load();
+    if(!d.owned||d.claimed[tier])return;
+    const t=this.TIERS.find(x=>x.t===tier);if(!t)return;
+    d.claimed[tier]=true;this.save(d);
+    // Apply reward
+    if(t.type==='credits'){Player.credits+=(t.data.amt||0);UI.credit(Player.credits);}
+    else if(t.type==='weapon'){Player.pickupWeapon(Loot.genWeapon(t.data.rar));}
+    else if(t.type==='armor'){Armor.equip(Loot.genArmor(t.data.rar));}
+    else if(t.type==='style'){StyleSystem.unlock('color',t.data.color);StyleSystem.save();}
+    else if(t.type==='helmet'){StyleSystem.unlock('helmet',t.data.id);StyleSystem.save();}
+    else if(t.type==='emote'){StyleSystem.unlock('emote',t.data.id);StyleSystem.save();}
+    else if(t.type==='grand'){Player.credits+=(t.data.amt||0);UI.credit(Player.credits);}
+    Audio.pickup();Save.save();this.renderHub();
+  },
+
+  renderHub(){
+    const d=this.load();
+    const tier=this.currentTier();
+    const xpInTier=(d.xp||0)%1000;
+    // Status bar
+    const tl=document.getElementById('pass-tier-lbl');
+    const ol=document.getElementById('pass-owned-lbl');
+    const xb=document.getElementById('pass-xp-bar');
+    const xl=document.getElementById('pass-xp-lbl');
+    if(tl)tl.textContent=`TIER ${tier} / 50`;
+    if(ol)ol.textContent=d.owned?'✦ PASS OWNED':'FREE TIER';
+    if(xb)xb.style.width=(xpInTier/10)+'%';
+    if(xl)xl.textContent=`${xpInTier} / 1000 XP TO NEXT TIER · EARN XP BY PLAYING`;
+    // Buy banner
+    const bb=document.getElementById('pass-buy-banner');
+    if(bb)bb.style.display=d.owned?'none':'block';
+    // Tier list
+    const track=document.getElementById('pass-tracks');if(!track)return;
+    track.innerHTML='';
+    this.TIERS.forEach((t,idx)=>{
+      const unlocked=tier>=t.t;
+      const claimed=!!d.claimed[t.t];
+      const canClaim=d.owned&&unlocked&&!claimed;
+      const stateClass=claimed?'claimed':unlocked?'unlocked':'locked';
+      const row=document.createElement('div');row.className='pass-tier-row';
+      row.innerHTML=`<div class="pass-tier-num">${t.t}</div>
+        <div class="pass-tier-reward ${stateClass}">
+          <div class="pass-tier-icon">${t.icon}</div>
+          <div class="pass-tier-name">${t.name}${!d.owned&&t.t>5?'<br><span style="font-size:9px;color:#445">REQUIRES PASS</span>':''}</div>
+          ${canClaim?`<button class="pass-tier-claim" onclick="BattlePass.claimReward(${t.t})">CLAIM</button>`:
+            claimed?'<div class="pass-tier-claimed-badge">✓ CLAIMED</div>':
+            !unlocked?`<div style="font-size:9px;color:#334">TIER ${t.t}</div>`:''}
+        </div>`;
+      if(idx<this.TIERS.length-1){
+        const conn=document.createElement('div');conn.className='pass-connector';
+        track.appendChild(row);track.appendChild(conn);
+      } else track.appendChild(row);
+    });
+  },
+};
+
+// =====================================================================
+//  STORY INTRO — plays after tutorial for new agents
+//  The Division × Borderlands × FATE — solo operative narrative
+// =====================================================================
+const StoryIntro={
+  step:0,active:false,
+  PANELS:[
+    {icon:'🏙️',bg:'rgba(6,8,18,.98)',accent:'#4a6fa5',title:'SHADOW CITY — YEAR THREE',
+     body:'The outbreak hit without warning.\n\nWithin 72 hours, Shadow City went dark. Three years later, it\'s still dark — carved into rival zones by hostile factions who moved in when the government moved out.\n\nNobody came to take it back. Until now.'},
+    {icon:'💀',bg:'rgba(18,4,4,.98)',accent:'#cc2200',title:'THE COLLAPSE',
+     body:'What started as a supply chain contamination became something worse. Sleeper cells. Black-market augments. Experimental weapons flooding the streets.\n\nThree factions control the zones now. None of them are friendly. All of them shoot first.'},
+    {icon:'🕵️',bg:'rgba(4,8,18,.98)',accent:'#e67e22',title:'CLASSIFIED DIRECTIVE 7',
+     body:'You work for an agency that doesn\'t officially exist.\n\nNo badge. No backup. No record in any database that matters. They call it the Protocol. Your handler calls it a death sentence with a signing bonus.\n\nYou signed anyway.'},
+    {icon:'📡',bg:'rgba(4,14,8,.98)',accent:'#2ecc71',title:'THE PROTOCOL',
+     body:'The Protocol deploys solo operatives into high-risk zones to do what squadrons can\'t — move fast, hit hard, disappear.\n\nNo chains of command. No rules of engagement. Just an objective, a loadout, and a one-way extraction window.\n\nYou are the asset.'},
+    {icon:'🎯',bg:'rgba(14,8,4,.98)',accent:'#e67e22',title:'THAT\'S YOU, ZERO',
+     body:'No name. No history. Just a callsign burned into a tactical vest and a weapon pulled from a crate.\n\nThey chose you because one operative with nothing to lose is worth a hundred soldiers with something to protect.\n\nYour designation: AGENT ZERO.'},
+    {icon:'🔬',bg:'rgba(4,4,22,.98)',accent:'#9b59b6',title:'FATE PROTOCOL — ACTIVE',
+     body:'Before they dropped you in, they injected you with the FATE nanite system.\n\nDie out there and your body reconstitutes in the nearest safe zone. It hurts. It costs credits. But you keep your gear. Your levels. Your memory.\n\nYou come back. Every time. Stronger.'},
+    {icon:'⬡',bg:'rgba(18,12,4,.98)',accent:'#f39c12',title:'THEY LEFT EVERYTHING BEHIND',
+     body:'When Shadow City fell, the factions brought weapons nobody was supposed to have.\n\nExperimental. Classified. Built in black-site labs by people who aren\'t alive anymore.\n\nThe best gear in the world is scattered across these zones. Nobody\'s coming to collect it but you.'},
+    {icon:'📋',bg:'rgba(8,8,8,.98)',accent:'#e67e22',title:'EXTRACT. ELIMINATE. SURVIVE.',
+     body:'Zone by zone. Room by room. Shadow City goes deeper than any map shows.\n\nEvery zone cleared brings something worse. Every faction eliminated triggers reinforcements. The mission never ends.\n\nIt just gets harder. That\'s the job.'},
+    {icon:'⭐',bg:'rgba(14,10,0,.98)',accent:'#ffd700',title:'AGENT ZERO PASS — SEASON 1',
+     body:'50 tiers of exclusive gear, cosmetics, and credits — all earnable through missions.\n\nUniform colors. Helmet styles. Emotes. Legendary weapons. Exotic armor.\n\nCosts 2,500 CR. Earn it by playing.\nFind it in the ⭐ PASS tab inside Shadow City Hub.'},
+  ],
+
+  start(isNew){
+    if(!isNew)return;
+    this.step=0;this.active=true;
+    gameRunning=false;
+    document.getElementById('story-screen').style.display='flex';
+    this._render();
+  },
+
+  _render(){
+    const p=this.PANELS[this.step],total=this.PANELS.length;
+    const inner=document.getElementById('story-inner');
+    const screen=document.getElementById('story-screen');
+    inner.style.opacity='0';
+    setTimeout(()=>{
+      screen.style.background=p.bg;
+      document.getElementById('story-panel-num').textContent=`${String(this.step+1).padStart(2,'0')} / ${String(total).padStart(2,'0')}`;
+      document.getElementById('story-icon').textContent=p.icon;
+      document.getElementById('story-title').textContent=p.title;
+      document.getElementById('story-title').style.color=p.accent;
+      document.getElementById('story-title').style.textShadow=`0 0 30px ${p.accent}55`;
+      const bodyEl=document.getElementById('story-body');
+      bodyEl.innerHTML=p.body.replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
+      const nextBtn=document.getElementById('story-next');
+      nextBtn.textContent=this.step===total-1?'BEGIN MISSION  ▶':'NEXT  ›';
+      nextBtn.style.borderColor=`${p.accent}66`;nextBtn.style.color=p.accent;nextBtn.style.background=`${p.accent}18`;
+      document.getElementById('story-progress').style.width=((this.step+1)/total*100)+'%';
+      const dots=document.getElementById('story-dots');dots.innerHTML='';
+      for(let i=0;i<total;i++){
+        const d=document.createElement('div');
+        d.style.cssText=`width:${i===this.step?16:6}px;height:4px;border-radius:2px;background:${i===this.step?p.accent:'rgba(255,255,255,.15)'};transition:all .3s`;
+        dots.appendChild(d);
+      }
+      inner.style.opacity='1';
+    },200);
+  },
+
+  next(){
+    if(this.step<this.PANELS.length-1){this.step++;this._render();}
+    else{this.finish();}
+  },
+  skip(){this.finish();},
+
+  finish(){
+    this.active=false;
+    const s=document.getElementById('story-screen');
+    s.style.transition='opacity .5s';s.style.opacity='0';
+    setTimeout(()=>{s.style.display='none';s.style.opacity='1';s.style.transition='';},520);
     gameRunning=true;Audio.uiClick();
     const wb=document.getElementById('wave-banner');
     if(wb){wb.textContent='GOOD LUCK, ZERO';wb.style.display='block';wb.style.animation='none';void wb.offsetWidth;wb.style.animation='waveflash 2.4s ease forwards';setTimeout(()=>wb.style.display='none',2400);}
   },
 };
-function tutNext(){Tutorial.next();}
-function tutSkip(){Tutorial.finish();}
-// Space bar also advances tutorial
-window.addEventListener('keydown',e=>{if(Tutorial.active&&(e.code==='Space'||e.code==='Enter')){e.preventDefault();Tutorial.next();}},true);
 
-
-// =====================================================================
-//  SEEDED RNG (Mulberry32) — deterministic random for daily challenge
 // =====================================================================
 let _rngSeed=0;
 function _seedRng(seed){_rngSeed=seed>>>0;}
@@ -4612,8 +5201,16 @@ camera.position.set(0,12,10);camera.lookAt(0,0,0);
 
 loop();
 _refreshMenu();
-// Check login reward on load (after short delay for context)
-setTimeout(()=>LoginReward.check(),1200);
+setTimeout(()=>LoginReward.check(),1400);
+
+function unlockAudio(){
+  const el=document.getElementById('audio-unlock');
+  if(el){el.style.opacity='0';el.style.transition='opacity .4s';setTimeout(()=>el.remove(),420);}
+  Audio._setup&&Audio._setup();
+}
+
+// Init systems that depend on late-defined objects
+StyleSystem.load();
 
 window.addEventListener('resize',()=>{
   camera.aspect=window.innerWidth/window.innerHeight;
