@@ -1370,6 +1370,7 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
   <div id="boss-bar"><div id="boss-name">BOSS</div><div id="boss-hp-wrap"><div id="boss-hp-fill"></div></div></div>
   <div id="autosave-indicator"></div>
   <div id="loot-log"></div>
+  <div id="fishing-prompt" style="display:none;position:fixed;bottom:calc(env(safe-area-inset-bottom,0px)+240px);left:50%;transform:translateX(-50%);background:rgba(0,20,10,.88);border:1px solid rgba(0,255,100,.4);padding:10px 20px;font-family:'Courier New',monospace;font-size:11px;letter-spacing:3px;color:#00ff88;cursor:pointer;z-index:16;align-items:center;gap:8px;white-space:nowrap;-webkit-tap-highlight-color:transparent" onclick="Fishing.open(document.getElementById('fishing-prompt')._hole)">🎣 FISH HERE</div>
   <div id="dmg-layer"></div>
   <div id="dmg-flash"></div>
   <div id="skill-notify"></div>
@@ -1922,15 +1923,14 @@ const Map3D = {
     else if(room.type==='subway'){
       for(let i=0;i<2+~~(Math.random()*3);i++){
         const bx=rx+1+Math.random()*(rw-2),bz=rz+1+Math.random()*(rh-2);
-        // Benches — solid
-        solid(new THREE.BoxGeometry(2.4,.55,.55),0x2a2222,bx,.275,bz);
-        cov(bx,bz);
+        solid(new THREE.BoxGeometry(2.4,.55,.55),0x2a2222,bx,.275,bz);cov(bx,bz);
       }
       for(let i=0;i<2+~~(Math.random()*2);i++){
         const px=rx+Math.random()*rw,pz=rz+Math.random()*rh;
-        solid(new THREE.CylinderGeometry(.2,.22,C.WALL_H,8),0x222230,px,C.WALL_H/2,pz);
-        cov(px,pz);
+        solid(new THREE.CylinderGeometry(.2,.22,C.WALL_H,8),0x222230,px,C.WALL_H/2,pz);cov(px,pz);
       }
+      // Drainage pool — always has a fishing spot in subway
+      this._fishHole(cx+(Math.random()-.5)*3,cz+(Math.random()-.5)*3,0x44dd66,'DRAINAGE');
     }
     else if(room.type==='rooftop'){
       for(let i=0;i<2+~~(Math.random()*3);i++){
@@ -2005,8 +2005,31 @@ const Map3D = {
         const fx=rx+1+Math.random()*(rw-2),fz=rz+1+Math.random()*(rh-2);
         solid(new THREE.BoxGeometry(.8,.8,.8),0x333,fx,.4,fz);
       }
+      // Toxic waste sump — fishing spot
+      if(Math.random()<.65)this._fishHole(cx+(Math.random()-.5)*2,cz+(Math.random()-.5)*2,0xff6600,'TOXIC');
       const gl=new THREE.PointLight(0xff4400,1.2,8);gl.position.set(cx,2,cz);scene.add(gl);this.lights.push(gl);
     }
+  },
+
+  // ── Fishing hole: glowing pool with FISH prompt ──
+  _fishHole(x,z,col,type){
+    col=col||0x00ff88;type=type||'FLOODED';
+    // Water pool mesh
+    const pool=new THREE.Mesh(
+      new THREE.BoxGeometry(2.2,.06,2.2),
+      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.7})
+    );
+    pool.position.set(x,.03,z);this.group.add(pool);
+    // Ripple ring
+    const ring=new THREE.Mesh(
+      new THREE.BoxGeometry(2.6,.02,2.6),
+      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.3})
+    );
+    ring.position.set(x,.02,z);this.group.add(ring);
+    // Glow light under pool
+    const gl=new THREE.PointLight(col,2.5,5);gl.position.set(x,.5,z);scene.add(gl);this.lights.push(gl);
+    // Register fishing hole
+    this.fishingHoles.push({x,z,type,light:gl});
   },
 
   _chest(x,z){
@@ -3053,6 +3076,17 @@ const Player={
     if(Input.down('KeyE'))Skills.activate(1);
     if(Input.down('KeyF'))Skills.activate(2);
     if(Input.down('KeyX'))Skills.activate(3);
+    // ── Fishing hole proximity ──
+    let _nearFish=null;
+    if(Map3D.fishingHoles){
+      for(const h of Map3D.fishingHoles){
+        const fdx=this.mesh.position.x-h.x,fdz=this.mesh.position.z-h.z;
+        if(fdx*fdx+fdz*fdz<7){_nearFish=h;break;}
+      }
+    }
+    const fp=document.getElementById('fishing-prompt');
+    if(fp)fp.style.display=(_nearFish&&!_paused&&!Fishing.active)?'flex':'none';
+    if(_nearFish&&!_paused&&!Fishing.active)fp._hole=_nearFish;
     if(Input.down('KeyI'))InvUI.toggle();
     if(Input.down('KeyH')){GoToHub();}
     if(Input.down('KeyR')&&!this.reloading)this.startReload();
@@ -6528,6 +6562,212 @@ const Casino={
   },
 
   open(){const el=document.getElementById('casino-credits');if(el)el.textContent=Player.credits;this.switchGame('blackjack');},
+};
+
+// =====================================================================
+//  FISHING SYSTEM — FATE-style timing minigame with toxic fish
+// =====================================================================
+const Fishing={
+  active:false,_hole:null,_phase:'waiting',
+  _catchPct:0,_zoneMin:.3,_zoneMax:.6,
+  _biteTimer:0,_biteWindow:0,_tickerId:null,_animId:null,
+  _canvas:null,_ctx:null,
+
+  FISH:{
+    FLOODED:[
+      {name:'Acid Perch',rarity:'COMMON',col:'#88ff88',desc:'Mildly corrosive. Dissolves its own container.',reward(){return{credits:20,hp:-8};}},
+      {name:'Mutant Carp',rarity:'UNCOMMON',col:'#44ff44',desc:'Three eyes. One is watching you specifically.',reward(){return{credits:55,hp:30};}},
+      {name:'Void Eel',rarity:'RARE',col:'#aa66ff',desc:'Screams when caught. Underwater.',reward(){return{credits:175,hp:-18};}},
+      {name:'Glowing Catfish',rarity:'EPIC',col:'#00ffff',desc:'Radioactive. Worth its weight in reactor fuel.',reward(){return{credits:320,xp:300};}},
+      {name:'Shadow Serpent',rarity:'LEGENDARY',col:'#ff8800',desc:'Ancient. Pre-dates the collapse. Priceless.',reward(){return{credits:1000,hp:120};}},
+    ],
+    DRAINAGE:[
+      {name:'Sewer Rat-Fish',rarity:'COMMON',col:'#aacc44',desc:'It evolved down here. Evolved wrong.',reward(){return{credits:15,hp:-5};}},
+      {name:'Corroded Bass',rarity:'UNCOMMON',col:'#ccee55',desc:'Rusted fins. Nutritious in a bad way.',reward(){return{credits:50,hp:25};}},
+      {name:'Chemical Pike',rarity:'RARE',col:'#ffdd00',desc:'Leaks on contact. Eyes glow in the dark.',reward(){return{credits:150,hp:-12};}},
+      {name:'Drain Shark',rarity:'EPIC',col:'#ff66aa',desc:'Somehow. A shark. In the drain.',reward(){return{credits:260,hp:999};}},
+      {name:'The Unnamed',rarity:'LEGENDARY',col:'#ff0055',desc:'DATA CORRUPTED. DO NOT EAT.',reward(){return{credits:880,xp:500};}},
+    ],
+    TOXIC:[
+      {name:'Waste Crawler',rarity:'COMMON',col:'#ff8800',desc:'Orange and wrong. Fetches good coin though.',reward(){return{credits:30,hp:-14};}},
+      {name:'Barrel Dweller',rarity:'UNCOMMON',col:'#ffaa00',desc:'Born in a sealed waste barrel. Never left.',reward(){return{credits:80,hp:-8};}},
+      {name:'Acid-Spine Ray',rarity:'RARE',col:'#ff5500',desc:'Touch it wrong and lose a hand. Worth it.',reward(){return{credits:210,hp:-20};}},
+      {name:'Prototype Specimen',rarity:'EPIC',col:'#dd00ff',desc:'Lab tag #7731. Escaped containment Year 2.',reward(){return{credits:420,weapon:true};}},
+      {name:'APEX Leviathan',rarity:'LEGENDARY',col:'#ff0000',desc:'The final boss of the waste pools.',reward(){return{credits:1250,hp:200,weapon:true};}},
+    ],
+  },
+
+  _rarWeights:{COMMON:50,UNCOMMON:28,RARE:14,EPIC:6,LEGENDARY:2},
+  _roll(type){
+    const pool=this.FISH[type]||this.FISH.FLOODED;
+    const total=pool.reduce((s,f)=>s+(this._rarWeights[f.rarity]||10),0);
+    let r=Math.random()*total;
+    for(const f of pool){r-=(this._rarWeights[f.rarity]||10);if(r<=0)return f;}
+    return pool[0];
+  },
+
+  open(hole){
+    if(this.active)return;
+    this.active=true;this._hole=hole;this._phase='waiting';
+    this._catchPct=0;this._biteTimer=1.5+Math.random()*3;
+    gameRunning=false;
+    const fs=document.getElementById('fishing-screen');if(fs)fs.style.display='flex';
+    this._canvas=document.getElementById('fishing-canvas');
+    this._ctx=this._canvas?this._canvas.getContext('2d'):null;
+    document.getElementById('fish-info').textContent='Cast into the dark water...';
+    document.getElementById('fish-catch-bar').style.width='0%';
+    const btn=document.getElementById('fishing-btn');if(btn)btn.textContent='⬇ REEL IN';
+    Audio.uiClick();
+    this._startTick();this._drawLoop();
+  },
+
+  close(){
+    this.active=false;this._phase='waiting';
+    if(this._tickerId){clearInterval(this._tickerId);this._tickerId=null;}
+    if(this._animId){cancelAnimationFrame(this._animId);this._animId=null;}
+    const fs=document.getElementById('fishing-screen');if(fs)fs.style.display='none';
+    gameRunning=(gameState===GS.MISSION&&!_paused);
+  },
+
+  tap(){
+    if(!this.active)return;
+    if(this._phase==='waiting'){
+      document.getElementById('fish-info').textContent='Not yet... wait for the bite!';return;
+    }
+    if(this._phase==='biting'){
+      this._phase='reeling';
+      const zMin=15+Math.random()*30,zW=18+Math.random()*28;
+      const zEl=document.getElementById('fish-zone');
+      if(zEl){zEl.style.left=zMin+'%';zEl.style.width=zW+'%';}
+      this._zoneMin=zMin/100;this._zoneMax=(zMin+zW)/100;
+      this._catchPct=0;
+      document.getElementById('fish-info').textContent='REEL IT IN — keep tapping!';return;
+    }
+    if(this._phase==='reeling'){
+      this._catchPct=Math.min(1,this._catchPct+.13);
+      document.getElementById('fish-catch-bar').style.width=(this._catchPct*100)+'%';
+      if(this._catchPct>=this._zoneMax)this._land();
+    }
+  },
+
+  _startTick(){
+    if(this._tickerId)clearInterval(this._tickerId);
+    this._tickerId=setInterval(()=>{
+      if(!this.active){clearInterval(this._tickerId);return;}
+      if(this._phase==='waiting'){
+        this._biteTimer-=.1;
+        if(this._biteTimer<=0){
+          this._phase='biting';this._biteWindow=1.6+Math.random()*.9;
+          document.getElementById('fish-info').textContent='🎣 SOMETHING\'S BITING — TAP NOW!';
+          try{Audio.uiClick();}catch(e){}
+        }
+      } else if(this._phase==='biting'){
+        this._biteWindow-=.1;
+        if(this._biteWindow<=0){
+          this._phase='waiting';this._biteTimer=1.8+Math.random()*3;
+          document.getElementById('fish-info').textContent='Missed it... wait for the next bite';
+        }
+      } else if(this._phase==='reeling'){
+        this._catchPct=Math.max(0,this._catchPct-.022);
+        document.getElementById('fish-catch-bar').style.width=(this._catchPct*100)+'%';
+        if(this._catchPct<=0){
+          this._phase='waiting';this._biteTimer=1.5+Math.random()*2.5;
+          document.getElementById('fish-info').textContent='It slipped off! Keep your tension up.';
+        }
+      }
+    },100);
+  },
+
+  _land(){
+    this._phase='caught';
+    const type=(this._hole&&this._hole.type)||'FLOODED';
+    const fish=this._roll(type);
+    const r=fish.reward();
+    const rarColors={COMMON:'#aaa',UNCOMMON:'#2ecc71',RARE:'#3498db',EPIC:'#9b59b6',LEGENDARY:'#e67e22'};
+    const col=rarColors[fish.rarity]||'#fff';
+    if(r.hp>0)try{Player.heal(Math.min(r.hp,Player.maxHp));}catch(e){}
+    else if(r.hp<0)try{Player.takeDamage(Math.abs(r.hp),false);}catch(e){}
+    if(r.credits){Player.credits+=r.credits;try{UI.credit(Player.credits);}catch(e){}}
+    if(r.xp)try{Player.gainXP(r.xp);}catch(e){}
+    if(r.weapon)try{Player.pickupWeapon(Loot.genWeapon('RARE'));}catch(e){}
+    document.getElementById('fish-info').innerHTML='<span style="color:'+col+'">'+fish.rarity+': '+fish.name+'</span>';
+    const btn=document.getElementById('fishing-btn');if(btn)btn.textContent='🐟 CAST AGAIN';
+    showBanner(fish.rarity+' — '+fish.name+' +'+r.credits+' CR');
+    Save.save();
+    this._drawCatch(fish,col);
+    setTimeout(()=>{
+      if(this.active){
+        this._phase='waiting';this._catchPct=0;this._biteTimer=2+Math.random()*3;
+        document.getElementById('fish-catch-bar').style.width='0%';
+        document.getElementById('fish-info').textContent='Recasting...';
+        if(btn)btn.textContent='⬇ REEL IN';
+      }
+    },2400);
+  },
+
+  _drawLoop(){
+    if(!this.active)return;
+    const cv=this._canvas;const ctx=this._ctx;
+    if(!cv||!ctx){this._animId=requestAnimationFrame(()=>this._drawLoop());return;}
+    const W=cv.width,H=cv.height;const t=Date.now()*.001;
+    ctx.fillStyle='#000a08';ctx.fillRect(0,0,W,H);
+    // Water layers
+    for(let y=~~(H*.42);y<H;y+=3){
+      const wave=Math.sin(y*.1+t*1.2)*3;
+      const g=15+~~(y/H*30),b=12+~~(y/H*25);
+      ctx.fillStyle='rgba(0,'+g+','+b+',.7)';
+      ctx.fillRect(wave,y,W,3);
+    }
+    // Ripple rings from bobber
+    ctx.strokeStyle='rgba(0,255,100,.12)';ctx.lineWidth=1;
+    for(let i=0;i<5;i++){
+      const rs=(((t*25+i*18)%90)+8);
+      ctx.beginPath();ctx.ellipse(W/2,H*.45,rs,rs*.22,0,0,Math.PI*2);ctx.stroke();
+    }
+    // Fishing line
+    const bobY=H*.43+Math.sin(t*2.4)*4+(this._phase==='biting'?Math.sin(t*12)*5:0);
+    ctx.strokeStyle='rgba(255,255,255,.3)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(W*.55,10);ctx.quadraticCurveTo(W*.56,H*.3,W/2,bobY-6);ctx.stroke();
+    // Bobber body
+    const bCol=this._phase==='biting'?'#ff3300':'#cc2200';
+    ctx.fillStyle=bCol;ctx.beginPath();ctx.arc(W/2,bobY,6,Math.PI,0);ctx.fill();
+    ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(W/2,bobY,6,0,Math.PI);ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.6)';ctx.beginPath();ctx.arc(W/2,bobY,1.5,0,Math.PI*2);ctx.fill();
+    // Stick above bobber
+    ctx.fillStyle='#cc2200';ctx.fillRect(W/2-1,bobY-10,2,6);
+    // Bite flash overlay
+    if(this._phase==='biting'){
+      const pulse=.08+Math.abs(Math.sin(t*8))*.1;
+      ctx.fillStyle='rgba(255,50,0,'+pulse+')';ctx.fillRect(0,0,W,H);
+      ctx.font='bold 18px "Courier New"';ctx.fillStyle='#ff4400';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText('! BITE !',W/2,H*.22);
+    }
+    // Zone type label bottom-left
+    const ztype=(this._hole&&this._hole.type)||'FLOODED';
+    const zCols={FLOODED:'#00ff88',DRAINAGE:'#88cc44',TOXIC:'#ff6600'};
+    ctx.font='9px "Courier New"';ctx.fillStyle=zCols[ztype]||'#88cc88';
+    ctx.textAlign='left';ctx.textBaseline='bottom';
+    ctx.fillText(ztype+' ZONE',8,H-6);
+    this._animId=requestAnimationFrame(()=>this._drawLoop());
+  },
+
+  _drawCatch(fish,col){
+    const cv=this._canvas;const ctx=this._ctx;if(!cv||!ctx)return;
+    const W=cv.width,H=cv.height;
+    ctx.fillStyle='rgba(0,10,6,.88)';ctx.fillRect(0,0,W,H);
+    // Fish emoji big
+    ctx.font='52px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('🐟',W/2,H*.38);
+    ctx.font='bold 13px "Courier New"';ctx.fillStyle=col;
+    ctx.fillText(fish.name,W/2,H*.6);
+    ctx.font='10px "Courier New"';ctx.fillStyle='rgba(255,255,255,.45)';
+    // Word-wrap description
+    const words=fish.desc.split(' ');let line='',lines=[];
+    for(const w of words){const t=line?line+' '+w:w;if(t.length>36){lines.push(line);line=w;}else line=t;}
+    if(line)lines.push(line);
+    lines.forEach((l,i)=>ctx.fillText(l,W/2,H*.72+i*14));
+  },
 };
 
 let _bannerTimer=null;
