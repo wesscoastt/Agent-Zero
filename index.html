@@ -93,13 +93,16 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:#000;
    HUB CITY
 ────────────────────────────────────────────────────── */
 #hub-screen{background:rgba(0,0,0,.97);z-index:60;overflow-y:auto;align-items:flex-start;
-  padding:max(env(safe-area-inset-top,0px),10px) 0 max(env(safe-area-inset-bottom,0px),10px);}
+  padding:0;} /* No top padding - header handles safe area */
+#hub-screen-inner{width:100%;max-width:480px;display:flex;flex-direction:column;padding-bottom:max(env(safe-area-inset-bottom,0px),20px);}
 #hub-header{width:100%;display:flex;align-items:center;justify-content:space-between;
-  padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06);position:sticky;top:0;
-  background:rgba(0,0,0,.98);z-index:1;}
+  padding:max(env(safe-area-inset-top,0px),12px) 14px 10px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  position:sticky;top:0;background:rgba(0,0,0,.99);z-index:2;}
 .hub-title{font-size:10px;letter-spacing:4px;color:#e67e22}
 .hub-credits{font-size:9px;color:#aaa;letter-spacing:2px}
-#hub-tabs{display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,.06);width:100%;flex-wrap:wrap}
+#hub-tabs{display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,.06);width:100%;flex-wrap:wrap;
+  position:sticky;top:var(--hub-header-h,52px);background:rgba(0,0,0,.99);z-index:1;}
 .hub-tab{flex:1;min-width:80px;padding:9px 4px;font-size:8px;letter-spacing:2px;color:#445;
   text-align:center;cursor:pointer;border-bottom:2px solid transparent;
   -webkit-tap-highlight-color:transparent;transition:all .15s;}
@@ -806,6 +809,62 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
 .cc-icon-btn canvas{image-rendering:pixelated}
 .cc-icon-btn span{font-size:8px;letter-spacing:1px;color:#889}
 .cc-icon-btn.sel span{color:#e67e22}
+/* ══ CASINO ══ */
+.casino-tab{flex:1;padding:9px 4px;font-size:9px;letter-spacing:1px;color:#445;text-align:center;
+  cursor:pointer;border-bottom:2px solid transparent;font-family:'Courier New',monospace;
+  -webkit-tap-highlight-color:transparent;transition:all .15s;min-width:50px}
+.casino-tab.active{color:#ffd700;border-bottom-color:#ffd700}
+.casino-btn{padding:10px 14px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04);
+  color:#bcc8d4;font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all .15s}
+.casino-btn:hover,.casino-btn:active{background:rgba(255,255,255,.1)}
+.casino-btn.gold{border-color:rgba(255,215,0,.45);background:rgba(255,215,0,.1);color:#ffd700}
+.casino-btn:disabled{opacity:.3;cursor:not-allowed}
+.casino-msg{font-size:13px;letter-spacing:2px;color:#ffd700;text-align:center;min-height:22px;margin-bottom:10px;font-weight:bold}
+.casino-label{font-size:9px;color:#556;letter-spacing:2px;margin-bottom:4px}
+.casino-bet-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.casino-val-small{font-size:10px;color:#8899aa;letter-spacing:1px;margin-top:2px}
+/* Poker/Blackjack cards */
+.card-row{display:flex;gap:4px;flex-wrap:wrap;min-height:52px;align-items:flex-start}
+.playing-card{width:36px;height:52px;background:#f8f4e8;border:1px solid rgba(0,0,0,.2);
+  border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:14px;line-height:1.1;box-shadow:1px 1px 3px rgba(0,0,0,.3);cursor:pointer;
+  -webkit-tap-highlight-color:transparent;transition:transform .15s,box-shadow .15s;user-select:none}
+.playing-card.red{color:#cc0000}
+.playing-card.black{color:#111}
+.playing-card.held{transform:translateY(-6px);box-shadow:0 0 12px rgba(255,215,0,.6);border-color:#ffd700}
+.playing-card.back{background:linear-gradient(135deg,#1a1a6e,#2a2a8e);color:transparent;font-size:0}
+.card-val{font-size:11px;font-weight:bold;line-height:1}
+.card-suit{font-size:16px;line-height:1}
+/* Chips */
+.chip-row{display:flex;gap:6px;flex-wrap:wrap}
+.chip{width:38px;height:38px;border-radius:50%;background:rgba(200,150,0,.2);border:2px solid #aa8800;
+  color:#ffd700;font-family:'Courier New',monospace;font-size:9px;font-weight:bold;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;transition:all .12s;letter-spacing:0}
+.chip:hover,.chip:active{background:rgba(255,215,0,.35);transform:scale(1.1)}
+.chip.chip-blue{border-color:#0066cc;color:#44aaff;background:rgba(0,80,200,.2)}
+.chip.chip-purple{border-color:#660099;color:#cc66ff;background:rgba(80,0,150,.2)}
+.chip.chip-red{border-color:#cc0000;color:#ff4444;background:rgba(150,0,0,.2)}
+/* Horse racing */
+.horse-card{border:1px solid rgba(255,255,255,.1);padding:10px 12px;
+  display:flex;align-items:center;gap:12px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;transition:all .15s;background:rgba(255,255,255,.02)}
+.horse-card.selected{border-color:rgba(255,215,0,.5);background:rgba(255,215,0,.08)}
+.horse-card:hover{background:rgba(255,255,255,.05)}
+.horse-lane{height:14px;background:rgba(255,255,255,.04);border-radius:2px;
+  position:relative;overflow:hidden;margin-bottom:3px;border:1px solid rgba(255,255,255,.06)}
+.horse-runner{position:absolute;left:0;top:50%;transform:translateY(-50%);
+  font-size:12px;transition:left .05s linear;white-space:nowrap}
+.slot-reel{width:56px;height:56px;border:1px solid rgba(255,215,0,.3);background:#060612;
+  font-size:30px;display:flex;align-items:center;justify-content:center;border-radius:4px;
+  box-shadow:inset 0 0 10px rgba(0,0,0,.5)}
+.casino-game{width:100%}
+</style>
+#autosave-indicator{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px)+12px);right:12px;
+  font-family:'Courier New',monospace;font-size:10px;letter-spacing:2px;
+  color:rgba(255,255,255,.5);opacity:0;transition:opacity .4s ease;
+  pointer-events:none;z-index:50;text-shadow:0 1px 4px rgba(0,0,0,.8);}
 </style>
 <body>
 <canvas id="canvas"></canvas>
@@ -985,6 +1044,7 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
 
 <!-- HUB CITY -->
 <div id="hub-screen" class="overlay">
+<div id="hub-screen-inner">
   <div id="hub-header">
     <div class="hub-title">⬡ SHADOW CITY HUB</div>
     <div style="display:flex;align-items:center;gap:10px">
@@ -1007,6 +1067,7 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
     <div class="hub-tab" data-panel="style" style="color:#ff88cc">✦ STYLE</div>
     <div class="hub-tab" data-panel="pass" style="color:#ffd700">⭐ PASS</div>
     <div class="hub-tab" data-panel="cosmshop" style="color:#cc88ff">🛍 LOOKS</div>
+    <div class="hub-tab" data-panel="casino" style="color:#ffd700">🎰 CASINO</div>
   </div>
   <div id="hub-intel" class="hub-panel active">
     <div class="hub-section-title">MISSION TERMINAL</div>
@@ -1068,6 +1129,154 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
     <button class="hub-btn" style="margin-top:16px;border-color:rgba(255,136,204,.4);color:#ff88cc" onclick="StyleSystem.applyToPlayer()">✦ APPLY STYLE</button>
   </div>
 
+  <!-- ═══ CASINO ═══ -->
+  <div id="hub-casino" class="hub-panel">
+    <div class="hub-section-title" style="color:#ffd700">🎰 SHADOW CITY UNDERGROUND CASINO</div>
+    <div style="font-size:11px;color:#8899aa;letter-spacing:1px;margin-bottom:4px">ILLEGAL. UNREGULATED. HIGHLY PROFITABLE.</div>
+    <div style="font-size:11px;color:#ffd700;letter-spacing:2px;margin-bottom:14px">💰 <span id="casino-credits"></span> CR</div>
+
+    <!-- Game selector tabs -->
+    <div style="display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:14px;flex-wrap:wrap">
+      <div class="casino-tab active" data-game="blackjack" onclick="Casino.switchGame('blackjack')">♠ BLACKJACK</div>
+      <div class="casino-tab" data-game="slots" onclick="Casino.switchGame('slots')">🎰 SLOTS</div>
+      <div class="casino-tab" data-game="poker" onclick="Casino.switchGame('poker')">🃏 POKER</div>
+      <div class="casino-tab" data-game="wheel" onclick="Casino.switchGame('wheel')">🎡 WHEEL</div>
+      <div class="casino-tab" data-game="horses" onclick="Casino.switchGame('horses')">🏇 RACES</div>
+    </div>
+
+    <!-- BLACKJACK — GTA SA Inside Track style card game -->
+    <div id="casino-blackjack" class="casino-game">
+      <div id="bj-msg" class="casino-msg"></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:12px">
+        <div style="flex:1">
+          <div class="casino-label">DEALER</div>
+          <div id="bj-dealer-cards" class="card-row"></div>
+          <div id="bj-dealer-val" class="casino-val-small"></div>
+        </div>
+        <div style="flex:1;text-align:right">
+          <div class="casino-label">YOU</div>
+          <div id="bj-player-cards" class="card-row" style="justify-content:flex-end"></div>
+          <div id="bj-player-val" class="casino-val-small"></div>
+        </div>
+      </div>
+      <div class="casino-bet-row">
+        <span class="casino-label">BET</span>
+        <div class="chip-row" id="bj-chips">
+          <div class="chip" onclick="Casino.bj.addBet(10)">10</div>
+          <div class="chip" onclick="Casino.bj.addBet(50)">50</div>
+          <div class="chip chip-blue" onclick="Casino.bj.addBet(100)">100</div>
+          <div class="chip chip-purple" onclick="Casino.bj.addBet(500)">500</div>
+          <div class="chip chip-red" onclick="Casino.bj.clearBet()">CLR</div>
+        </div>
+      </div>
+      <div style="font-size:16px;color:#ffd700;letter-spacing:2px;margin:6px 0 10px">BET: <span id="bj-bet-display">0</span> CR</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="casino-btn gold" id="bj-deal" onclick="Casino.bj.deal()">DEAL</button>
+        <button class="casino-btn" id="bj-hit" onclick="Casino.bj.hit()" disabled>HIT</button>
+        <button class="casino-btn" id="bj-stand" onclick="Casino.bj.stand()" disabled>STAND</button>
+        <button class="casino-btn" id="bj-double" onclick="Casino.bj.double()" disabled>DOUBLE DOWN</button>
+      </div>
+    </div>
+
+    <!-- SLOTS — Four Dragons Casino style -->
+    <div id="casino-slots" class="casino-game" style="display:none">
+      <div id="slots-msg" class="casino-msg"></div>
+      <div id="slots-machine" style="background:#0a0814;border:2px solid rgba(255,215,0,.3);padding:12px;margin-bottom:10px;border-radius:4px">
+        <div style="text-align:center;font-size:9px;letter-spacing:3px;color:#ffd700;margin-bottom:8px">SHADOW CITY SLOTS</div>
+        <div style="display:flex;justify-content:center;gap:4px;margin-bottom:6px">
+          <div style="width:3px;background:linear-gradient(to bottom,transparent,rgba(255,215,0,.4),transparent);height:60px"></div>
+          <div id="slots-reels" style="display:flex;gap:3px">
+            <div class="slot-reel" id="reel-0">🎰</div>
+            <div class="slot-reel" id="reel-1">🎰</div>
+            <div class="slot-reel" id="reel-2">🎰</div>
+          </div>
+          <div style="width:3px;background:linear-gradient(to bottom,transparent,rgba(255,215,0,.4),transparent);height:60px"></div>
+        </div>
+        <div style="height:2px;background:rgba(255,215,0,.35);margin-bottom:4px"></div>
+        <div style="font-size:9px;color:#556;text-align:center;letter-spacing:1px">777=50× · ⭐×3=25× · 3-match=6× · 2-match=2×</div>
+      </div>
+      <div class="casino-bet-row">
+        <span class="casino-label">BET</span>
+        <div class="chip-row">
+          <div class="chip" onclick="Casino.slots.setBet(10)">10</div>
+          <div class="chip" onclick="Casino.slots.setBet(25)">25</div>
+          <div class="chip chip-blue" onclick="Casino.slots.setBet(50)">50</div>
+          <div class="chip chip-purple" onclick="Casino.slots.setBet(100)">100</div>
+        </div>
+      </div>
+      <div style="font-size:14px;color:#ffd700;margin:6px 0 10px">BET: <span id="slots-bet-display">25</span> CR</div>
+      <button class="casino-btn gold" style="width:100%;font-size:14px;padding:14px" id="slots-spin" onclick="Casino.slots.spin()">🎰  SPIN</button>
+    </div>
+
+    <!-- VIDEO POKER — GTA SA Four Dragons style -->
+    <div id="casino-poker" class="casino-game" style="display:none">
+      <div id="poker-msg" class="casino-msg"></div>
+      <div style="font-size:9px;color:#8899aa;letter-spacing:2px;text-align:center;margin-bottom:8px">JACKS OR BETTER · HOLD THE CARDS YOU WANT TO KEEP</div>
+      <div id="poker-cards" style="display:flex;gap:4px;justify-content:center;margin-bottom:8px"></div>
+      <div id="poker-holds" style="display:flex;gap:4px;justify-content:center;margin-bottom:12px"></div>
+      <div id="poker-paytable" style="font-size:9px;color:#334;letter-spacing:1px;text-align:center;margin-bottom:10px;line-height:1.8">
+        ROYAL FLUSH 250× · STRAIGHT FLUSH 50× · 4-OF-KIND 25×<br>
+        FULL HOUSE 9× · FLUSH 6× · STRAIGHT 4× · 3-OF-KIND 3×<br>
+        TWO PAIR 2× · JACKS OR BETTER 1×
+      </div>
+      <div class="casino-bet-row">
+        <span class="casino-label">BET</span>
+        <div class="chip-row">
+          <div class="chip" onclick="Casino.poker.setBet(25)">25</div>
+          <div class="chip chip-blue" onclick="Casino.poker.setBet(50)">50</div>
+          <div class="chip chip-purple" onclick="Casino.poker.setBet(100)">100</div>
+        </div>
+      </div>
+      <div style="font-size:14px;color:#ffd700;margin:6px 0 10px">BET: <span id="poker-bet-display">25</span> CR</div>
+      <div style="display:flex;gap:8px">
+        <button class="casino-btn gold" id="poker-deal" onclick="Casino.poker.deal()" style="flex:1">DEAL</button>
+        <button class="casino-btn" id="poker-draw" onclick="Casino.poker.draw()" style="flex:1;display:none">DRAW</button>
+      </div>
+    </div>
+
+    <!-- LUCKY WHEEL — GTA SA style -->
+    <div id="casino-wheel" class="casino-game" style="display:none">
+      <div id="wheel-msg" class="casino-msg"></div>
+      <div style="position:relative;width:200px;margin:0 auto 16px">
+        <canvas id="wheel-canvas" width="200" height="200" style="display:block"></canvas>
+        <div id="wheel-needle" style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:22px solid #e67e22;filter:drop-shadow(0 0 6px rgba(230,126,34,.7))"></div>
+      </div>
+      <div style="font-size:13px;color:#ffd700;text-align:center;margin-bottom:12px">COST: <span style="font-size:18px;font-weight:bold">100 CR</span> PER SPIN</div>
+      <button class="casino-btn gold" style="width:100%;font-size:14px;padding:14px" id="wheel-spin-btn" onclick="Casino.wheel.spin()">🎡  FREE SPIN</button>
+      <div style="font-size:9px;color:#334;letter-spacing:1px;text-align:center;margin-top:8px">ONE SPIN AVAILABLE PER VISIT</div>
+    </div>
+
+    <!-- HORSE RACING — GTA SA Inside Track Betting style -->
+    <div id="casino-horses" class="casino-game" style="display:none">
+      <div id="horse-msg" class="casino-msg"></div>
+      <div style="font-size:9px;letter-spacing:3px;color:#8899aa;text-align:center;margin-bottom:10px" id="horse-race-name">SHADOW CITY STAKES</div>
+
+      <!-- Race track visual -->
+      <div id="horse-track" style="background:#0a1a08;border:1px solid rgba(255,215,0,.2);padding:8px;margin-bottom:12px;min-height:80px;display:none">
+        <div id="horse-lanes" style="display:flex;flex-direction:column;gap:4px"></div>
+        <div id="horse-finish" style="height:2px;background:rgba(255,255,255,.3);margin-top:4px;position:relative">
+          <span style="position:absolute;right:0;top:-10px;font-size:8px;color:#fff;letter-spacing:1px">FINISH</span>
+        </div>
+      </div>
+
+      <!-- Horse selection -->
+      <div id="horse-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+
+      <!-- Bet amount -->
+      <div class="casino-bet-row">
+        <span class="casino-label">BET</span>
+        <div class="chip-row">
+          <div class="chip" onclick="Casino.horses.setBet(50)">50</div>
+          <div class="chip chip-blue" onclick="Casino.horses.setBet(100)">100</div>
+          <div class="chip chip-purple" onclick="Casino.horses.setBet(500)">500</div>
+          <div class="chip chip-red" onclick="Casino.horses.setBet(1000)">1K</div>
+        </div>
+      </div>
+      <div style="font-size:14px;color:#ffd700;margin:6px 0 10px">BET: <span id="horse-bet-display">100</span> CR on <span id="horse-pick-display" style="color:#e67e22">—</span></div>
+      <button class="casino-btn gold" style="width:100%;font-size:14px;padding:14px" id="horse-race-btn" onclick="Casino.horses.race()" disabled>🏇  PLACE BET &amp; RACE</button>
+    </div>
+  </div>
+
   <!-- ═══ COSMETIC SHOP ═══ -->
   <div id="hub-cosmshop" class="hub-panel">
     <div class="hub-section-title" style="color:#cc88ff">🛍 OPERATIVE LOOKS</div>
@@ -1075,7 +1284,8 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
     <div id="cosmshop-grid" style="display:flex;flex-direction:column;gap:10px"></div>
   </div>
 
-</div>
+  <!-- ═══ BATTLE PASS ═══ -->
+  <div id="hub-pass" class="hub-panel">
     <div class="hub-section-title" style="color:#ffd700">⭐ AGENT ZERO BATTLE PASS</div>
     <div id="pass-status-bar" style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -1089,13 +1299,48 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
     </div>
     <div id="pass-buy-banner" style="display:none;border:1px solid rgba(255,215,0,.3);background:rgba(255,215,0,.06);padding:14px;margin-bottom:14px;text-align:center">
       <div style="font-size:14px;letter-spacing:3px;color:#ffd700;margin-bottom:8px">SEASON 1 PASS</div>
-      <div style="font-size:11px;color:#8899aa;margin-bottom:12px;line-height:1.8">50 tiers of exclusive cosmetics, weapons & armor<br>Unlocks immediately upon purchase</div>
+      <div style="font-size:11px;color:#8899aa;margin-bottom:12px;line-height:1.8">50 tiers of exclusive cosmetics, weapons &amp; armor<br>Unlocks immediately upon purchase</div>
       <div style="font-size:22px;color:#ffd700;letter-spacing:2px;margin-bottom:12px">2,500 CR</div>
       <button class="hub-btn" style="border-color:rgba(255,215,0,.5);color:#ffd700;font-size:13px" onclick="BattlePass.buy()">⭐ PURCHASE PASS</button>
     </div>
     <div id="pass-tracks" style="display:flex;flex-direction:column;gap:8px"></div>
   </div>
 
+</div><!-- end hub-screen-inner -->
+</div><!-- end hub-screen -->
+
+<!-- ══════════════ FISHING MINIGAME ══════════════ -->
+<div id="fishing-screen" style="
+  position:fixed;inset:0;z-index:180;
+  background:rgba(0,8,6,.94);display:none;
+  flex-direction:column;align-items:center;justify-content:flex-end;
+  padding-bottom:max(env(safe-area-inset-bottom,0px),24px);
+  pointer-events:auto;font-family:'Courier New',monospace;
+">
+  <!-- Water canvas -->
+  <canvas id="fishing-canvas" width="340" height="220" style="border:1px solid rgba(0,255,150,.2);margin-bottom:16px;max-width:92vw"></canvas>
+  <!-- Info row -->
+  <div id="fish-info" style="font-size:12px;letter-spacing:3px;color:#00ff88;margin-bottom:12px;text-align:center;min-height:18px"></div>
+  <!-- Catch bar -->
+  <div style="width:280px;max-width:88vw;margin-bottom:14px">
+    <div style="font-size:9px;letter-spacing:2px;color:#334;margin-bottom:4px">CATCH METER</div>
+    <div style="height:14px;background:rgba(255,255,255,.06);border:1px solid rgba(0,255,150,.2);position:relative;overflow:hidden">
+      <div id="fish-catch-bar" style="height:100%;background:linear-gradient(90deg,#00aa55,#00ff88);width:0%;transition:width .08s"></div>
+      <div id="fish-zone" style="position:absolute;top:0;height:100%;background:rgba(0,255,100,.25);border:1px solid rgba(0,255,100,.6)"></div>
+    </div>
+  </div>
+  <div style="display:flex;gap:12px">
+    <button id="fishing-btn" style="
+      padding:16px 36px;border:1px solid rgba(0,255,150,.4);background:rgba(0,255,100,.1);
+      color:#00ff88;font-family:'Courier New',monospace;font-size:14px;letter-spacing:4px;
+      cursor:pointer;-webkit-tap-highlight-color:transparent;
+    " ontouchstart="Fishing.tap()" onclick="Fishing.tap()">⬇ REEL IN</button>
+    <button style="
+      padding:16px 20px;border:1px solid rgba(255,255,255,.1);background:transparent;
+      color:#445;font-family:'Courier New',monospace;font-size:12px;letter-spacing:2px;
+      cursor:pointer;-webkit-tap-highlight-color:transparent;
+    " onclick="Fishing.close()">LEAVE</button>
+  </div>
 </div>
 
 <!-- HUD -->
@@ -1123,7 +1368,7 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
   </div>
   <div id="minimap" onclick="openFullMap()" title="Tap to expand map"><canvas id="mm-canvas" width="90" height="90"></canvas><div id="minimap-lbl">TAP TO EXPAND</div></div>
   <div id="boss-bar"><div id="boss-name">BOSS</div><div id="boss-hp-wrap"><div id="boss-hp-fill"></div></div></div>
-  <div id="kill-feed"></div>
+  <div id="autosave-indicator"></div>
   <div id="loot-log"></div>
   <div id="dmg-layer"></div>
   <div id="dmg-flash"></div>
@@ -1499,6 +1744,7 @@ function setState(s) {
   document.getElementById('slot-screen').classList.toggle('on', s===GS.SLOTS);
   document.getElementById('char-creator').classList.toggle('on', s===GS.CHAR);
   document.getElementById('hub-screen').classList.toggle('on', s===GS.HUB);
+  if(s===GS.HUB)setTimeout(_updateHubHeaderHeight,50);
   document.getElementById('hud').style.display = (s===GS.MISSION)?'block':'none';
   document.getElementById('btn-pause').style.display = (s===GS.MISSION)?'flex':'none';
   document.getElementById('pause-screen').classList.remove('on');
@@ -1517,11 +1763,11 @@ function setState(s) {
 // =====================================================================
 const Map3D = {
   group:null, collidables:[], coverPts:[], spawnPts:[], rooms:[], grid:null,
-  lights:[], furniture:[], // furniture[] = solid AABB boxes for collision
+  lights:[], furniture:[], fishingHoles:[], // world positions of fishing spots
 
   generate(){
     this.collidables=[]; this.coverPts=[]; this.spawnPts=[]; this.rooms=[];
-    this.furniture=[];
+    this.furniture=[];this.fishingHoles=[];
     Loot.chests=[];
     this.lights.forEach(l=>scene.remove(l)); this.lights=[];
     if(this.group)scene.remove(this.group);
@@ -1621,13 +1867,14 @@ const Map3D = {
     // solid() — registers a piece as a collidable cover object
     const solid=(geo,col,x,y,z,ry=0)=>{
       const m=add(geo,col,x,y,z,ry);
-      m.updateMatrixWorld(true);
-      m.geometry.computeBoundingBox();
-      const bb=m.geometry.boundingBox.clone().applyMatrix4(m.matrixWorld);
-      // Expand bb slightly for reliable collision at character edges
-      bb.expandByScalar(0.15);
-      m.userData.solidBB=bb;
-      this.furniture.push(m);
+      try{
+        m.updateMatrixWorld(true);
+        m.geometry.computeBoundingBox();
+        const bb=m.geometry.boundingBox.clone().applyMatrix4(m.matrixWorld);
+        bb.expandByScalar(0.15);
+        m.userData.solidBB=bb;
+        this.furniture.push(m);
+      }catch(ex){}
       return m;
     };
     const cov=(x,z)=>this.coverPts.push(new THREE.Vector3(x,0,z));
@@ -1743,6 +1990,9 @@ const Map3D = {
         const px2=rx+1+Math.random()*(rw-2),pz2=rz+1+Math.random()*(rh-2);
         solid(new THREE.CylinderGeometry(.3,.32,C.WALL_H,8),0x223322,px2,C.WALL_H/2,pz2);cov(px2,pz2);
       }
+      // Fishing hole — glowing toxic pool
+      const fhx=cx+(Math.random()-.5)*4,fhz=cz+(Math.random()-.5)*4;
+      this._fishHole(fhx,fhz,0x00ff88);
       const gl=new THREE.PointLight(0x004488,1.5,10);gl.position.set(cx,1,cz);scene.add(gl);this.lights.push(gl);
     }
     else if(room.type==='industrial'){
@@ -2014,10 +2264,9 @@ const Enemies = {
   _makeMesh(key,T){
     const G=new THREE.Group();const bodyMats=[];
     const M=col=>{const m=new THREE.MeshLambertMaterial({color:col});bodyMats.push(m);return m;};
-    const box=(w,h,d,col)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(col));
+    const box=(w,h,d,col)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(col));return mesh;};
     if(key==='SOLDIER'||key==='ELITE'){
       const baseCol=key==='ELITE'?0x442200:0x2d4a2d;
-      box(.28,.2,.38,0x111111).position.set(-.19,.1,.02);G.add(G.children[G.children.length]||new THREE.Object3D());
       // Boots
       const lb=box(.28,.2,.38,0x111111);lb.position.set(-.19,.1,.02);G.add(lb);
       const rb=box(.28,.2,.38,0x111111);rb.position.set(.19,.1,.02);G.add(rb);
@@ -2027,7 +2276,6 @@ const Enemies = {
       // Torso
       const torso=box(.68,.8,.5,baseCol);torso.position.set(0,1.1,0);G.add(torso);
       // Vest
-      box(.64,.68,.14,0x1a2a1a).position.set(0,1.12,.28);G.add(G.children[G.children.length]||new THREE.Object3D());
       const vest=box(.64,.68,.14,key==='ELITE'?0x331100:0x1a2a1a);vest.position.set(0,1.12,.28);G.add(vest);
       // Arms
       const la=box(.22,.6,.22,baseCol);la.position.set(-.46,.9,0);G.add(la);
@@ -2037,7 +2285,6 @@ const Enemies = {
       // Helmet
       const hl=box(.5,.24,.48,key==='ELITE'?0x330000:0x1a2a1a);hl.position.set(0,2.02,0);G.add(hl);
       if(key==='ELITE'){
-        // Elite visor glow
         const vs=new THREE.Mesh(new THREE.BoxGeometry(.42,.08,.06),new THREE.MeshBasicMaterial({color:0xff2200}));vs.position.set(0,2.02,-.26);G.add(vs);
         const gl=new THREE.PointLight(0xff2200,1.5,3);gl.position.set(0,2.02,-.2);G.add(gl);
       }
@@ -2124,7 +2371,10 @@ const Enemies = {
     e.hp-=dmg;
     UI.dmgNum(e.mesh.position.clone().add(new THREE.Vector3(0,2.3,0)),dmg,isCrit,isHead);
     if(isHead)UI.headshot();
-    if(e.bodyMats){e.bodyMats.forEach(m=>m.emissive?.setHex(0xaa1111));setTimeout(()=>{if(e.alive)e.bodyMats.forEach(m=>m.emissive?.setHex(0));},90);}
+    if(e.bodyMats){
+      try{e.bodyMats.forEach(m=>{if(m.emissive)m.emissive.setHex(0xaa1111);});
+      setTimeout(()=>{if(e.alive&&e.bodyMats)e.bodyMats.forEach(m=>{if(m.emissive)m.emissive.setHex(0);});},90);}catch(ex){}
+    }
     // Element effects
     if(element){
       if(element==='ELECTRIC'){
@@ -2143,27 +2393,52 @@ const Enemies = {
 
   _kill(e){
     e.alive=false;
-    // Blood splatter — red particles burst from death position
+    // Capture position BEFORE removing from scene
     const bp=e.mesh.position.clone();
-    Particles.burst(bp,0xaa0000,IS_MOB?12:20);
-    // Blood pool decal on ground
+    const lx=bp.x+(Math.random()-.5)*2;
+    const lz=bp.z+(Math.random()-.5)*2;
+    const isDrone=e.isDrone;
+    const eKey=e.key;
+    const eT=e.T;
+    const elite=e.elite;
+
+    // Blood + death particles
+    try{Particles.burst(bp,isDrone?0x4444ff:0xaa0000,IS_MOB?10:16);}catch(ex){}
+
+    // Blood pool decal
     try{
-      const pool=new THREE.Mesh(new THREE.CircleGeometry(.5+Math.random()*.4,8),new THREE.MeshBasicMaterial({color:0x660000,transparent:true,opacity:.75}));
-      pool.rotation.x=-Math.PI/2;pool.position.set(bp.x,.02,bp.z);scene.add(pool);
-      setTimeout(()=>{pool.material.opacity-=.02;const fade=setInterval(()=>{pool.material.opacity-=.008;if(pool.material.opacity<=0){clearInterval(fade);scene.remove(pool);}},1000);},8000);
-    }catch(e2){}
-    scene.remove(e.mesh);this.totalKills++;
-    BattlePass.addXP(e.elite?30:10); // elites give 3x BP XP
-    Player.gainXP(e.T.xp);
-    Player.credits+=~~(e.T.cr*(1+Zone.zone*.1));
+      const pool=new THREE.Mesh(
+        new THREE.BoxGeometry(.6+Math.random()*.4,.02,.6+Math.random()*.4),
+        new THREE.MeshBasicMaterial({color:0x550000,transparent:true,opacity:.7})
+      );
+      pool.position.set(bp.x,.01,bp.z);
+      pool.rotation.y=Math.random()*Math.PI;
+      scene.add(pool);
+      let op=.7;
+      const fade=setInterval(()=>{
+        op-=.035;
+        try{if(pool.material)pool.material.opacity=Math.max(0,op);}catch(ex){}
+        if(op<=0){clearInterval(fade);try{scene.remove(pool);}catch(ex){}}
+      },500);
+    }catch(ex){}
+
+    // Remove mesh AFTER capturing all needed data
+    try{scene.remove(e.mesh);}catch(ex){}
+
+    // Rewards and progression
+    this.totalKills++;
+    try{BattlePass.addXP(elite?30:10);}catch(ex){}
+    try{Player.gainXP(eT.xp);}catch(ex){}
+    Player.credits+=~~(eT.cr*(1+Zone.zone*.1));
     UI.credit(Player.credits);
-    UI.kill(e.T.label);
-    Audio.enemyDie();
-    Particles.burst(e.mesh.position,e.isDrone?0x4444ff:0xcc2200,IS_MOB?5:9);
-    const lx=e.mesh.position.x+(Math.random()-.5)*2,lz=e.mesh.position.z+(Math.random()-.5)*2;
-    if(Math.random()<.55)Loot.spawnDrop(lx,lz);
-    if(e.key==='HEAVY'&&Math.random()<.8)Loot.spawnDrop(lx,lz,'RARE',true);
-    if(e.key==='ELITE')Loot.spawnDrop(lx,lz,'EPIC');
+    try{UI.kill(eT.label);}catch(ex){}
+    try{Audio.enemyDie();}catch(ex){}
+
+    // Loot drops
+    try{if(Math.random()<.55)Loot.spawnDrop(lx,lz);}catch(ex){}
+    try{if(eKey==='HEAVY'&&Math.random()<.8)Loot.spawnDrop(lx,lz,'RARE',true);}catch(ex){}
+    try{if(eKey==='ELITE')Loot.spawnDrop(lx,lz,'EPIC');}catch(ex){}
+
     Zone.onKill();
   },
 
@@ -2229,11 +2504,17 @@ const Enemies = {
         }
         if(!e.isDrone&&dist>14&&e.stateTimer>1.5){e.state='chase';e.stateTimer=0;}
       }
-      e.mesh.lookAt(new THREE.Vector3(pp.x,ep.y,pp.z));
-      const pct=Math.max(0,e.hp/e.maxHp);
-      e.hpBar.scale.x=pct;
-      e.hpBar.material.color.setHex(pct>.5?0x22ee55:pct>.25?0xffaa00:0xff2200);
-      e.hpBar.lookAt(camera.position);
+      // Face player and update HP bar — wrapped in try/catch so one bad enemy can't crash the loop
+      try{
+        e.mesh.lookAt(new THREE.Vector3(pp.x,ep.y,pp.z));
+        const pct=Math.max(0,e.hp/e.maxHp);
+        if(e.hpBar){
+          e.hpBar.scale.x=pct;
+          if(e.hpBar.material&&e.hpBar.material.color)
+            e.hpBar.material.color.setHex(pct>.5?0x22ee55:pct>.25?0xffaa00:0xff2200);
+          e.hpBar.lookAt(camera.position);
+        }
+      }catch(ex){}
     }
   },
 };
@@ -2340,7 +2621,9 @@ const Zone={
     this.killsInZone++;
     if(this.killsInZone>=this.killsToNext&&!Boss.active){
       this.killsInZone=0;this.zone++;this.killsToNext=~~(this.killsToNext*1.4);
-    BattlePass.addXP(500); // bonus XP for clearing a zone
+    BattlePass.addXP(500);
+    // Auto-save on zone clear
+    setTimeout(()=>{if(gameState===GS.MISSION){Save.save();const el=document.getElementById('autosave-indicator');if(el){el.style.opacity='1';el.textContent='💾 SAVED';clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity='0',2200);}}},600);
       // Every 3 zones: boss
       if(this.zone%3===0&&Map3D.spawnPts.length>0){
         const sp=Map3D.spawnPts[~~(Math.random()*Map3D.spawnPts.length)];
@@ -2405,12 +2688,24 @@ const SkillTree = {
 //  ACTIVE SKILLS
 // =====================================================================
 const Skills={
-  defs:[{name:'Healing Drone',cd:25,dur:8},{name:'EMP Pulse',cd:20,dur:0},{name:'Sticky Grenade',cd:10,dur:0},{name:'Shield Wall',cd:30,dur:5}],
+  defs:[
+    {name:'Healing Drone',cd:22,dur:12}, // 12s active, heals 18/s = up to 216 HP
+    {name:'EMP Pulse',cd:20,dur:0},
+    {name:'Sticky Grenade',cd:10,dur:0},
+    {name:'Shield Wall',cd:30,dur:6}
+  ],
   cds:[0,0,0,0],active:[false,false,false,false],timers:[0,0,0,0],
   _drone:null,_da:0,
   activate(i){
     if(this.cds[i]>0)return;this.cds[i]=this.defs[i].cd;UI.notifySkill(this.defs[i].name);
-    if(i===0){this.active[0]=true;this.timers[0]=this.defs[0].dur;if(!this._drone){const m=new THREE.Mesh(new THREE.SphereGeometry(.28,6,6),new THREE.MeshBasicMaterial({color:0x00ffaa}));const gl=new THREE.PointLight(0x00ffaa,2.5,5);m.add(gl);scene.add(m);this._drone=m;}this._drone.visible=true;document.getElementById('drone-hud').style.display='block';}
+    if(i===0){
+      this.active[0]=true;this.timers[0]=this.defs[0].dur;
+      if(!this._drone){const m=new THREE.Mesh(new THREE.SphereGeometry(.28,6,6),new THREE.MeshBasicMaterial({color:0x00ffaa}));const gl=new THREE.PointLight(0x00ffaa,2.5,5);m.add(gl);scene.add(m);this._drone=m;}
+      this._drone.visible=true;document.getElementById('drone-hud').style.display='block';
+      // Instant burst heal on activation — 25 HP immediately
+      Player.heal(25*(1+SkillTree.nodes.droneUp.lvl*.3));
+      Particles.burst(Player.mesh.position.clone().add(new THREE.Vector3(0,1.5,0)),0x00ffaa,IS_MOB?10:18);
+    }
     if(i===1){Enemies.list.forEach(e=>{if(e.alive&&e.mesh.position.distanceTo(Player.mesh.position)<12*(1+SkillTree.nodes.empUp.lvl*.3))Enemies.stun(e,3);});Particles.burst(Player.mesh.position.clone().add(new THREE.Vector3(0,1,0)),0x0088ff,15);}
     if(i===2)Grenades.throw(Player.mesh.position.clone().add(new THREE.Vector3(0,1.1,0)),Player.facing.clone());
     if(i===3){this.active[3]=true;this.timers[3]=this.defs[3].dur*(1+SkillTree.nodes.shieldUp.lvl*.2);Player.shielded=true;document.getElementById('shield-vfx').classList.add('on');}
@@ -2429,9 +2724,10 @@ const Skills={
         if(i===0&&this._drone){
           this._da+=dt*2.2;const pp=Player.mesh.position;
           this._drone.position.set(pp.x+Math.cos(this._da)*2.5,pp.y+2.2,pp.z+Math.sin(this._da)*2.5);
-          const healPower=5*(1+SkillTree.nodes.droneUp.lvl*.3);
-          if(Math.random()<.8*dt)Player.heal(healPower*dt);
-          if(Math.random()<3*dt)Particles.burst(this._drone.position.clone(),0x00ffaa,1);
+          // Heal 18 HP/sec base (+30% per drone upgrade) — meaningful in combat
+          const healRate=18*(1+SkillTree.nodes.droneUp.lvl*.3);
+          Player.heal(healRate*dt);
+          if(Math.random()<4*dt)Particles.burst(this._drone.position.clone(),0x00ffaa,1);
         }
       }
     }
@@ -2832,44 +3128,74 @@ const UI={
   notifySkill(name){const el=document.getElementById('skill-notify');el.textContent=`⬢ ${name.toUpperCase()} ACTIVATED`;el.style.opacity='1';setTimeout(()=>el.style.opacity='0',1800);},
   levelUp(lvl){const el=document.createElement('div');el.style.cssText='position:fixed;top:42%;left:50%;font-family:Courier New;color:#ffd700;font-size:24px;letter-spacing:5px;text-shadow:0 0 24px #ffd700;pointer-events:none;z-index:200;animation:lvlup 2.5s ease forwards;transform:translate(-50%,-50%)';el.textContent=`LEVEL UP — ${lvl}`;document.body.appendChild(el);setTimeout(()=>el.remove(),2500);},
   drawMinimap(){
-    if(!_mmCtx||!Player.mesh)return;
+    if(!_mmCtx||!Player.mesh||!Map3D.grid)return;
     const ctx=_mmCtx;const W=90,H=90;
     ctx.fillStyle='#03030a';ctx.fillRect(0,0,W,H);
     const px=Player.mesh.position.x,pz=Player.mesh.position.z;
-    const off=-(C.GRID/2)*C.CELL; // CRITICAL: rooms use grid coords, world = off + r.x*CELL
-    const S=2.8;
+    const G=C.GRID;
+    const off=-(G/2)*C.CELL;
+    const S=1.4; // world units → pixels
     const CX=W/2,CY=H/2;
+    const cellPx=C.CELL*S; // size of one grid cell in pixels
+
+    // Draw every floor tile (rooms + corridors) directly from the grid
+    ctx.fillStyle='#1e1e2e';
+    for(let gz=0;gz<G;gz++){
+      for(let gx=0;gx<G;gx++){
+        if(!Map3D.grid[gz][gx])continue;
+        const wx=(off+gx*C.CELL-px)*S+CX;
+        const wz=(off+gz*C.CELL-pz)*S+CY;
+        if(wx+cellPx<-1||wx>W+1||wz+cellPx<-1||wz>H+1)continue;
+        ctx.fillRect(wx,wz,cellPx+.5,cellPx+.5);
+      }
+    }
+
+    // Room outlines + type color tint on top
     for(const r of Map3D.rooms){
       const wx=(off+r.x*C.CELL-px)*S+CX;
       const wz=(off+r.z*C.CELL-pz)*S+CY;
-      const rw=r.w*C.CELL*S,rh=r.h*C.CELL*S;
-      if(wx+rw<0||wx>W||wz+rh<0||wz>H)continue;
-      const typeCol={office:'#1c1c2c',warehouse:'#1c1c14',garage:'#14141c',subway:'#0c1420',rooftop:'#14141c',lab:'#0c1c14',mall:'#1a1820',desert:'#201a10',flooded:'#0a1218',industrial:'#181414',start:'#181818'}[r.type]||'#141420';
-      ctx.fillStyle=typeCol;ctx.fillRect(wx,wz,rw,rh);
-      ctx.strokeStyle='rgba(255,140,0,.22)';ctx.lineWidth=.5;ctx.strokeRect(wx,wz,rw,rh);
+      const rw=r.w*C.CELL*S, rh=r.h*C.CELL*S;
+      if(wx+rw<-4||wx>W+4||wz+rh<-4||wz>H+4)continue;
+      const tintCol={
+        office:'rgba(60,60,120,.3)',warehouse:'rgba(60,80,30,.3)',
+        garage:'rgba(30,30,60,.3)',subway:'rgba(20,60,100,.3)',
+        rooftop:'rgba(40,40,60,.3)',lab:'rgba(20,80,60,.3)',
+        mall:'rgba(80,50,100,.3)',desert:'rgba(100,80,40,.3)',
+        flooded:'rgba(20,60,80,.3)',industrial:'rgba(80,30,20,.3)',
+      }[r.type]||'rgba(40,40,60,.2)';
+      ctx.fillStyle=tintCol;ctx.fillRect(wx,wz,rw,rh);
+      ctx.strokeStyle='rgba(255,140,0,.35)';ctx.lineWidth=.8;ctx.strokeRect(wx,wz,rw,rh);
     }
+
+    // Enemies
     for(const e of Enemies.list){
       if(!e.alive)continue;
       const ex=(e.mesh.position.x-px)*S+CX,ez=(e.mesh.position.z-pz)*S+CY;
-      if(ex<-3||ex>W+3||ez<-3||ez>H+3)continue;
+      if(ex<-2||ex>W+2||ez<-2||ez>H+2)continue;
       ctx.fillStyle=e.elite?'#ff8800':'#ff3300';
-      ctx.beginPath();ctx.arc(ex,ez,2,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(ex,ez,2.2,0,Math.PI*2);ctx.fill();
     }
-    if(Boss.active){
+
+    // Boss
+    if(Boss.active&&Boss.active.mesh){
       const bx=(Boss.active.mesh.position.x-px)*S+CX,bz=(Boss.active.mesh.position.z-pz)*S+CY;
-      ctx.fillStyle='#ff0000';ctx.beginPath();ctx.arc(bx,bz,3.5,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#ff0000';ctx.beginPath();ctx.arc(bx,bz,4,0,Math.PI*2);ctx.fill();
     }
+
+    // Loot
     for(const d of Loot.drops){
       if(!d.mesh)continue;
       const lx=(d.mesh.position.x-px)*S+CX,lz=(d.mesh.position.z-pz)*S+CY;
-      if(lx<-3||lx>W+3||lz<-3||lz>H+3)continue;
+      if(lx<-2||lx>W+2||lz<-2||lz>H+2)continue;
       ctx.fillStyle=RARITY[d.rar]?.col||'#aaa';
-      ctx.beginPath();ctx.arc(lx,lz,1.5,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(lx,lz,1.8,0,Math.PI*2);ctx.fill();
     }
-    ctx.fillStyle='#33aaff';ctx.beginPath();ctx.arc(CX,CY,3.5,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#33aaff';ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.moveTo(CX,CY);ctx.lineTo(CX+Player.facing.x*10,CY+Player.facing.z*10);ctx.stroke();
-    ctx.strokeStyle='rgba(255,140,0,.35)';ctx.lineWidth=1;ctx.strokeRect(.5,.5,W-1,H-1);
+
+    // Player dot + direction
+    ctx.fillStyle='#3399ff';ctx.beginPath();ctx.arc(CX,CY,3.5,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#66bbff';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(CX,CY);ctx.lineTo(CX+Player.facing.x*8,CY+Player.facing.z*8);ctx.stroke();
+    ctx.strokeStyle='rgba(255,140,0,.4)';ctx.lineWidth=1;ctx.strokeRect(.5,.5,W-1,H-1);
   },
 };
 
@@ -3850,6 +4176,7 @@ document.querySelectorAll('.hub-tab').forEach(tab=>{
     if(tab.dataset.panel==='pass')BattlePass.renderHub();
     if(tab.dataset.panel==='style')StyleSystem.render();
     if(tab.dataset.panel==='cosmshop')CosmeticShop.render();
+    if(tab.dataset.panel==='casino')Casino.open();
   });
 });
 
@@ -3868,34 +4195,53 @@ document.querySelectorAll('.cc-swatch').forEach(el=>el.addEventListener('pointer
 }));
 
 // Auto-save every 90s during mission
-setInterval(()=>{if(gameState===GS.MISSION)Save.save();},90000);
+// ── AUTO-SAVE — every 60 seconds while in mission, with save indicator ──
+let _autoSaveCount=0;
+setInterval(()=>{
+  if(gameState!==GS.MISSION||_paused||!gameRunning)return;
+  Save.save();
+  _autoSaveCount++;
+  // Show a subtle save indicator (top-left corner, doesn't interrupt gameplay)
+  const el=document.getElementById('autosave-indicator');
+  if(el){
+    el.style.opacity='1';
+    el.textContent='💾 SAVED';
+    clearTimeout(el._t);
+    el._t=setTimeout(()=>{el.style.opacity='0';},2200);
+  }
+},60000);
 
 // =====================================================================
 //  GAME LOOP
 // =====================================================================
 function loop(){
   requestAnimationFrame(loop);
-  const dt=Math.min(clock.getDelta(),.05);
-  renderer.render(scene,camera);
-  if(!gameRunning)return;
-  Input.updateWorld();
-  Player.update(dt);
-  Bullets.update(dt);
-  Enemies.update(dt);
-  Boss.update(dt);
-  Skills.update(dt);
-  Grenades.update(dt);
-  Loot.update(dt,Player.mesh.position);
-  Particles.update(dt);
-  Rain.update(dt);
-  Events.update(dt);
-  Mercs.update(dt);
-  flicker(dt);
-  const tgt=Player.mesh.position.clone().add(CAM_OFF);
-  camera.position.lerp(tgt,7*dt);
-  _camLook.lerp(Player.mesh.position,7*dt);
-  camera.lookAt(_camLook);
-  UI.drawMinimap();
+  try{
+    const dt=Math.min(clock.getDelta(),.05);
+    renderer.render(scene,camera);
+    if(!gameRunning)return;
+    Input.updateWorld();
+    Player.update(dt);
+    Bullets.update(dt);
+    Enemies.update(dt);
+    Boss.update(dt);
+    Skills.update(dt);
+    Grenades.update(dt);
+    Loot.update(dt,Player.mesh.position);
+    Particles.update(dt);
+    Rain.update(dt);
+    Events.update(dt);
+    Mercs.update(dt);
+    flicker(dt);
+    const tgt=Player.mesh.position.clone().add(CAM_OFF);
+    camera.position.lerp(tgt,7*dt);
+    _camLook.lerp(Player.mesh.position,7*dt);
+    camera.lookAt(_camLook);
+    UI.drawMinimap();
+  }catch(ex){
+    // Log but don't crash — keep the RAF going
+    if(typeof console!=='undefined')console.warn('Loop error:',ex.message);
+  }
 }
 
 // =====================================================================
@@ -5837,7 +6183,353 @@ const PixelIcons={
   },
 };
 
-// Centralized banner helper — prevents overlapping banners
+// =====================================================================
+//  CASINO — Blackjack, Slots, High-Low Dice, Roulette
+// =====================================================================
+const Casino={
+  switchGame(g){
+    document.querySelectorAll('.casino-tab').forEach(t=>t.classList.toggle('active',t.dataset.game===g));
+    document.querySelectorAll('.casino-game').forEach(p=>p.style.display='none');
+    const panel=document.getElementById('casino-'+g);if(panel)panel.style.display='block';
+    Audio.uiClick();
+    if(g==='wheel')Casino.wheel.drawWheel();
+    if(g==='horses')Casino.horses.setup();
+  },
+  _cr(n){Player.credits+=n;UI.credit(Player.credits);const el=document.getElementById('casino-credits');if(el)el.textContent=Player.credits;},
+  _msg(id,m,c){const el=document.getElementById(id);if(el){el.textContent=m;el.style.color=c||'#ffd700';}},
+
+  // ── BLACKJACK ──────────────────────────────────────────────────────
+  bj:{
+    deck:[],hand:[],dealer:[],bet:0,pendingBet:0,active:false,
+    SUITS:['&#9824;','&#9829;','&#9830;','&#9827;'],
+    _build(){this.deck=[];for(const s of this.SUITS)for(let v=1;v<=13;v++)this.deck.push({s,v});for(let i=this.deck.length-1;i>0;i--){const j=~~(Math.random()*(i+1));[this.deck[i],this.deck[j]]=[this.deck[j],this.deck[i]];}},
+    _draw(){return this.deck.pop();},
+    _val(h){let s=0,a=0;for(const c of h){s+=c.v>=10?10:c.v===1?(a++,11):c.v;}while(s>21&&a-->0)s-=10;return s;},
+    _cardEl(c,hidden){
+      const el=document.createElement('div');
+      if(hidden){el.className='playing-card back';el.innerHTML='<div style="font-size:22px;color:#446">?</div>';return el;}
+      const isRed=c.s==='&#9829;'||c.s==='&#9830;';
+      el.className='playing-card '+(isRed?'red':'black');
+      const f=['','A','2','3','4','5','6','7','8','9','10','J','Q','K'][c.v];
+      el.innerHTML='<div class="card-val">'+f+'</div><div class="card-suit">'+c.s+'</div>';
+      return el;
+    },
+    addBet(n){if(this.active)return;this.pendingBet=Math.min(this.pendingBet+n,Player.credits);const el=document.getElementById('bj-bet-display');if(el)el.textContent=this.pendingBet;},
+    clearBet(){this.pendingBet=0;const el=document.getElementById('bj-bet-display');if(el)el.textContent=0;},
+    _render(hideDealer){
+      const dc=document.getElementById('bj-dealer-cards');const pc=document.getElementById('bj-player-cards');if(!dc||!pc)return;
+      dc.innerHTML='';pc.innerHTML='';
+      this.dealer.forEach((c,i)=>dc.appendChild(this._cardEl(c,hideDealer&&i===1)));
+      this.hand.forEach(c=>pc.appendChild(this._cardEl(c,false)));
+      const dv=document.getElementById('bj-dealer-val');const pv=document.getElementById('bj-player-val');
+      if(dv)dv.textContent=hideDealer?'?':this._val(this.dealer)+' pts';
+      if(pv)pv.textContent=this._val(this.hand)+' pts';
+    },
+    deal(){
+      if(this.pendingBet<10){Casino._msg('bj-msg','PLACE A BET FIRST','#e74c3c');return;}
+      if(Player.credits<this.pendingBet){Casino._msg('bj-msg','NOT ENOUGH CREDITS','#e74c3c');return;}
+      Casino._cr(-this.pendingBet);this.bet=this.pendingBet;this.pendingBet=0;
+      const bd=document.getElementById('bj-bet-display');if(bd)bd.textContent=0;
+      this._build();this.hand=[this._draw(),this._draw()];this.dealer=[this._draw(),this._draw()];
+      this.active=true;this._render(true);
+      ['bj-hit','bj-stand','bj-double'].forEach(id=>{const e=document.getElementById(id);if(e)e.disabled=false;});
+      const de=document.getElementById('bj-deal');if(de)de.disabled=true;
+      if(this._val(this.hand)===21){Casino._msg('bj-msg','BLACKJACK! +'+~~(this.bet*2.5)+' CR','#ffd700');this._end(true,1.5);}
+      else Casino._msg('bj-msg','Hit or Stand?');
+    },
+    hit(){if(!this.active)return;this.hand.push(this._draw());this._render(true);const v=this._val(this.hand);if(v>21){Casino._msg('bj-msg','BUST! Lost '+this.bet+' CR','#e74c3c');this._end(false);}else if(v===21)this.stand();},
+    stand(){
+      if(!this.active)return;
+      while(this._val(this.dealer)<17)this.dealer.push(this._draw());
+      this._render(false);
+      const dv=this._val(this.dealer),pv=this._val(this.hand);
+      const win=dv>21||pv>dv;const push=pv===dv;
+      Casino._msg('bj-msg',win?'WIN! +'+~~(this.bet*2)+' CR':push?'PUSH — BET RETURNED':'DEALER WINS',win?'#2ecc71':push?'#ffd700':'#e74c3c');
+      this._end(win,1,push);
+    },
+    double(){
+      if(!this.active||Player.credits<this.bet)return;
+      Casino._cr(-this.bet);this.bet*=2;this.hand.push(this._draw());this._render(true);
+      if(this._val(this.hand)>21){Casino._msg('bj-msg','BUST! Lost '+this.bet+' CR','#e74c3c');this._end(false);}else this.stand();
+    },
+    _end(win,mult,push){
+      this.active=false;
+      if(push)Casino._cr(this.bet);else if(win)Casino._cr(~~(this.bet*(1+(mult||1))));
+      ['bj-hit','bj-stand','bj-double'].forEach(id=>{const e=document.getElementById(id);if(e)e.disabled=true;});
+      const de=document.getElementById('bj-deal');if(de)de.disabled=false;
+      Save.save();
+    },
+  },
+
+  // ── SLOTS ──────────────────────────────────────────────────────────
+  slots:{
+    SYMS:['💀','🔫','💎','⭐','7️⃣','🎯','🃏','💰'],
+    _bet:25,spinning:false,
+    setBet(n){this._bet=n;const el=document.getElementById('slots-bet-display');if(el)el.textContent=n;},
+    spin(){
+      if(this.spinning)return;
+      if(Player.credits<this._bet){Casino._msg('slots-msg','NOT ENOUGH CREDITS','#e74c3c');return;}
+      Casino._cr(-this._bet);this.spinning=true;
+      const sb=document.getElementById('slots-spin');if(sb)sb.disabled=true;
+      Casino._msg('slots-msg','');
+      let t=0;const id=setInterval(()=>{
+        for(let i=0;i<3;i++){const el=document.getElementById('reel-'+i);if(el)el.textContent=this.SYMS[~~(Math.random()*this.SYMS.length)];}
+        t++;if(t>=18){clearInterval(id);this._result();}
+      },75);
+    },
+    _result(){
+      const r=[0,1,2].map(()=>this.SYMS[~~(Math.random()*this.SYMS.length)]);
+      for(let i=0;i<3;i++){const el=document.getElementById('reel-'+i);if(el)el.textContent=r[i];}
+      let mult=0,msg='';
+      if(r[0]==='7️⃣'&&r[1]==='7️⃣'&&r[2]==='7️⃣'){mult=50;msg='JACKPOT! TRIPLE 7!';}
+      else if(r[0]==='💎'&&r[1]==='💎'&&r[2]==='💎'){mult=25;msg='TRIPLE DIAMOND!';}
+      else if(r[0]==='⭐'&&r[1]==='⭐'&&r[2]==='⭐'){mult=20;msg='TRIPLE STAR!';}
+      else if(r[0]===r[1]&&r[1]===r[2]){mult=6;msg='3 OF A KIND!';}
+      else if(r[0]===r[1]||r[1]===r[2]||r[0]===r[2]){mult=2;msg='2 MATCH!';}
+      if(mult>0){const earn=~~(this._bet*mult);Casino._cr(earn);Casino._msg('slots-msg',msg+' +'+earn+' CR','#ffd700');}
+      else Casino._msg('slots-msg','NO MATCH — TRY AGAIN','#556');
+      this.spinning=false;const sb=document.getElementById('slots-spin');if(sb)sb.disabled=false;Save.save();
+    },
+  },
+
+  // ── VIDEO POKER — Jacks or Better ──────────────────────────────────
+  poker:{
+    deck:[],hand:[],holds:[false,false,false,false,false],_bet:25,_phase:'deal',
+    SUITS:['S','H','D','C'],SUIT_SYM:{S:'&#9824;',H:'&#9829;',D:'&#9830;',C:'&#9827;'},
+    setBet(n){this._bet=n;const el=document.getElementById('poker-bet-display');if(el)el.textContent=n;},
+    _build(){this.deck=[];for(const s of this.SUITS)for(let v=1;v<=13;v++)this.deck.push({s,v});for(let i=this.deck.length-1;i>0;i--){const j=~~(Math.random()*(i+1));[this.deck[i],this.deck[j]]=[this.deck[j],this.deck[i]];}},
+    _draw(){return this.deck.pop();},
+    _render(){
+      const cc=document.getElementById('poker-cards');const hh=document.getElementById('poker-holds');if(!cc||!hh)return;
+      cc.innerHTML='';hh.innerHTML='';
+      this.hand.forEach((c,i)=>{
+        const isRed=c.s==='H'||c.s==='D';
+        const held=this.holds[i];
+        const el=document.createElement('div');
+        el.className='playing-card '+(isRed?'red':'black')+(held?' held':'');
+        const f=['','A','2','3','4','5','6','7','8','9','10','J','Q','K'][c.v];
+        el.innerHTML='<div class="card-val">'+f+'</div><div class="card-suit">'+this.SUIT_SYM[c.s]+'</div>';
+        if(this._phase==='hold'){el.onclick=()=>{this.holds[i]=!this.holds[i];this._render();};}
+        cc.appendChild(el);
+        const hl=document.createElement('div');
+        hl.style.cssText='font-size:9px;color:'+(held?'#ffd700':'#334')+';letter-spacing:2px;text-align:center;width:36px;cursor:pointer;margin-top:2px;';
+        hl.textContent=held?'HELD':'HOLD';
+        if(this._phase==='hold'){hl.onclick=()=>{this.holds[i]=!this.holds[i];this._render();};}
+        hh.appendChild(hl);
+      });
+    },
+    deal(){
+      if(Player.credits<this._bet){Casino._msg('poker-msg','NOT ENOUGH CREDITS','#e74c3c');return;}
+      Casino._cr(-this._bet);this._build();
+      this.hand=[this._draw(),this._draw(),this._draw(),this._draw(),this._draw()];
+      this.holds=[false,false,false,false,false];this._phase='hold';this._render();
+      const dd=document.getElementById('poker-deal');const dr=document.getElementById('poker-draw');
+      if(dd)dd.style.display='none';if(dr)dr.style.display='block';
+      Casino._msg('poker-msg','Select cards to HOLD, then DRAW');
+    },
+    draw(){
+      for(let i=0;i<5;i++)if(!this.holds[i])this.hand[i]=this._draw();
+      this._phase='result';this.holds=[false,false,false,false,false];this._render();
+      const dd=document.getElementById('poker-deal');const dr=document.getElementById('poker-draw');
+      if(dd)dd.style.display='block';if(dr)dr.style.display='none';
+      const res=this._eval();
+      if(res.mult>0){Casino._cr(~~(this._bet*res.mult));Casino._msg('poker-msg',res.name+' — WIN '+~~(this._bet*res.mult)+' CR!','#ffd700');}
+      else Casino._msg('poker-msg','No winning hand. Deal again.','#e74c3c');
+      Save.save();
+    },
+    _eval(){
+      const vals=this.hand.map(c=>c.v===1?14:c.v).sort((a,b)=>a-b);
+      const suits=this.hand.map(c=>c.s);
+      const flush=suits.every(s=>s===suits[0]);
+      const uniq=new Set(vals);
+      const straight=(vals[4]-vals[0]===4&&uniq.size===5)||(JSON.stringify(vals)==='[2,3,4,5,14]');
+      const counts={};vals.forEach(v=>counts[v]=(counts[v]||0)+1);
+      const groups=Object.values(counts).sort((a,b)=>b-a);
+      if(flush&&straight&&vals[4]===14&&vals[0]===10)return{name:'ROYAL FLUSH',mult:250};
+      if(flush&&straight)return{name:'STRAIGHT FLUSH',mult:50};
+      if(groups[0]===4)return{name:'FOUR OF A KIND',mult:25};
+      if(groups[0]===3&&groups[1]===2)return{name:'FULL HOUSE',mult:9};
+      if(flush)return{name:'FLUSH',mult:6};
+      if(straight)return{name:'STRAIGHT',mult:4};
+      if(groups[0]===3)return{name:'THREE OF A KIND',mult:3};
+      if(groups[0]===2&&groups[1]===2)return{name:'TWO PAIR',mult:2};
+      if(groups[0]===2){const pv=parseInt(Object.entries(counts).find(([k,v])=>v===2)[0]);if(pv>=11||pv===14)return{name:'JACKS OR BETTER',mult:1};}
+      return{name:'',mult:0};
+    },
+  },
+
+  // ── LUCKY WHEEL ─────────────────────────────────────────────────────
+  wheel:{
+    SEGS:[
+      {label:'100 CR',col:'#1a3a1a',val:100,type:'cr'},
+      {label:'MYSTERY',col:'#3a1a3a',val:0,type:'mystery'},
+      {label:'250 CR',col:'#1a2a3a',val:250,type:'cr'},
+      {label:'50 CR',col:'#2a1a1a',val:50,type:'cr'},
+      {label:'RARE GUN',col:'#0a1a2a',val:0,type:'weapon'},
+      {label:'500 CR',col:'#1a3a1a',val:500,type:'cr'},
+      {label:'NOTHING',col:'#1a1a1a',val:0,type:'nothing'},
+      {label:'1000 CR',col:'#2a2a0a',val:1000,type:'cr'},
+      {label:'EPIC GEAR',col:'#2a0a2a',val:0,type:'armor'},
+      {label:'75 CR',col:'#1a1a2a',val:75,type:'cr'},
+      {label:'STYLE',col:'#2a1a0a',val:0,type:'style'},
+      {label:'150 CR',col:'#0a2a1a',val:150,type:'cr'},
+    ],
+    _spinning:false,_angle:0,_hasSpun:false,
+    drawWheel(){
+      const cv=document.getElementById('wheel-canvas');if(!cv)return;
+      const ctx=cv.getContext('2d');const R=95,CX=100,CY=100;
+      const n=this.SEGS.length;const arc=Math.PI*2/n;
+      ctx.clearRect(0,0,200,200);
+      this.SEGS.forEach((seg,i)=>{
+        const s=this._angle+i*arc;
+        ctx.beginPath();ctx.moveTo(CX,CY);ctx.arc(CX,CY,R,s,s+arc);ctx.closePath();
+        ctx.fillStyle=seg.col;ctx.fill();ctx.strokeStyle='rgba(255,215,0,.3)';ctx.lineWidth=1.5;ctx.stroke();
+        ctx.save();ctx.translate(CX,CY);ctx.rotate(s+arc/2);ctx.translate(R*.62,0);ctx.rotate(Math.PI/2);
+        ctx.fillStyle='#ffd700';ctx.font='bold 9px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(seg.label,0,0);ctx.restore();
+      });
+      ctx.beginPath();ctx.arc(CX,CY,14,0,Math.PI*2);ctx.fillStyle='#0a0a14';ctx.fill();
+      ctx.strokeStyle='#ffd700';ctx.lineWidth=2;ctx.stroke();
+    },
+    spin(){
+      if(this._spinning)return;
+      if(this._hasSpun){
+        if(Player.credits<100){Casino._msg('wheel-msg','NOT ENOUGH CREDITS','#e74c3c');return;}
+        Casino._cr(-100);
+      }
+      this._hasSpun=true;this._spinning=true;
+      const btn=document.getElementById('wheel-spin-btn');if(btn){btn.textContent='SPINNING...';btn.disabled=true;}
+      const targetSeg=~~(Math.random()*this.SEGS.length);
+      const n=this.SEGS.length;const arc=Math.PI*2/n;
+      const extra=(5+Math.random()*5)*Math.PI*2;
+      const targetAngle=Math.PI*2-(targetSeg*arc+arc/2)+Math.PI/2;
+      const total=extra+(targetAngle%( Math.PI*2));
+      const dur=4500;let start=null;const init=this._angle;
+      const ease=t=>t<.5?4*t*t*t:(t-1)*(2*t-2)*(2*t-2)+1;
+      const step=ts=>{
+        if(!start)start=ts;
+        const p=Math.min(1,(ts-start)/dur);
+        this._angle=init+total*ease(p);
+        this.drawWheel();
+        if(p<1)requestAnimationFrame(step);else{this._spinning=false;this._resolve(targetSeg);}
+      };
+      requestAnimationFrame(step);
+    },
+    _resolve(idx){
+      const seg=this.SEGS[idx];
+      let msg='';
+      if(seg.type==='cr'){Casino._cr(seg.val);msg='WIN: '+seg.label+'!';}
+      else if(seg.type==='weapon'){try{Player.pickupWeapon(Loot.genWeapon('RARE'));}catch(e){}msg='RARE WEAPON!';}
+      else if(seg.type==='armor'){try{Armor.equip(Loot.genArmor('RARE'));}catch(e){}msg='RARE GEAR!';}
+      else if(seg.type==='mystery'){const b=~~(Math.random()*500)+50;Casino._cr(b);msg='MYSTERY: +'+b+' CR!';}
+      else if(seg.type==='style'){try{StyleSystem.unlock('color',~~(Math.random()*8));StyleSystem.save();}catch(e){}msg='NEW STYLE!';}
+      else msg='Better luck next time!';
+      Casino._msg('wheel-msg',msg,seg.type==='nothing'?'#556':'#ffd700');
+      const btn=document.getElementById('wheel-spin-btn');
+      if(btn){btn.textContent=this._hasSpun?'EXTRA SPIN (100 CR)':'FREE SPIN';btn.disabled=false;}
+      Save.save();
+    },
+  },
+
+  // ── HORSE RACING — GTA SA Inside Track Betting ─────────────────────
+  horses:{
+    _bet:100,_pick:-1,_racing:false,_currentRace:0,
+    RACES:[
+      {name:'SHADOW CITY STAKES',horses:[
+        {name:'GHOST RUNNER',odds:2.1,col:'#aaaaaa'},{name:'IRON FIST',odds:3.5,col:'#cc4400'},
+        {name:'NIGHT BLADE',odds:5.0,col:'#4444cc'},{name:'GOLDEN APEX',odds:1.8,col:'#ddaa00'},
+        {name:'STREET REAPER',odds:8.0,col:'#006622'},{name:'CHROME BULLET',odds:4.2,col:'#446688'},
+      ]},
+      {name:'UNDERGROUND GRAND PRIX',horses:[
+        {name:'VENOM STRIKE',odds:2.5,col:'#446600'},{name:'ACID RAIN',odds:4.0,col:'#884400'},
+        {name:'PHANTOM X',odds:1.6,col:'#880088'},{name:'DUST DEVIL',odds:6.5,col:'#886644'},
+        {name:'NOVA SPARK',odds:3.2,col:'#004488'},{name:'RUST DEMON',odds:9.0,col:'#663300'},
+      ]},
+      {name:'CARTEL CLASSIC',horses:[
+        {name:'EL DIABLO',odds:2.0,col:'#cc2200'},{name:'SILENT GUN',odds:3.8,col:'#333355'},
+        {name:'LUCKY SEVEN',odds:1.5,col:'#ddbb00'},{name:'BLOOD MONEY',odds:7.0,col:'#aa0022'},
+        {name:'SMOKESCREEN',odds:4.5,col:'#556644'},
+      ]},
+    ],
+    setBet(n){this._bet=n;const el=document.getElementById('horse-bet-display');if(el)el.textContent=n;},
+    setup(){
+      if(this._racing)return;
+      this._pick=-1;
+      const ri=~~(Math.random()*this.RACES.length);this._currentRace=ri;
+      const race=this.RACES[ri];
+      const rn=document.getElementById('horse-race-name');if(rn)rn.textContent=race.name;
+      const list=document.getElementById('horse-list');if(!list)return;
+      list.innerHTML='';
+      const track=document.getElementById('horse-track');if(track)track.style.display='none';
+      const btn=document.getElementById('horse-race-btn');if(btn){btn.disabled=true;btn.textContent='PLACE BET & RACE';}
+      const pd=document.getElementById('horse-pick-display');if(pd)pd.textContent='—';
+      Casino._msg('horse-msg','Pick a horse to bet on');
+      race.horses.forEach((h,i)=>{
+        const div=document.createElement('div');div.className='horse-card';
+        const tag=h.odds<2?'<span style="color:#ff4;font-size:9px"> FAV</span>':h.odds>6?'<span style="color:#f84;font-size:9px"> LONG</span>':'';
+        div.innerHTML='<div style="font-size:22px">&#127939;</div>'+
+          '<div style="flex:1"><div style="font-size:12px;color:'+h.col+'">'+h.name+tag+'</div>'+
+          '<div style="font-size:10px;color:#556;margin-top:2px">ODDS: '+h.odds+'×</div></div>'+
+          '<div style="font-size:16px;color:#ffd700;font-weight:bold">'+h.odds+'×</div>';
+        div.onclick=()=>{
+          document.querySelectorAll('.horse-card').forEach(c=>c.classList.remove('selected'));
+          div.classList.add('selected');this._pick=i;
+          if(pd)pd.textContent=h.name;
+          if(btn)btn.disabled=false;
+          Audio.uiClick();
+        };
+        list.appendChild(div);
+      });
+    },
+    race(){
+      if(this._racing||this._pick<0)return;
+      if(Player.credits<this._bet){Casino._msg('horse-msg','NOT ENOUGH CREDITS','#e74c3c');return;}
+      Casino._cr(-this._bet);this._racing=true;
+      const btn=document.getElementById('horse-race-btn');if(btn)btn.disabled=true;
+      Casino._msg('horse-msg',"THEY'RE OFF!",'#ffd700');
+      const race=this.RACES[this._currentRace];
+      const horses=race.horses;const n=horses.length;
+      const track=document.getElementById('horse-track');const lanes=document.getElementById('horse-lanes');
+      if(track)track.style.display='block';if(lanes)lanes.innerHTML='';
+      const pos=new Array(n).fill(0);
+      const speed=horses.map(h=>{const base=(1/h.odds)*3.5;return()=>base*(0.3+Math.random()*1.8);});
+      const laneEls=horses.map((h,i)=>{
+        const lane=document.createElement('div');lane.className='horse-lane';
+        const runner=document.createElement('div');runner.className='horse-runner';
+        runner.innerHTML='<span style="color:'+h.col+'">'+(i===this._pick?'★':'')+'&#127939;</span>';
+        runner.style.left='0%';lane.appendChild(runner);if(lanes)lanes.appendChild(lane);
+        return runner;
+      });
+      let done=false;
+      const tick=()=>{
+        if(done)return;
+        let winner=-1;
+        for(let i=0;i<n;i++){
+          pos[i]=Math.min(100,pos[i]+speed[i]());
+          laneEls[i].style.left=Math.min(92,pos[i])+'%';
+          if(pos[i]>=100&&winner<0)winner=i;
+        }
+        if(winner>=0){done=true;this._finish(winner,horses);return;}
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    },
+    _finish(winner,horses){
+      this._racing=false;
+      const won=winner===this._pick;
+      const h=horses[winner];
+      const earn=won?~~(this._bet*h.odds):0;
+      if(won)Casino._cr(earn);
+      Casino._msg('horse-msg',won?h.name+' WINS! +'+earn+' CR':h.name+' WINS — YOU LOST',won?'#2ecc71':'#e74c3c');
+      const btn=document.getElementById('horse-race-btn');
+      if(btn){btn.textContent='NEW RACE';btn.disabled=false;btn.onclick=()=>{btn.textContent='PLACE BET & RACE';btn.onclick=()=>Casino.horses.race();Casino.horses.setup();};}
+      Save.save();
+    },
+  },
+
+  open(){const el=document.getElementById('casino-credits');if(el)el.textContent=Player.credits;this.switchGame('blackjack');},
+};
+
 let _bannerTimer=null;
 function showBanner(msg,dur=2000){
   const wb=document.getElementById('wave-banner');
@@ -5873,10 +6565,16 @@ CharCreator.init(); // must be after Tutorial, StoryIntro, PixelIcons are define
 StyleSystem.load();
 setTimeout(()=>PixelIcons.renderAll(),120);
 
+// Measure hub header height so tabs stick correctly below it
+function _updateHubHeaderHeight(){
+  const h=document.getElementById('hub-header');
+  if(h)document.documentElement.style.setProperty('--hub-header-h',h.offsetHeight+'px');
+}
 window.addEventListener('resize',()=>{
   camera.aspect=window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth,window.innerHeight);
+  _updateHubHeaderHeight();
 });
 </script>
 </body>
