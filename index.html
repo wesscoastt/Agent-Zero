@@ -5611,44 +5611,43 @@ const StyleSystem={
 
   render(){
     this.load();
-    const S=this; // guaranteed reference to StyleSystem
+    const S=this;
     const cc=document.getElementById('style-colors');if(!cc)return;
-    cc.innerHTML='';
-    // Use <button> elements — they always fire on iOS Safari
-    S.colors.forEach((col,i)=>{
-      const btn=document.createElement('button');
-      const sel=i===S.sel.color;
-      btn.style.cssText='width:42px;height:42px;background:'+col+';border:'+(sel?'2px solid #ff88cc':'2px solid rgba(255,255,255,.12)')+';outline:none;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:'+(sel?'0 0 8px rgba(255,136,204,.5)':'none');
-      btn.title=S.colorNames[i];
-      btn.addEventListener('click',function(){S.sel.color=i;S.render();S._drawPreview();});
-      cc.appendChild(btn);
-    });
-    const hc=document.getElementById('style-helmet-opts');if(!hc)return;hc.innerHTML='';
-    S.helmetOpts.forEach(h=>{
-      const sel=S.sel.helmet===h.id;
-      const btn=document.createElement('button');
-      btn.style.cssText='background:rgba(255,255,255,.03);border:'+(sel?'2px solid #ff88cc':'2px solid rgba(255,255,255,.12)')+';outline:none;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;flex-direction:column;align-items:center;padding:3px;box-sizing:border-box;width:54px;min-height:56px;box-shadow:'+(sel?'0 0 8px rgba(255,136,204,.5)':'none');
-      const cvs=document.createElement('canvas');cvs.width=44;cvs.height=44;cvs.style.cssText='image-rendering:pixelated;display:block;pointer-events:none';
-      S._drawHelmetOpt(cvs,h.id);btn.appendChild(cvs);
-      const lbl=document.createElement('div');lbl.style.cssText='font-size:7px;color:'+(sel?'#ff88cc':'#667')+';letter-spacing:1px;text-align:center;margin-top:2px;pointer-events:none';
-      lbl.textContent=h.label;btn.appendChild(lbl);
-      btn.addEventListener('click',function(){S.sel.helmet=h.id;S.render();S._drawPreview();});
-      hc.appendChild(btn);
-    });
-    const ec=document.getElementById('style-emotes');if(!ec)return;ec.innerHTML='';
-    S.emotes.forEach(e=>{
-      const sel=S.sel.emote===e.id;
-      const btn=document.createElement('button');
-      btn.style.cssText='background:rgba(255,255,255,.03);border:'+(sel?'2px solid #ff88cc':'2px solid rgba(255,255,255,.12)')+';outline:none;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;flex-direction:column;align-items:center;padding:3px;box-sizing:border-box;width:54px;min-height:56px;box-shadow:'+(sel?'0 0 8px rgba(255,136,204,.5)':'none');
-      const cvs=document.createElement('canvas');cvs.width=44;cvs.height=44;cvs.style.cssText='image-rendering:pixelated;display:block;pointer-events:none';
-      S._drawEmoteOpt(cvs,e.id);btn.appendChild(cvs);
-      const lbl=document.createElement('div');lbl.style.cssText='font-size:7px;color:'+(sel?'#ff88cc':'#667')+';letter-spacing:1px;text-align:center;margin-top:2px;pointer-events:none';
-      lbl.textContent=e.name;btn.appendChild(lbl);
-      btn.addEventListener('click',function(){S.sel.emote=e.id;S.render();S._drawPreview();});
-      ec.appendChild(btn);
-    });
+
+    // Build color swatches using innerHTML with inline onclick — most reliable on iOS
+    cc.innerHTML=S.colors.map((col,i)=>
+      `<button onclick="StyleSystem.pickColor(${i})" style="width:42px;height:42px;background:${col};border:${i===S.sel.color?'3px solid #ff88cc':'2px solid rgba(255,255,255,.12)'};outline:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;box-shadow:${i===S.sel.color?'0 0 10px rgba(255,136,204,.6)':'none'}"></button>`
+    ).join('');
+
+    // Helmet options — canvas icons rendered after innerHTML set
+    const hc=document.getElementById('style-helmet-opts');if(!hc)return;
+    hc.innerHTML=S.helmetOpts.map(h=>
+      `<button onclick="StyleSystem.pickHelmet('${h.id}')" style="background:rgba(255,255,255,.03);border:${S.sel.helmet===h.id?'3px solid #ff88cc':'2px solid rgba(255,255,255,.12)'};outline:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;display:inline-flex;flex-direction:column;align-items:center;padding:3px;width:56px;min-height:58px;vertical-align:top;box-shadow:${S.sel.helmet===h.id?'0 0 10px rgba(255,136,204,.6)':'none'}">
+        <canvas data-helmet="${h.id}" width="44" height="44" style="image-rendering:pixelated;pointer-events:none;display:block"></canvas>
+        <span style="font-size:7px;color:${S.sel.helmet===h.id?'#ff88cc':'#667'};letter-spacing:1px;pointer-events:none;margin-top:2px">${h.label}</span>
+      </button>`
+    ).join('');
+    // Draw helmet canvases
+    hc.querySelectorAll('canvas[data-helmet]').forEach(c=>S._drawHelmetOpt(c,c.dataset.helmet));
+
+    // Emote options
+    const ec=document.getElementById('style-emotes');if(!ec)return;
+    ec.innerHTML=S.emotes.map(e=>
+      `<button onclick="StyleSystem.pickEmote('${e.id}')" style="background:rgba(255,255,255,.03);border:${S.sel.emote===e.id?'3px solid #ff88cc':'2px solid rgba(255,255,255,.12)'};outline:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;display:inline-flex;flex-direction:column;align-items:center;padding:3px;width:56px;min-height:58px;vertical-align:top;box-shadow:${S.sel.emote===e.id?'0 0 10px rgba(255,136,204,.6)':'none'}">
+        <canvas data-emote="${e.id}" width="44" height="44" style="image-rendering:pixelated;pointer-events:none;display:block"></canvas>
+        <span style="font-size:7px;color:${S.sel.emote===e.id?'#ff88cc':'#667'};letter-spacing:1px;pointer-events:none;margin-top:2px">${e.name}</span>
+      </button>`
+    ).join('');
+    // Draw emote canvases
+    ec.querySelectorAll('canvas[data-emote]').forEach(c=>S._drawEmoteOpt(c,c.dataset.emote));
+
     S._drawPreview();
   },
+
+  // Global picker functions — called via inline onclick (most reliable on iOS)
+  pickColor(i){this.sel.color=i;this.save();this.render();this._drawPreview();Audio.uiClick();},
+  pickHelmet(id){this.sel.helmet=id;this.save();this.render();this._drawPreview();Audio.uiClick();},
+  pickEmote(id){this.sel.emote=id;this.save();this.render();this._drawPreview();Audio.uiClick();},
 
   _drawHelmetOpt(cvs,id){
     const ctx=cvs.getContext('2d');const W=44,H=44;
