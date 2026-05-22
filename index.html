@@ -2850,7 +2850,9 @@ const Zone={
         if(this._portal){try{scene.remove(this._portal);}catch(e){}this._portal=null;}
         if(sv){sv.style.background='';sv.classList.remove('on');}
         this.zone++;
-        Mercs.onZoneComplete(); // tick merc contract down
+        Mercs.onZoneComplete();
+        // Clear previous zone's gravestone
+        if(_graveMarker){try{scene.remove(_graveMarker);}catch(e){}}_graveMarker=null;_gravePos=null;_deathDrops=[];
         const bossZone=this.zone%3===0;
         Map3D.generate();
         const sp=Map3D.startPos();
@@ -3361,7 +3363,26 @@ const Player={
     if(Input.down('KeyE'))Skills.activate(1);
     if(Input.down('KeyF'))Skills.activate(2);
     if(Input.down('KeyX'))Skills.activate(3);
-    // ── Fishing hole proximity ──
+    // ── Grave loot pickup — walk over gravestone to recover all dropped items ──
+    if(_gravePos&&_graveMarker&&_deathDrops&&_deathDrops.length>0){
+      const gdx=this.mesh.position.x-_gravePos.x,gdz=this.mesh.position.z-_gravePos.z;
+      if(gdx*gdx+gdz*gdz<3){
+        // Recover all items
+        let count=0;
+        for(const item of _deathDrops){
+          if(!item)continue;
+          if(item.kind==='weapon'||item.damage){Player.pickupWeapon(item);}
+          else{Armor._bag(item);}
+          count++;
+        }
+        _deathDrops=[];
+        try{scene.remove(_graveMarker);}catch(e){}
+        _graveMarker=null;_gravePos=null;
+        showBanner('✦ LOOT RECOVERED — '+count+' ITEM'+(count>1?'S':''));
+        try{Audio.pickup();}catch(e){}
+        try{InvUI.refresh();}catch(e){}
+      }
+    }
     let _nearFish=null;
     if(Map3D.fishingHoles&&Map3D.fishingHoles.length){
       for(const h of Map3D.fishingHoles){
@@ -4158,59 +4179,67 @@ function _die(){
   Audio.stopMusic();
   if(_isDailyRun){DailyChallenge.recordScore(Enemies.totalKills,Zone.zone);_isDailyRun=false;}
 
-  // ── Calculate penalties (FATE-style: lose % of XP and credits, keep gear) ──
-  const xpLost=~~(Player.xp*0.35);       // lose 35% current XP
-  const credLost=~~(Player.credits*0.25); // lose 25% credits
-
-  // Apply penalty (keep level, keep gear)
+  // ── Penalties: lose XP and credits, keep gear ──
+  const xpLost=~~(Player.xp*0.35);
+  const credLost=~~(Player.credits*0.25);
   Player.xp=Math.max(0,Player.xp-xpLost);
   Player.credits=Math.max(0,Player.credits-credLost);
   UI.credit(Player.credits);
 
-  // ── Drop 1 random bag item at death location as gravestone loot ──
+  // ── FATE-style grave — ALL bag items drop at death location ──
   _deathDrops=[];
-  const dropCandidates=[...Player.weaponBag,...Armor.bag].filter(Boolean);
-  if(dropCandidates.length>0&&Player.mesh){
-    const dropped=dropCandidates[~~(Math.random()*dropCandidates.length)];
-    _deathDrops.push(dropped);
+  if(Player.mesh){
     _gravePos=Player.mesh.position.clone();
-    // Spawn a glowing gravestone marker in the world
-    const g=new THREE.Mesh(
-      new THREE.BoxGeometry(.5,1.2,.2),
-      new THREE.MeshLambertMaterial({color:0x222244})
-    );
-    g.position.copy(Player.mesh.position);g.position.y=.6;scene.add(g);
-    const gl=new THREE.PointLight(0x8844ff,.8,5);
-    gl.position.copy(Player.mesh.position);gl.position.y=1.5;scene.add(gl);
-    g.userData.isGrave=true;
+    // Collect everything in the bag and weapon bag
+    const allDrops=[...Armor.bag,...Player.weaponBag].filter(Boolean);
+    _deathDrops=[...allDrops];
+    // Remove them from bags
+    Armor.bag=[];Player.weaponBag=[];
+
+    // ── Build gravestone 3D marker ──
+    if(_graveMarker){try{scene.remove(_graveMarker);}catch(e){}}
+    const gGroup=new THREE.Group();gGroup.position.copy(_gravePos);gGroup.position.y=0;
+    // Stone slab
+    const slab=new THREE.Mesh(new THREE.BoxGeometry(.4,1.4,.15),new THREE.MeshLambertMaterial({color:0x334455}));
+    slab.position.y=.7;gGroup.add(slab);
+    // Cross top
+    const cross=new THREE.Mesh(new THREE.BoxGeometry(.7,.15,.15),new THREE.MeshLambertMaterial({color:0x334455}));
+    cross.position.y=1.4;gGroup.add(cross);
+    // Loot pile on ground
+    const pile=new THREE.Mesh(new THREE.BoxGeometry(.6,.2,.6),new THREE.MeshLambertMaterial({color:0x886622,emissive:0x443311}));
+    pile.position.y=.1;gGroup.add(pile);
+    // Purple glow
+    const gl=new THREE.PointLight(0x8844ff,2,6);gl.position.y=1.5;gGroup.add(gl);
+    // Vertical beam of light so it's visible from far away
+    const beam=new THREE.Mesh(new THREE.BoxGeometry(.08,.08,4),new THREE.MeshBasicMaterial({color:0xaa66ff,transparent:true,opacity:.5}));
+    beam.rotation.x=Math.PI/2;beam.position.y=2.5;gGroup.add(beam);
+    scene.add(gGroup);
+    _graveMarker=gGroup;
+    Map3D.lights.push(gl);
   }
 
-  // ── Revive cost scales with zone ──
+  // ── Revive cost ──
   const reviveCost=Math.min(9999,200+Zone.zone*150);
-
-  // ── Populate death screen ──
-  document.getElementById('death-zone-line').textContent=
-    `ZONE ${Zone.zone}  ·  ${Enemies.totalKills} KILLS  ·  LVL ${Player.level}`;
+  document.getElementById('death-zone-line').textContent=`ZONE ${Zone.zone}  ·  ${Enemies.totalKills} KILLS  ·  LVL ${Player.level}`;
   document.getElementById('dp-credits').textContent=credLost>0?`–${credLost} CR`:'NONE';
   document.getElementById('dp-xp').textContent=xpLost>0?`–${xpLost} XP`:'NONE';
   document.getElementById('dp-level').textContent=`LVL ${Player.level} KEPT`;
-
   const graveBox=document.getElementById('death-grave-box');
   const graveDesc=document.getElementById('death-grave-desc');
   if(_deathDrops.length>0){
     graveBox.style.display='block';
-    graveDesc.textContent=`${_deathDrops[0].name} dropped at your position. Marked on the map — evacuate and return to recover it.`;
+    graveDesc.textContent=`${_deathDrops.length} item${_deathDrops.length>1?'s':''} dropped at your grave — walk to the marker to recover them.`;
   } else graveBox.style.display='none';
-
   const revBtn=document.getElementById('death-btn-revive');
   const costSpan=document.getElementById('death-revive-cost');
   costSpan.textContent=`${reviveCost} CR`;
   revBtn.disabled=Player.credits<reviveCost;
   revBtn.onclick=()=>deathRevive(reviveCost);
   if(Player.credits<reviveCost)revBtn.title='NOT ENOUGH CREDITS';
-
   setState(GS.DEAD);
 }
+
+let _graveMarker=null; // 3D grave object in scene
 
 function deathRevive(cost){
   Audio.uiClick();
@@ -4219,22 +4248,24 @@ function deathRevive(cost){
   Player.hp=Player.maxHp;Player.armor=Player.maxArmor;
   UI.credit(Player.credits);UI.updateBars();
   setState(GS.MISSION);gameRunning=true;
-  // Spawn protection so we don't die immediately on revive
   Player._spawnShield=true;
   const sv=document.getElementById('shield-vfx');if(sv)sv.classList.add('on');
   setTimeout(()=>{Player._spawnShield=false;if(sv)sv.classList.remove('on');},3000);
-  // If all enemies are dead (maybe we died to environmental damage), re-populate
+  // Always spawn near gravestone — player can walk to it to recover loot
+  if(_gravePos&&Player.mesh){
+    Player.mesh.position.set(_gravePos.x+3,0,_gravePos.z);
+    camera.position.copy(Player.mesh.position).add(CAM_OFF);
+    _camLook.copy(Player.mesh.position);camera.lookAt(_camLook);
+  }
+  // If all enemies dead, respawn them WITHOUT regenerating the map
+  // (keeps the gravestone in place so player can recover their loot)
   const aliveCount=Enemies.list.filter(e=>e.alive).length;
   if(aliveCount===0&&Map3D.rooms.length>0){
-    // Regenerate the zone
-    Map3D.generate();
-    const sp=Map3D.startPos();
-    Player.mesh.position.set(sp.x,0,sp.z);
-    camera.position.copy(Player.mesh.position).add(CAM_OFF);
+    Enemies.list.forEach(e=>{try{scene.remove(e.mesh);}catch(ex){}});Enemies.list=[];
     _spawnEnemies();
-    showBanner('✦ REVIVED — NEW SECTOR');
+    showBanner('✦ REVIVED — ENEMIES RESPAWNED');
   } else {
-    showBanner('✦ REVIVED');
+    showBanner('✦ REVIVED — RECOVER YOUR LOOT');
   }
   setTimeout(()=>Audio.startMusic(),300);
   Zone._hud();
