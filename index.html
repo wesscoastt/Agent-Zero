@@ -5625,59 +5625,53 @@ const StyleSystem={
   helmetOpts:[{id:'on',label:'HELMET',name:'HELMET ON'},{id:'off',label:'BARE',name:'HIDE HELMET'},{id:'beret',label:'BERET',name:'BERET'},{id:'hood',label:'HOOD',name:'HOOD'}],
   emotes:[{id:'salute',name:'SALUTE'},{id:'wave',name:'WAVE'},{id:'point',name:'POINT'},{id:'thumbs',name:'THUMBS UP'},{id:'nod',name:'NOD'},{id:'cross',name:'FIST BUMP'},{id:'reload',name:'RELOAD FLEX'},{id:'scan',name:'SCAN'}],
   sel:{color:0,helmet:'on',emote:'salute'},
-  _unlocked:{colors:[0,1,2,3],helmets:['on','off'],emotes:['salute','wave']},
+  // Everything unlocked — no paywalls on cosmetic style
+  _unlocked:{colors:[0,1,2,3,4,5,6,7],helmets:['on','off','beret','hood'],emotes:['salute','wave','point','thumbs','nod','cross','reload','scan']},
 
-  load(){try{const d=JSON.parse(localStorage.getItem(this.KEY));if(d){this.sel=d.sel||this.sel;this._unlocked=d.unlocked||this._unlocked;}}catch{}},
-  save(){try{localStorage.setItem(this.KEY,JSON.stringify({sel:this.sel,unlocked:this._unlocked}));}catch{}},
+  load(){try{const d=JSON.parse(localStorage.getItem(this.KEY));if(d){this.sel=d.sel||this.sel;}}catch{}},
+  save(){try{localStorage.setItem(this.KEY,JSON.stringify({sel:this.sel}));}catch{}},
 
-  unlock(type,id){
-    if(type==='color'&&!this._unlocked.colors.includes(id))this._unlocked.colors.push(id);
-    if(type==='helmet'&&!this._unlocked.helmets.includes(id))this._unlocked.helmets.push(id);
-    if(type==='emote'&&!this._unlocked.emotes.includes(id))this._unlocked.emotes.push(id);
-    this.save();
-  },
+  unlock(type,id){/* everything already unlocked */},
 
   render(){
     this.load();
+    const S=this; // guaranteed reference to StyleSystem
     const cc=document.getElementById('style-colors');if(!cc)return;
     cc.innerHTML='';
-    this.colors.forEach((col,i)=>{
-      const el=document.createElement('div');
-      el.className='style-opt'+(i===this.sel.color?' sel':'');
-      el.style.cssText='background:'+col+';cursor:pointer;-webkit-tap-highlight-color:transparent'+(this._unlocked.colors.includes(i)?'':';opacity:.3');
-      const fn=(()=>{const idx=i;return()=>{if(!this._unlocked.colors.includes(idx))return;this.sel.color=idx;this.render();this._drawPreview();}})();
-      el.onclick=fn;el.ontouchend=(ev)=>{ev.preventDefault();fn();};
-      cc.appendChild(el);
+    // Use <button> elements — they always fire on iOS Safari
+    S.colors.forEach((col,i)=>{
+      const btn=document.createElement('button');
+      const sel=i===S.sel.color;
+      btn.style.cssText='width:42px;height:42px;background:'+col+';border:'+(sel?'2px solid #ff88cc':'2px solid rgba(255,255,255,.12)')+';outline:none;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:'+(sel?'0 0 8px rgba(255,136,204,.5)':'none');
+      btn.title=S.colorNames[i];
+      btn.addEventListener('click',function(){S.sel.color=i;S.render();S._drawPreview();});
+      cc.appendChild(btn);
     });
     const hc=document.getElementById('style-helmet-opts');if(!hc)return;hc.innerHTML='';
-    this.helmetOpts.forEach(h=>{
-      const locked=!this._unlocked.helmets.includes(h.id);
-      const wrap=document.createElement('div');
-      wrap.className='style-opt'+(this.sel.helmet===h.id?' sel':'');
-      wrap.style.cssText='cursor:pointer;-webkit-tap-highlight-color:transparent'+(locked?';opacity:.3':'');
+    S.helmetOpts.forEach(h=>{
+      const sel=S.sel.helmet===h.id;
+      const btn=document.createElement('button');
+      btn.style.cssText='background:rgba(255,255,255,.03);border:'+(sel?'2px solid #ff88cc':'2px solid rgba(255,255,255,.12)')+';outline:none;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;flex-direction:column;align-items:center;padding:3px;box-sizing:border-box;width:54px;min-height:56px;box-shadow:'+(sel?'0 0 8px rgba(255,136,204,.5)':'none');
       const cvs=document.createElement('canvas');cvs.width=44;cvs.height=44;cvs.style.cssText='image-rendering:pixelated;display:block;pointer-events:none';
-      this._drawHelmetOpt(cvs,h.id);wrap.appendChild(cvs);
-      const lbl=document.createElement('div');lbl.style.cssText='font-size:7px;color:#667;letter-spacing:1px;text-align:center;margin-top:2px;pointer-events:none';
-      lbl.textContent=h.label;wrap.appendChild(lbl);
-      const fn=(()=>{const hid=h.id,lk=locked;return()=>{if(lk)return;this.sel.helmet=hid;this.render();this._drawPreview();}})();
-      wrap.onclick=fn;wrap.ontouchend=(ev)=>{ev.preventDefault();fn();};
-      hc.appendChild(wrap);
+      S._drawHelmetOpt(cvs,h.id);btn.appendChild(cvs);
+      const lbl=document.createElement('div');lbl.style.cssText='font-size:7px;color:'+(sel?'#ff88cc':'#667')+';letter-spacing:1px;text-align:center;margin-top:2px;pointer-events:none';
+      lbl.textContent=h.label;btn.appendChild(lbl);
+      btn.addEventListener('click',function(){S.sel.helmet=h.id;S.render();S._drawPreview();});
+      hc.appendChild(btn);
     });
     const ec=document.getElementById('style-emotes');if(!ec)return;ec.innerHTML='';
-    this.emotes.forEach(e=>{
-      const locked=!this._unlocked.emotes.includes(e.id);
-      const wrap=document.createElement('div');
-      wrap.className='style-opt'+(this.sel.emote===e.id?' sel':'');
-      wrap.style.cssText='cursor:pointer;-webkit-tap-highlight-color:transparent'+(locked?';opacity:.3':'');
+    S.emotes.forEach(e=>{
+      const sel=S.sel.emote===e.id;
+      const btn=document.createElement('button');
+      btn.style.cssText='background:rgba(255,255,255,.03);border:'+(sel?'2px solid #ff88cc':'2px solid rgba(255,255,255,.12)')+';outline:none;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;flex-direction:column;align-items:center;padding:3px;box-sizing:border-box;width:54px;min-height:56px;box-shadow:'+(sel?'0 0 8px rgba(255,136,204,.5)':'none');
       const cvs=document.createElement('canvas');cvs.width=44;cvs.height=44;cvs.style.cssText='image-rendering:pixelated;display:block;pointer-events:none';
-      this._drawEmoteOpt(cvs,e.id);wrap.appendChild(cvs);
-      const lbl=document.createElement('div');lbl.style.cssText='font-size:7px;color:#667;letter-spacing:1px;text-align:center;margin-top:2px;pointer-events:none';
-      lbl.textContent=e.name;wrap.appendChild(lbl);
-      const fn=(()=>{const eid=e.id,lk=locked;return()=>{if(lk)return;this.sel.emote=eid;this.render();this._drawPreview();}})();
-      wrap.onclick=fn;wrap.ontouchend=(ev)=>{ev.preventDefault();fn();};
-      ec.appendChild(wrap);
+      S._drawEmoteOpt(cvs,e.id);btn.appendChild(cvs);
+      const lbl=document.createElement('div');lbl.style.cssText='font-size:7px;color:'+(sel?'#ff88cc':'#667')+';letter-spacing:1px;text-align:center;margin-top:2px;pointer-events:none';
+      lbl.textContent=e.name;btn.appendChild(lbl);
+      btn.addEventListener('click',function(){S.sel.emote=e.id;S.render();S._drawPreview();});
+      ec.appendChild(btn);
     });
-    this._drawPreview();
+    S._drawPreview();
   },
 
   _drawHelmetOpt(cvs,id){
