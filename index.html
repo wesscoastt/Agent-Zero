@@ -5885,19 +5885,148 @@ const CosmeticShop={
         const isActive=this._isActive(item);
         const card=document.createElement('div');
         card.style.cssText=`display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid ${isActive?'rgba(204,136,255,.5)':owned?'rgba(46,204,113,.25)':'rgba(255,255,255,.07)'};background:${isActive?'rgba(204,136,255,.08)':owned?'rgba(46,204,113,.04)':'rgba(255,255,255,.02)'};cursor:pointer;-webkit-tap-highlight-color:transparent`;
-        card.innerHTML=`<div style="font-size:24px;flex-shrink:0">${item.icon}</div>
-          <div style="flex:1">
-            <div style="font-size:12px;letter-spacing:1px;color:${isActive?'#cc88ff':owned?'#2ecc71':'#bcc8d4'}">${item.name}${isActive?' ✓':''}</div>
-            <div style="font-size:10px;color:#556;letter-spacing:.5px;margin-top:2px">${item.desc}</div>
-          </div>
-          <div style="font-size:${owned?'11px':'13px'};color:${owned?'#2ecc71':'#ffd700'};letter-spacing:1px;flex-shrink:0;text-align:right">
-            ${owned?'<div style="margin-bottom:4px">OWNED</div>':item.price===0?'FREE ':'💰 '+item.price}
-            ${owned||item.price===0?`<button style="padding:4px 10px;border:1px solid rgba(204,136,255,.4);background:rgba(204,136,255,.1);color:#cc88ff;font-family:monospace;font-size:9px;letter-spacing:2px;cursor:pointer">EQUIP</button>`:`<button style="padding:4px 10px;border:1px solid rgba(255,215,0,.35);background:rgba(255,215,0,.08);color:#ffd700;font-family:monospace;font-size:9px;letter-spacing:2px;cursor:pointer;${Player.credits<item.price?'opacity:.4':''}">BUY</button>`}
-          </div>`;
-        card.querySelector('button').addEventListener('click',e=>{e.stopPropagation();this.buy(item.id);});
+        // Canvas preview icon instead of emoji
+        const cvs=document.createElement('canvas');
+        cvs.width=44;cvs.height=44;cvs.style.cssText='flex-shrink:0;image-rendering:pixelated;border:1px solid rgba(255,255,255,.08);border-radius:2px';
+        this._drawIcon(cvs,item);
+        card.appendChild(cvs);
+        const info=document.createElement('div');info.style.cssText='flex:1;min-width:0';
+        info.innerHTML=`<div style="font-size:12px;letter-spacing:1px;color:${isActive?'#cc88ff':owned?'#2ecc71':'#bcc8d4'}">${item.name}${isActive?' ✓':''}</div><div style="font-size:10px;color:#556;letter-spacing:.5px;margin-top:2px">${item.desc}</div>`;
+        card.appendChild(info);
+        const btnArea=document.createElement('div');
+        btnArea.style.cssText='flex-shrink:0;text-align:right';
+        if(owned){
+          btnArea.innerHTML=`<div style="font-size:10px;color:#2ecc71;margin-bottom:4px">OWNED</div><button style="padding:5px 10px;border:1px solid rgba(204,136,255,.4);background:rgba(204,136,255,.1);color:#cc88ff;font-family:monospace;font-size:9px;letter-spacing:2px;cursor:pointer">EQUIP</button>`;
+        } else {
+          btnArea.innerHTML=`<div style="font-size:13px;color:#ffd700;margin-bottom:4px">${item.price===0?'FREE':'💰 '+item.price}</div><button style="padding:5px 10px;border:1px solid rgba(255,215,0,.35);background:rgba(255,215,0,.08);color:#ffd700;font-family:monospace;font-size:9px;letter-spacing:2px;cursor:pointer;${Player.credits<item.price?'opacity:.35':''}">BUY</button>`;
+        }
+        btnArea.querySelector('button').addEventListener('click',e=>{e.stopPropagation();this.buy(item.id);});
+        card.appendChild(btnArea);
         el.appendChild(card);
       });
     });
+    // Draw all canvases after they're in the DOM
+    setTimeout(()=>{
+      this.ITEMS.forEach(item=>{
+        const cvs=el.querySelector(`canvas[data-id="${item.id}"]`);
+        if(cvs)this._drawIcon(cvs,item);
+      });
+    },10);
+  },
+
+  // Draw a custom canvas preview for each cosmetic item
+  _drawIcon(cvs,item){
+    cvs.dataset.id=item.id;
+    const ctx=cvs.getContext('2d');
+    const W=cvs.width,H=cvs.height;
+    ctx.fillStyle='#08080f';ctx.fillRect(0,0,W,H);
+    const {type,val}=item.data;
+    const skinCol='#c8a882';
+    if(type==='hair'){
+      // Draw head + hair style
+      this._drawHead(ctx,W,H,skinCol);
+      ctx.fillStyle='#1a1a1a';
+      if(val==='short'){ctx.fillRect(W*.28,H*.08,W*.44,H*.2);ctx.fillRect(W*.26,H*.26,W*.06,H*.1);ctx.fillRect(W*.68,H*.26,W*.06,H*.1);}
+      else if(val==='mohawk'){ctx.fillRect(W*.42,H*.04,W*.16,H*.3);}
+      else if(val==='dreads'){for(let i=0;i<5;i++){ctx.fillRect(W*(.28+i*.1),H*.16,W*.07,H*.38+i%2*H*.08);}}
+      else if(val==='buzz'){ctx.fillStyle='#2a2a2a';ctx.fillRect(W*.28,H*.08,W*.44,H*.1);}
+      else if(val==='fade'){ctx.fillRect(W*.3,H*.06,W*.4,H*.28);ctx.fillStyle='#333';ctx.fillRect(W*.3,H*.3,W*.4,H*.06);}
+      else if(val==='slick'){ctx.fillRect(W*.28,H*.06,W*.44,H*.18);ctx.fillStyle='rgba(40,40,40,.7)';ctx.fillRect(W*.28,H*.2,W*.44,H*.1);}
+      else if(val==='bald'){/* no hair */}
+    }
+    else if(type==='hat'){
+      this._drawHead(ctx,W,H,skinCol);
+      if(val==='helmet'){
+        ctx.fillStyle='#1a2a1a';ctx.fillRect(W*.22,H*.04,W*.56,H*.28);
+        ctx.fillRect(W*.2,H*.3,W*.6,H*.08);
+        ctx.fillStyle='#0a1520';ctx.fillRect(W*.28,H*.08,W*.44,H*.2);
+        ctx.fillStyle='rgba(100,180,255,.25)';ctx.fillRect(W*.3,H*.09,W*.18,H*.1);
+      } else if(val==='beanie'){
+        ctx.fillStyle='#334433';ctx.fillRect(W*.26,H*.04,W*.48,H*.28);
+        ctx.fillStyle='#223322';ctx.fillRect(W*.26,H*.3,W*.48,H*.06);
+        ctx.fillStyle='#2a3a2a';ctx.fillRect(W*.32,H*.04,W*.36,H*.06);
+      } else if(val==='cap'){
+        ctx.fillStyle='#1a1a1a';ctx.fillRect(W*.28,H*.1,W*.44,H*.22);
+        ctx.fillStyle='#111';ctx.fillRect(W*.24,H*.3,W*.52,H*.06);
+        ctx.fillRect(W*.14,H*.32,W*.28,H*.04);
+      } else if(val==='balaclava'){
+        ctx.fillStyle='#111';ctx.fillRect(W*.24,H*.04,W*.52,H*.7);
+        ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(W*.3,H*.32,W*.4,H*.12);
+        ctx.fillStyle=skinCol;ctx.fillRect(W*.32,H*.34,W*.1,H*.08);ctx.fillRect(W*.56,H*.34,W*.1,H*.08);
+      } else if(val==='none'){
+        ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+        ctx.strokeRect(W*.26,H*.06,W*.48,H*.26);ctx.setLineDash([]);
+        ctx.fillStyle='rgba(255,255,255,.3)';ctx.font=`${H*.25}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText('—',W/2,H*.2);
+      }
+    }
+    else if(type==='color'){
+      // Draw mini soldier silhouette in the uniform color
+      const uCol=val;
+      this._drawSoldierColor(ctx,W,H,uCol,skinCol);
+    }
+    else if(type==='barmor'){
+      // Draw armor type silhouette
+      if(val==='medium'){
+        ctx.fillStyle='#1a1a2a';ctx.fillRect(W*.18,H*.1,W*.64,H*.8);
+        ctx.fillStyle='#252535';ctx.fillRect(W*.24,H*.18,W*.52,H*.42);
+        ctx.fillStyle='#1a1a2a';ctx.fillRect(W*.08,H*.12,W*.12,H*.28);ctx.fillRect(W*.8,H*.12,W*.12,H*.28);
+        ctx.fillStyle='#0d0d1a';for(let i=0;i<3;i++)ctx.fillRect(W*.2+i*W*.2,H*.55,W*.16,H*.22);
+        // ZERO label
+        ctx.fillStyle='rgba(180,90,0,.7)';ctx.fillRect(W*.22,H*.56,W*.56,H*.14);
+        ctx.fillStyle='#e67e22';ctx.font=`bold ${H*.12}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('ZERO',W/2,H*.63);
+      } else if(val==='heavy'){
+        ctx.fillStyle='#0a0a0a';ctx.fillRect(W*.14,H*.06,W*.72,H*.86);
+        ctx.fillStyle='#1a1a1a';ctx.fillRect(W*.2,H*.14,W*.6,H*.52);
+        ctx.fillStyle='#0d0d0d';ctx.fillRect(W*.04,H*.06,W*.14,H*.38);ctx.fillRect(W*.82,H*.06,W*.14,H*.38);
+        ctx.fillRect(W*.28,H*.06,W*.44,H*.1);
+        for(let i=0;i<4;i++)ctx.fillRect(W*.15+i*W*.18,H*.6,W*.14,H*.24);
+        ctx.fillStyle='rgba(180,90,0,.7)';ctx.fillRect(W*.2,H*.6,W*.6,H*.14);
+        ctx.fillStyle='#e67e22';ctx.font=`bold ${H*.12}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('ZERO',W/2,H*.67);
+      } else {
+        // light
+        ctx.fillStyle='#0d0d0d';ctx.fillRect(W*.26,H*.12,W*.48,H*.72);
+        ctx.fillStyle='#1a1a1a';ctx.fillRect(W*.3,H*.18,W*.4,H*.52);
+        for(let i=0;i<2;i++)ctx.fillRect(W*.28+i*W*.22,H*.56,W*.16,H*.2);
+        ctx.fillStyle='rgba(180,90,0,.7)';ctx.fillRect(W*.26,H*.54,W*.48,H*.12);
+        ctx.fillStyle='#e67e22';ctx.font=`bold ${H*.1}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('ZERO',W/2,H*.6);
+      }
+    }
+  },
+
+  _drawHead(ctx,W,H,skin){
+    ctx.fillStyle=skin;
+    ctx.fillRect(W*.34,H*.28,W*.32,H*.08);// neck
+    ctx.fillRect(W*.28,H*.34,W*.44,H*.4);// head
+    // eyes
+    ctx.fillStyle='#0a0a14';ctx.fillRect(W*.33,H*.42,W*.12,H*.1);ctx.fillRect(W*.55,H*.42,W*.12,H*.1);
+    // eyebrows
+    ctx.fillStyle='#1a1a1a';ctx.fillRect(W*.32,H*.39,W*.13,H*.04);ctx.fillRect(W*.55,H*.39,W*.13,H*.04);
+  },
+
+  _drawSoldierColor(ctx,W,H,col,skin){
+    // Boots
+    ctx.fillStyle='#0a0a0a';ctx.fillRect(W*.25,H*.8,W*.2,H*.16);ctx.fillRect(W*.55,H*.8,W*.2,H*.16);
+    // Legs
+    ctx.fillStyle=col;ctx.fillRect(W*.28,H*.54,W*.18,H*.28);ctx.fillRect(W*.54,H*.54,W*.18,H*.28);
+    // Torso + vest
+    ctx.fillRect(W*.22,H*.3,W*.56,H*.26);
+    ctx.fillStyle=this._darken(col,.6);ctx.fillRect(W*.26,H*.32,W*.48,H*.22);
+    // Arms
+    ctx.fillStyle=col;ctx.fillRect(W*.12,H*.32,W*.12,H*.22);ctx.fillRect(W*.76,H*.32,W*.12,H*.22);
+    // ZERO badge
+    ctx.fillStyle='rgba(180,90,0,.75)';ctx.fillRect(W*.28,H*.38,W*.44,H*.1);
+    ctx.fillStyle='#e67e22';ctx.font=`bold ${H*.09}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('ZERO',W/2,H*.43);
+    // Head
+    ctx.fillStyle=skin;ctx.fillRect(W*.34,H*.22,W*.32,H*.08);ctx.fillRect(W*.28,H*.1,W*.44,H*.14);
+    // Eyes
+    ctx.fillStyle='#0a0a14';ctx.fillRect(W*.33,H*.14,W*.1,H*.08);ctx.fillRect(W*.57,H*.14,W*.1,H*.08);
+  },
+
+  _darken(hex,f){
+    const n=parseInt(hex.replace('#',''),16)||0x1a3a1a;
+    const r=~~(((n>>16)&255)*f),g=~~(((n>>8)&255)*f),b=~~((n&255)*f);
+    return`#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
   },
 
   _isActive(item){
