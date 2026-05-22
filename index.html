@@ -2603,8 +2603,15 @@ const Enemies = {
       e.stateTimer+=dt;
       const dx=pp.x-ep.x,dz=pp.z-ep.z,dist=Math.sqrt(dx*dx+dz*dz);
       if(e.isDrone){
+        // Drones fly high but still respect walls (check floor below them)
         ep.y=3.0+Math.sin(Date.now()*.002+dist)*.3;
-        if(dist>3){ep.x+=dx/dist*spd*dt;ep.z+=dz/dist*spd*dt;}
+        if(dist>3){
+          const prevX=ep.x,prevZ=ep.z;
+          ep.x+=dx/dist*spd*dt;
+          if(!Map3D.isFloor(ep.x,prevZ))ep.x=prevX;
+          ep.z+=dz/dist*spd*dt;
+          if(!Map3D.isFloor(prevX,ep.z))ep.z=prevZ;
+        }
       }else{
         if(e.state==='chase'||e.state==='idle'){
           e.state='chase';
@@ -4067,29 +4074,37 @@ function _spawnEnemies(){
   const G=Map3D._G||C.GRID;
   const off=-(G/2)*C.CELL;
   const z=Zone.zone;
+  const totalRooms=Map3D.rooms.filter(r=>r.type!=='start').length||1;
 
   Map3D.rooms.forEach((room,ri)=>{
     if(room.type==='start')return;
-
     const cx=off+(room.x+room.w/2)*C.CELL;
     const cz=off+(room.z+room.h/2)*C.CELL;
     const isLast=ri===Map3D.rooms.length-1;
-    const depth=ri;
-    const base=isLast?5:2;
-    const count=base+~~(depth*.5)+~~(z*.3);
-    const cap=isLast?8:5;
-    const groupSize=Math.min(cap,count);
+    const depth=ri; // 0 = closest to start, higher = further in
+
+    // Zone 1: max 2 enemies per room early, 3 at the end
+    // Zone 5+: max 4 early, 6 at end. Scales gently.
+    const depthRatio=depth/totalRooms; // 0.0 to 1.0
+    const zScale=1+(z-1)*.2; // zone 1=1.0, zone 5=1.8, zone 10=2.8
+    const baseCount=isLast
+      ? Math.min(6, Math.ceil(2*zScale + depthRatio*2))    // last room: 2-6
+      : Math.min(4, Math.ceil(1 + depthRatio*1.5*zScale)); // other rooms: 1-4
+    const groupSize=Math.max(1,baseCount);
+
+    // Only add harder enemies deeper into zone and higher zone numbers
     const canSpawn=['SOLDIER'];
-    if(z>=2||depth>=3)canSpawn.push('RUSHER');
-    if(z>=3||depth>=5)canSpawn.push('DRONE');
-    if((z>=4||depth>=6)&&!isLast)canSpawn.push('HEAVY');
-    if(z>=5||depth>=7)canSpawn.push('SNIPER');
+    if(z>=2&&depth>=2)canSpawn.push('RUSHER');
+    if(z>=3&&depth>=4)canSpawn.push('DRONE');
+    if(z>=4&&depth>=5&&!isLast)canSpawn.push('HEAVY');
+    if(z>=5&&depth>=6)canSpawn.push('SNIPER');
+
     for(let i=0;i<groupSize;i++){
-      const angle=((Math.PI*2)/groupSize)*i+Math.random()*.5;
-      const radius=1.5+Math.random()*2.5;
+      const angle=((Math.PI*2)/groupSize)*i+Math.random()*.4;
+      const radius=1.2+Math.random()*2;
       const ex=cx+Math.cos(angle)*radius;
       const ez=cz+Math.sin(angle)*radius;
-      const key=isLast&&z>=2?'ELITE':canSpawn[~~(Math.random()*canSpawn.length)];
+      const key=isLast&&z>=3?'ELITE':canSpawn[~~(Math.random()*canSpawn.length)];
       const e=Enemies.spawn(new THREE.Vector3(ex,0,ez),key);
       if(e)e.state='dormant';
     }
@@ -4537,18 +4552,26 @@ const Mercs={
   active:null,
   mesh:null,
   ROSTER:[
-    {name:'VIPER',role:'Assault',bonus:'dmg',val:.25,desc:'High damage specialist.\n+25% weapon damage.',cost:400,col:'#e74c3c',icon:'🔴'},
-    {name:'SHADOW',role:'Infiltrator',bonus:'crit',val:.12,desc:'Critical hit expert.\n+12% crit chance.',cost:350,col:'#9b59b6',icon:'🟣'},
-    {name:'MEDIC',role:'Support',bonus:'regen',val:1,desc:'Combat medic.\nPassive 1HP/s regen.',cost:300,col:'#2ecc71',icon:'🟢'},
-    {name:'TANK',role:'Heavy',bonus:'armor',val:30,desc:'Armored juggernaut.\n+30 bonus armor.',cost:450,col:'#3498db',icon:'🔵'},
-    {name:'RECON',role:'Scout',bonus:'spd',val:.15,desc:'Rapid deployment.\n+15% move speed.',cost:280,col:'#f39c12',icon:'🟡'},
+    {name:'VIPER',role:'Assault',bonus:'dmg',val:.25,desc:'High damage specialist.\n+25% weapon damage.',cost:400,col:'#e74c3c'},
+    {name:'SHADOW',role:'Infiltrator',bonus:'crit',val:.12,desc:'Critical hit expert.\n+12% crit chance.',cost:350,col:'#9b59b6'},
+    {name:'MEDIC',role:'Support',bonus:'regen',val:1,desc:'Combat medic.\nPassive 1HP/s regen.',cost:300,col:'#2ecc71'},
+    {name:'TANK',role:'Heavy',bonus:'armor',val:30,desc:'Armored juggernaut.\n+30 bonus armor.',cost:450,col:'#3498db'},
+    {name:'RECON',role:'Scout',bonus:'spd',val:.15,desc:'Rapid deployment.\n+15% move speed.',cost:280,col:'#f39c12'},
+    {
+      name:'GEORGE DROID',role:'Chaos Agent',bonus:'george',val:1,
+      desc:'HE IS INEVITABLE.\nChaos aura: buffs everything, breaks everything.',
+      cost:1,col:'#ff6600',
+      quips:['UHH','YOINK','he protec but he also attac','george george george george','wah wah wah','hold on lemme check','POWER OVERWHELMING','no thoughts head empty'],
+    },
   ],
   hire(m){
     if(Player.credits<m.cost)return;
-    this.active=m;Player.credits-=m.cost;UI.credit(Player.credits);
+    this.active=m;Player.credits-=m.cost;
+    try{UI.credit(Player.credits);}catch(e){}
     this._applyBonus(m);
-    HubSystem.renderMercs();
-    UI.killFeed(`⚑ ${m.name} HIRED · ${m.desc.split('\n')[1]}`,'#f39c12');
+    try{HubSystem.renderMercs();}catch(e){}
+    showBanner(m.name+' HIRED');
+    try{Audio.uiClick();}catch(e){}
   },
   _applyBonus(m){
     if(m.bonus==='dmg')Player.bonusDmg=(Player.bonusDmg||1)+m.val;
@@ -4556,25 +4579,271 @@ const Mercs={
     if(m.bonus==='armor'){Player.maxArmor+=m.val;Player.armor+=m.val;}
     if(m.bonus==='spd')Player.bonusSpd=(Player.bonusSpd||0)+m.val;
     if(m.bonus==='regen')Player._mercRegen=true;
+    if(m.bonus==='george'){
+      // George buffs EVERYTHING but is chaotic
+      Player.bonusDmg=(Player.bonusDmg||1)+.4;
+      Player.bonusCrit=(Player.bonusCrit||0)+.15;
+      Player.maxArmor+=20;Player.armor+=20;
+      Player._mercRegen=true;
+      Player._georgeActive=true;
+    }
     Player.recalc();
   },
+
+  _drawPortrait(ctx,name,W,H){
+    const f=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,w,h);};
+    if(name==='GEORGE DROID'){
+      // Cyborg meme — half human half machine, based on the iconic image
+      // Background — red/dark
+      f(0,0,W,H,'#1a0000');
+      f(0,0,W,H/2,'#2a0808');
+      // Neck
+      f(~~(W*.35),~~(H*.72),~~(W*.3),~~(H*.28),'#5a3a20');
+      // Head base — warm brown skin
+      f(~~(W*.18),~~(H*.18),~~(W*.64),~~(H*.58),'#7a4a22');
+      // LEFT SIDE — human face (natural skin)
+      f(~~(W*.18),~~(H*.18),~~(W*.32),~~(H*.58),'#8a5a28');
+      // Human left eye — dark brown
+      f(~~(W*.22),~~(H*.35),~~(W*.12),~~(H*.1),'#111');
+      f(~~(W*.23),~~(H*.36),~~(W*.08),~~(H*.07),'#3a2010');
+      f(~~(W*.25),~~(H*.37),~~(W*.04),~~(H*.04),'#000');
+      // Human eyebrow left
+      f(~~(W*.21),~~(H*.31),~~(W*.14),~~(H*.04),'#2a1808');
+      // Human nostril hint
+      f(~~(W*.27),~~(H*.52),~~(W*.04),~~(H*.03),'#5a2a10');
+      // Human mouth left side
+      f(~~(W*.22),~~(H*.6),~~(W*.16),~~(H*.04),'#5a2a10');
+      // RIGHT SIDE — chrome cyborg metal plate
+      f(~~(W*.5),~~(H*.16),~~(W*.32),~~(H*.6),'#889aa8');
+      f(~~(W*.5),~~(H*.16),~~(W*.32),~~(H*.2),'#aabbcc');
+      // Metal panel lines
+      f(~~(W*.52),~~(H*.22),~~(W*.28),2,'#667788');
+      f(~~(W*.52),~~(H*.3),~~(W*.28),2,'#667788');
+      f(~~(W*.52),~~(H*.42),~~(W*.28),2,'#667788');
+      f(~~(W*.52),~~(H*.55),~~(W*.28),2,'#667788');
+      // Vertical seam down center
+      f(~~(W*.49),~~(H*.18),3,~~(H*.58),'#445566');
+      // CYBORG RIGHT EYE — glowing red lens
+      f(~~(W*.56),~~(H*.31),~~(W*.18),~~(H*.13),'#111');
+      f(~~(W*.57),~~(H*.32),~~(W*.16),~~(H*.11),'#cc0000');
+      f(~~(W*.59),~~(H*.33),~~(W*.12),~~(H*.08),'#ff2200');
+      f(~~(W*.62),~~(H*.35),~~(W*.06),~~(H*.05),'#ff8800');
+      f(~~(W*.63),~~(H*.36),~~(W*.03),~~(H*.03),'#fff');
+      // Cyborg ear/temple piece
+      f(~~(W*.72),~~(H*.3),~~(W*.1),~~(H*.25),'#778899');
+      f(~~(W*.74),~~(H*.32),~~(W*.06),~~(H*.18),'#99aabc');
+      // Metal jaw right
+      f(~~(W*.5),~~(H*.6),~~(W*.3),~~(H*.16),'#778899');
+      f(~~(W*.52),~~(H*.62),~~(W*.26),~~(H*.1),'#889ab0');
+      // Small G badge on chest area (bottom)
+      f(~~(W*.38),~~(H*.85),~~(W*.24),~~(H*.1),'#cc6600');
+      ctx.fillStyle='#ffdd00';ctx.font=`bold ${~~(W*.14)}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('G',W*.5,H*.9);
+    } else if(name==='VIPER'){
+      // Red beret, battle-scarred face, war paint
+      f(0,0,W,H,'#0a0808');
+      f(~~(W*.3),~~(H*.6),~~(W*.4),~~(H*.4),'#3a2010');// neck
+      f(~~(W*.2),~~(H*.2),~~(W*.6),~~(H*.55),'#c8a060');// face
+      // Red beret
+      f(~~(W*.12),~~(H*.1),~~(W*.76),~~(H*.2),'#aa1010');
+      f(~~(W*.08),~~(H*.25),~~(W*.84),~~(H*.06),'#881010');
+      f(~~(W*.3),~~(H*.1),~~(W*.08),~~(H*.08),'#cc1515');// beret badge
+      // Eyes — narrow intense
+      f(~~(W*.25),~~(H*.36),~~(W*.16),~~(H*.08),'#111');
+      f(~~(W*.28),~~(H*.37),~~(W*.1),~~(H*.05),'#603020');
+      f(~~(W*.55),~~(H*.36),~~(W*.16),~~(H*.08),'#111');
+      f(~~(W*.58),~~(H*.37),~~(W*.1),~~(H*.05),'#603020');
+      // Scar across left eye
+      f(~~(W*.22),~~(H*.32),~~(W*.2),2,'#a07040');
+      f(~~(W*.23),~~(H*.42),~~(W*.18),2,'#a07040');
+      // War paint — red streak
+      f(~~(W*.52),~~(H*.4),~~(W*.04),~~(H*.18),'#cc2020');
+      // Mouth — thin determined
+      f(~~(W*.32),~~(H*.62),~~(W*.36),~~(H*.04),'#803020');
+      // Collar/tactical gear
+      f(~~(W*.2),~~(H*.72),~~(W*.6),~~(H*.28),'#1a0808');
+      f(~~(W*.28),~~(H*.74),~~(W*.44),~~(H*.06),'#cc1010');// red collar
+    } else if(name==='SHADOW'){
+      // Purple mask, mysterious — only eyes visible
+      f(0,0,W,H,'#08060a');
+      f(~~(W*.28),~~(H*.58),~~(W*.44),~~(H*.42),'#1a0a2a');// neck shadow
+      f(~~(W*.18),~~(H*.15),~~(W*.64),~~(H*.7),'#1a0a2a');// masked face
+      // Hood / shadow effect
+      f(~~(W*.1),~~(H*.05),~~(W*.8),~~(H*.3),'#0d0818');
+      // Eyes — glowing purple
+      f(~~(W*.24),~~(H*.38),~~(W*.18),~~(H*.1),'#200a30');
+      f(~~(W*.26),~~(H*.39),~~(W*.14),~~(H*.08),'#8800cc');
+      f(~~(W*.28),~~(H*.4),~~(W*.1),~~(H*.05),'#bb44ff');
+      f(~~(W*.3),~~(H*.41),~~(W*.05),~~(H*.03),'#ffffff');
+      f(~~(W*.54),~~(H*.38),~~(W*.18),~~(H*.1),'#200a30');
+      f(~~(W*.56),~~(H*.39),~~(W*.14),~~(H*.08),'#8800cc');
+      f(~~(W*.58),~~(H*.4),~~(W*.1),~~(H*.05),'#bb44ff');
+      f(~~(W*.6),~~(H*.41),~~(W*.05),~~(H*.03),'#ffffff');
+      // Mask seam
+      f(~~(W*.18),~~(H*.5),~~(W*.64),1,'#330044');
+      // Shadow guild emblem on chest
+      f(~~(W*.38),~~(H*.78),~~(W*.24),~~(H*.16),'#220033');
+      ctx.fillStyle='#9b59b6';ctx.font=`bold ${~~(W*.18)}px serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('S',W*.5,H*.87);
+    } else if(name==='MEDIC'){
+      // Green cross badge, kind face, medic helmet
+      f(0,0,W,H,'#060a08');
+      f(~~(W*.32),~~(H*.6),~~(W*.36),~~(H*.4),'#5a7a58');// neck
+      f(~~(W*.2),~~(H*.22),~~(W*.6),~~(H*.5),'#c8b090');// face
+      // Medic helmet — white with red cross
+      f(~~(W*.14),~~(H*.1),~~(W*.72),~~(H*.22),'#e0e0e0');
+      f(~~(W*.14),~~(H*.28),~~(W*.72),~~(H*.06),'#ccc');
+      // Red cross on helmet
+      f(~~(W*.43),~~(H*.12),~~(W*.14),~~(H*.18),'#cc0000');
+      f(~~(W*.36),~~(H*.17),~~(W*.28),~~(H*.08),'#cc0000');
+      // Gentle eyes
+      f(~~(W*.26),~~(H*.36),~~(W*.14),~~(H*.09),'#111');
+      f(~~(W*.28),~~(H*.37),~~(W*.1),~~(H*.06),'#2a4a28');
+      f(~~(W*.56),~~(H*.36),~~(W*.14),~~(H*.09),'#111');
+      f(~~(W*.58),~~(H*.37),~~(W*.1),~~(H*.06),'#2a4a28');
+      // Smile
+      f(~~(W*.32),~~(H*.62),~~(W*.36),~~(H*.04),'#8a5040');
+      f(~~(W*.3),~~(H*.65),~~(W*.05),~~(H*.04),'#8a5040');
+      f(~~(W*.65),~~(H*.65),~~(W*.05),~~(H*.04),'#8a5040');
+      // Green medic collar
+      f(~~(W*.2),~~(H*.7),~~(W*.6),~~(H*.3),'#1a3a18');
+    } else if(name==='TANK'){
+      // Blue heavy armor, big square jaw, crew cut
+      f(0,0,W,H,'#050810');
+      f(~~(W*.28),~~(H*.62),~~(W*.44),~~(H*.38),'#1a2030');// neck
+      f(~~(W*.16),~~(H*.22),~~(W*.68),~~(H*.55),'#b8a080');// face — wide jaw
+      // Buzz cut / flat top
+      f(~~(W*.16),~~(H*.1),~~(W*.68),~~(H*.15),'#2a2010');
+      f(~~(W*.12),~~(H*.22),~~(W*.76),~~(H*.06),'#1a1408');
+      // Deep-set eyes
+      f(~~(W*.22),~~(H*.35),~~(W*.18),~~(H*.1),'#0a0a1a');
+      f(~~(W*.24),~~(H*.36),~~(W*.14),~~(H*.08),'#3050a0');
+      f(~~(W*.26),~~(H*.37),~~(W*.08),~~(H*.05),'#4a70cc');
+      f(~~(W*.56),~~(H*.35),~~(W*.18),~~(H*.1),'#0a0a1a');
+      f(~~(W*.58),~~(H*.36),~~(W*.14),~~(H*.08),'#3050a0');
+      f(~~(W*.6),~~(H*.37),~~(W*.08),~~(H*.05),'#4a70cc');
+      // Wide flat nose bridge
+      f(~~(W*.44),~~(H*.44),~~(W*.12),~~(H*.14),'#a89070');
+      // Square jaw line
+      f(~~(W*.16),~~(H*.62),~~(W*.68),~~(H*.05),'#a09070');
+      f(~~(W*.16),~~(H*.22),~~(W*.06),~~(H*.45),'#a09070');
+      f(~~(W*.78),~~(H*.22),~~(W*.06),~~(H*.45),'#a09070');
+      // Thin mouth
+      f(~~(W*.3),~~(H*.63),~~(W*.4),~~(H*.04),'#7a5040');
+      // Heavy armor collar
+      f(~~(W*.1),~~(H*.72),~~(W*.8),~~(H*.28),'#102030');
+      f(~~(W*.14),~~(H*.74),~~(W*.72),~~(H*.08),'#3498db');
+    } else if(name==='RECON'){
+      // Yellow balaclava with goggles — scout look
+      f(0,0,W,H,'#0a0800');
+      f(~~(W*.3),~~(H*.62),~~(W*.4),~~(H*.38),'#3a3010');// neck
+      f(~~(W*.18),~~(H*.18),~~(W*.64),~~(H*.62),'#c8a020');// yellow balaclava
+      // Tactical goggles
+      f(~~(W*.18),~~(H*.3),~~(W*.64),~~(H*.16),'#1a1a1a');
+      f(~~(W*.2),~~(H*.31),~~(W*.26),~~(H*.13),'#0a2a0a');// left lens
+      f(~~(W*.22),~~(H*.32),~~(W*.22),~~(H*.1),'#00aa44');// green tint
+      f(~~(W*.54),~~(H*.31),~~(W*.26),~~(H*.13),'#0a2a0a');// right lens
+      f(~~(W*.56),~~(H*.32),~~(W*.22),~~(H*.1),'#00aa44');
+      f(~~(W*.46),~~(H*.31),~~(W*.08),~~(H*.16),'#111');// goggle bridge
+      // Goggle strap
+      f(~~(W*.12),~~(H*.33),~~(W*.08),~~(H*.09),'#cc8800');
+      f(~~(W*.8),~~(H*.33),~~(W*.08),~~(H*.09),'#cc8800');
+      // Balaclava mouth slit
+      f(~~(W*.28),~~(H*.62),~~(W*.44),~~(H*.05),'#aa8810');
+      // Fast chevron on chest
+      f(~~(W*.3),~~(H*.76),~~(W*.4),~~(H*.08),'#f39c12');
+      f(~~(W*.36),~~(H*.82),~~(W*.28),~~(H*.06),'#f39c12');
+    }
+  },
+
+  _buildGeorgeMesh(){
+    // George Droid — wide orange body, tiny arms, goofy proportions
+    const g=new THREE.Group();
+    const box=(w,h,d,col)=>{
+      const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:col}));
+      return m;
+    };
+    // Wide orange torso (he big)
+    const torso=box(1.4,1.2,1.0,0xff6600);torso.position.set(0,.8,0);g.add(torso);
+    // Tiny stubby legs
+    const ll=box(.35,.6,.35,0xff4400);ll.position.set(-.35,.2,0);g.add(ll);
+    const rl=box(.35,.6,.35,0xff4400);rl.position.set(.35,.2,0);g.add(rl);
+    // Tiny t-rex arms
+    const la=box(.2,.35,.2,0xff6600);la.position.set(-.85,.85,0);g.add(la);
+    const ra=box(.2,.35,.2,0xff6600);ra.position.set(.85,.85,0);g.add(ra);
+    // Big round head (very round)
+    const head=box(1.1,1.0,1.0,0xff7700);head.position.set(0,1.75,0);g.add(head);
+    // Tiny eyes — beady
+    const le=box(.15,.15,.05,0x111111);le.position.set(-.22,1.85,.51);g.add(le);
+    const re=box(.15,.15,.05,0x111111);re.position.set(.22,1.85,.51);g.add(re);
+    // Derp mouth — big goofy grin
+    const mouth=box(.6,.1,.05,0x222222);mouth.position.set(0,1.55,.51);g.add(mouth);
+    // "G" badge on chest
+    const badge=box(.4,.35,.05,0xffdd00);badge.position.set(0,.9,.52);g.add(badge);
+    // Antenna on top (very important)
+    const ant=box(.06,.4,.06,0xaaaaaa);ant.position.set(.2,2.3,0);g.add(ant);
+    const ball=box(.15,.15,.15,0xff0000);ball.position.set(.2,2.52,0);g.add(ball);
+    return g;
+  },
+  spawnMesh(){
+    if(this.mesh)scene.remove(this.mesh);
+    if(this.active&&this.active.bonus==='george'){
+      this.mesh=this._buildGeorgeMesh();
+    } else {
+      const g=new THREE.Group();
+      const c=parseInt((this.active?.col||'#888').replace('#',''),16)||0x888888;
+      const torso=new THREE.Mesh(new THREE.BoxGeometry(.7,1.2,.5),new THREE.MeshLambertMaterial({color:c}));
+      torso.position.y=.8;g.add(torso);
+      const head=new THREE.Mesh(new THREE.BoxGeometry(.55,.55,.5),new THREE.MeshLambertMaterial({color:0xc8a882}));
+      head.position.y=1.7;g.add(head);
+      const ll=new THREE.Mesh(new THREE.BoxGeometry(.28,.7,.3),new THREE.MeshLambertMaterial({color:c}));ll.position.set(-.22,.2,0);g.add(ll);
+      const rl=ll.clone();rl.position.set(.22,.2,0);g.add(rl);
+      this.mesh=g;
+    }
+    this.mesh.position.copy(Player.mesh.position).add(new THREE.Vector3(2,0,0));
+    scene.add(this.mesh);
+  },
+
   update(dt){
     if(!this.active||!Player.mesh||!gameRunning)return;
-    if(this.active.bonus==='regen'&&Math.random()<dt)Player.heal(1*dt);
-    // Merc AI: chase nearest enemy and deal ambient damage
+    if(this.active.bonus==='regen'||this.active.bonus==='george'){
+      Player.heal(1*dt);
+    }
     if(this.mesh){
       const pp=Player.mesh.position;
-      this.mesh.position.x+=(pp.x+2-this.mesh.position.x)*3*dt;
-      this.mesh.position.z+=(pp.z-this.mesh.position.z)*3*dt;
-      this.mesh.position.y=0;
-      // Merc randomly fires at nearby enemies
-      if(Math.random()<0.4*dt){
+      const isGeorge=this.active.bonus==='george';
+      // George wobbles and drifts chaotically
+      const wobble=isGeorge?Math.sin(Date.now()*.003)*1.2:0;
+      const targetX=pp.x+(isGeorge?2+wobble:2);
+      const targetZ=pp.z+(isGeorge?wobble*.5:0);
+      this.mesh.position.x+=(targetX-this.mesh.position.x)*(isGeorge?2:3)*dt;
+      this.mesh.position.z+=(targetZ-this.mesh.position.z)*(isGeorge?2:3)*dt;
+      this.mesh.position.y=isGeorge?Math.abs(Math.sin(Date.now()*.002))*.4:0;
+      if(isGeorge)this.mesh.rotation.y+=dt*.8; // george spins slowly
+
+      // George fires at EVERYTHING near him (and occasionally misses spectacularly)
+      const fireRate=isGeorge?0.8:0.4;
+      if(Math.random()<fireRate*dt){
         for(const e of Enemies.list){
           if(!e.alive)continue;
-          if(e.mesh.position.distanceTo(this.mesh.position)<14){
-            Enemies.hit(e,~~(8+Math.random()*12+(Player.bonusDmg||1)*5),false,false,null);
+          if(e.mesh.position.distanceTo(this.mesh.position)<(isGeorge?18:14)){
+            const dmg=isGeorge
+              ? ~~(5+Math.random()*60) // george: wildly inconsistent damage
+              : ~~(8+Math.random()*12+(Player.bonusDmg||1)*5);
+            Enemies.hit(e,dmg,false,false,null);
+            if(isGeorge&&Math.random()<.15){
+              // George quip
+              const q=this.active.quips[~~(Math.random()*this.active.quips.length)];
+              showBanner('GEORGE: '+q);
+            }
             break;
           }
+        }
+      }
+      // George occasionally heals himself by yoinking your ammo
+      if(isGeorge&&Math.random()<.002){
+        if(Player.weapon&&Player.weapon.currentAmmo>2){
+          Player.weapon.currentAmmo=Math.max(1,Player.weapon.currentAmmo-2);
+          UI.updateWeaponAmmo();
+          showBanner('GEORGE: yoink');
         }
       }
     }
@@ -4666,25 +4935,41 @@ HubSystem.renderArena=function(){
 };
 
 HubSystem.renderMercs=function(){
-  const grid=document.getElementById('mercs-grid');grid.innerHTML='';
+  const el=document.getElementById('mercs-grid');if(!el)return;
+  el.innerHTML='';
   Mercs.ROSTER.forEach(m=>{
     const hired=Mercs.active&&Mercs.active.name===m.name;
-    const el=document.createElement('div');el.className='shop-item';
-    el.innerHTML=`<div class="shop-item-name" style="color:${m.col}">${m.icon} ${m.name} — ${m.role}</div><div class="shop-item-stats">${m.desc.replace('\n','<br>')}</div><div class="shop-item-price ${Player.credits>=m.cost?'can-afford':'cant-afford'}">💰 ${m.cost} CR</div>`;
-    if(!hired){
-      const btn=document.createElement('button');btn.className='hub-btn';btn.style.width='100%';btn.style.marginTop='4px';btn.textContent=Mercs.active?'DISMISS CURRENT FIRST':'HIRE';
-      btn.addEventListener('click',()=>{if(Mercs.active){Mercs.dismiss();}else{Mercs.hire(m);}});
-      el.appendChild(btn);
-    }else{
-      const tag=document.createElement('div');tag.style.cssText=`color:${m.col};font-size:7px;margin-top:4px;letter-spacing:2px`;tag.textContent='✦ ACTIVE — WILL DEPLOY WITH YOU';el.appendChild(tag);
-      const dbtn=document.createElement('button');dbtn.className='hub-btn danger';dbtn.textContent='DISMISS';
-      dbtn.addEventListener('click',()=>Mercs.dismiss());el.appendChild(dbtn);
-    }
-    grid.appendChild(el);
+    const isGeorge=m.bonus==='george';
+    const div=document.createElement('div');
+    div.style.cssText=`border:1px solid ${hired?m.col:'rgba(255,255,255,.08)'};background:${hired?'rgba(255,140,0,.05)':'rgba(0,0,0,.2)'};padding:12px;margin-bottom:8px;display:flex;gap:12px;align-items:center`;
+    // Portrait canvas
+    const cvs=document.createElement('canvas');cvs.width=52;cvs.height=52;cvs.style.cssText='flex-shrink:0;image-rendering:pixelated;border:1px solid rgba(255,255,255,.1)';
+    const ctx=cvs.getContext('2d');
+    ctx.fillStyle='#08080f';ctx.fillRect(0,0,52,52);
+    Mercs._drawPortrait(ctx,m.name,52,52);
+    div.appendChild(cvs);
+    // Info
+    const info=document.createElement('div');info.style.flex='1;min-width:0';
+    info.innerHTML=`<div style="font-size:11px;letter-spacing:2px;color:${m.col};font-family:'Courier New',monospace">${m.name}${hired?' [HIRED]':''}</div><div style="font-size:9px;color:#556;margin-top:3px;font-family:'Courier New',monospace">${m.role}</div><div style="font-size:9px;color:#778;margin-top:2px;font-family:'Courier New',monospace">${m.desc.split('\n')[1]}</div><div style="font-size:10px;color:#ffd700;margin-top:5px;font-family:'Courier New',monospace">${m.cost===1?'1 CR (CHAOS TAX)':m.cost+' CR'}</div>`;
+    div.appendChild(info);
+    // Hire/dismiss button
+    const btn=document.createElement('button');
+    btn.style.cssText=`padding:9px 12px;border:1px solid ${m.col};background:transparent;color:${m.col};font-family:'Courier New',monospace;font-size:9px;letter-spacing:2px;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
+    btn.textContent=hired?'ACTIVE':isGeorge?'UHH':'HIRE';
+    btn.onclick=()=>{if(Mercs.active){Mercs.dismiss();}else{Mercs.hire(m);}};
+    btn.ontouchend=(e)=>{e.preventDefault();if(Mercs.active){Mercs.dismiss();}else{Mercs.hire(m);}};
+    if(hired){
+      const db=document.createElement('button');
+      db.style.cssText='padding:9px 10px;border:1px solid #e74c3c;background:transparent;color:#e74c3c;font-family:monospace;font-size:9px;cursor:pointer;margin-left:4px;touch-action:manipulation';
+      db.textContent='FIRE';
+      db.onclick=()=>Mercs.dismiss();
+      db.ontouchend=(e)=>{e.preventDefault();Mercs.dismiss();};
+      div.appendChild(btn);div.appendChild(db);
+    } else {div.appendChild(btn);}
+    el.appendChild(div);
   });
-  const ad=document.getElementById('active-merc-display');
-  ad.textContent=Mercs.active?`ACTIVE MERC: ${Mercs.active.icon} ${Mercs.active.name} · ${Mercs.active.desc.split('\n')[1]}`:'NO MERC HIRED';
-  ad.style.color=Mercs.active?Mercs.active.col:'#334';
+  const ad=document.getElementById('active-merc-display')||document.getElementById('mercs-active-display');
+  if(ad)ad.textContent=Mercs.active?`ACTIVE: ${Mercs.active.name} · ${Mercs.active.desc.split('\n')[1]}`:'NO MERC HIRED';
 };
 
 // Extend HubSystem.refresh to include new tabs
