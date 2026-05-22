@@ -1080,6 +1080,12 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
     <div class="hub-tab" data-panel="casino" style="color:#ffd700">🎰 CASINO</div>
   </div>
   <div id="hub-intel" class="hub-panel active">
+    <!-- CONTINUE RUN — always visible when a run is in progress -->
+    <div id="hub-continue-run" style="display:none;border:1px solid rgba(230,126,34,.5);background:rgba(230,126,34,.08);padding:16px;margin-bottom:14px;border-radius:2px">
+      <div style="font-size:9px;letter-spacing:3px;color:#e67e22;margin-bottom:6px">ACTIVE RUN</div>
+      <div id="hub-continue-info" style="font-size:12px;color:#bcc8d4;letter-spacing:1px;margin-bottom:12px"></div>
+      <button onclick="hubContinueRun()" style="width:100%;padding:14px;border:1px solid rgba(230,126,34,.5);background:rgba(230,126,34,.15);color:#e67e22;font-family:'Courier New',monospace;font-size:13px;letter-spacing:4px;cursor:pointer;-webkit-tap-highlight-color:transparent">▶ CONTINUE ZONE <span id="hub-continue-zone">1</span></button>
+    </div>
     <div class="hub-section-title">MISSION TERMINAL</div>
     <div class="mission-list" id="mission-list"></div>
   </div>
@@ -1756,7 +1762,7 @@ function setState(s) {
   document.getElementById('slot-screen').classList.toggle('on', s===GS.SLOTS);
   document.getElementById('char-creator').classList.toggle('on', s===GS.CHAR);
   document.getElementById('hub-screen').classList.toggle('on', s===GS.HUB);
-  if(s===GS.HUB)setTimeout(_updateHubHeaderHeight,50);
+  if(s===GS.HUB){setTimeout(_updateHubHeaderHeight,50);setTimeout(_updateHubContinueBtn,80);}
   document.getElementById('hud').style.display = (s===GS.MISSION)?'block':'none';
   document.getElementById('btn-pause').style.display = (s===GS.MISSION)?'flex':'none';
   document.getElementById('pause-screen').classList.remove('on');
@@ -3395,10 +3401,38 @@ const HubSystem={
   shopInv:[], armoryInv:[], stash:[],
   selectedMission:0,
   MISSIONS:[
-    {name:'HOSTILE EXTRACTION',desc:'High enemy density · Random layout · Standard loot',reward:'2x Credits · Guaranteed Rare+'},
-    {name:'BLACK SITE RAID',desc:'Heavy units · Boss chance · Urban environment',reward:'3x Credits · Boss spawn · Epic+'},
-    {name:'RESEARCH FACILITY',desc:'Drones + Elites · Lab environment · Tech loot',reward:'2.5x Credits · Exotic chance · Tech gear'},
-    {name:'ENDLESS SURGE',desc:'Infinite enemies · Escalating difficulty · Pure survival',reward:'Credits per kill · No extraction'},
+    {
+      name:'HOSTILE EXTRACTION',
+      desc:'High enemy density · Random layout · Standard loot',
+      reward:'2× Credits · Guaranteed Rare+',
+      duration:'~5-10 min · Complete 3 zones to extract',
+      creditMult:2, missionZone:1, extraEnemies:4,
+      tag:'SIDE OP — won\'t affect your main zone run',
+    },
+    {
+      name:'BLACK SITE RAID',
+      desc:'Heavy units · Boss guaranteed · Urban environment',
+      reward:'3× Credits · Boss loot · Epic+',
+      duration:'~10-15 min · Kill the boss to complete',
+      creditMult:3, missionZone:3, extraEnemies:6, forceKey:null,
+      tag:'SIDE OP — won\'t affect your main zone run',
+    },
+    {
+      name:'RESEARCH FACILITY',
+      desc:'Drones + Elites · Lab environment · Tech loot',
+      reward:'2.5× Credits · Exotic chance · Tech gear',
+      duration:'~8-12 min · Clear the lab zones',
+      creditMult:2.5, missionZone:2, extraEnemies:5,
+      tag:'SIDE OP — won\'t affect your main zone run',
+    },
+    {
+      name:'ENDLESS SURGE',
+      desc:'Infinite enemies · Escalating difficulty · Pure survival',
+      reward:'Credits per kill · No extraction point',
+      duration:'Endless — return to hub when done',
+      creditMult:1.5, missionZone:1, extraEnemies:3,
+      tag:'SIDE OP — won\'t affect your main zone run',
+    },
   ],
 
   refresh(){
@@ -3411,11 +3445,19 @@ const HubSystem={
     const el=document.getElementById('mission-list');el.innerHTML='';
     this.MISSIONS.forEach((m,i)=>{
       const card=document.createElement('div');card.className='mission-card'+(this.selectedMission===i?' sel-mission':'');
-      card.innerHTML=`<div class="mission-card-name">${m.name}</div><div class="mission-card-desc">${m.desc}</div><div class="mission-card-reward">⊕ ${m.reward}</div>`;
+      card.innerHTML=
+        '<div class="mission-card-name">'+m.name+'</div>'+
+        '<div class="mission-card-desc">'+m.desc+'</div>'+
+        '<div style="font-size:9px;color:#556;letter-spacing:1px;margin:4px 0">⏱ '+m.duration+'</div>'+
+        '<div class="mission-card-reward">⊕ '+m.reward+'</div>'+
+        '<div style="font-size:8px;color:rgba(100,180,100,.6);letter-spacing:1px;margin-top:4px">✓ '+m.tag+'</div>';
       card.addEventListener('click',()=>{this.selectedMission=i;this.renderMissions();});
       el.appendChild(card);
     });
-    const deployBtn=document.createElement('button');deployBtn.className='hub-btn';deployBtn.style.width='100%';deployBtn.style.marginTop='14px';deployBtn.textContent='▶  DEPLOY TO MISSION';
+    const deployBtn=document.createElement('button');
+    deployBtn.className='hub-btn';
+    deployBtn.style.cssText='width:100%;margin-top:14px;border-color:rgba(100,180,100,.4);color:#6ab46a;font-size:11px';
+    deployBtn.textContent='▶  DEPLOY SIDE MISSION — MAIN RUN PRESERVED';
     deployBtn.addEventListener('click',()=>{_startMission(this.selectedMission);});
     el.appendChild(deployBtn);
   },
@@ -3699,7 +3741,8 @@ function slotPick(s){
     const d=Save.load(s);
     if(!d){_isNewAgent=true;_startNewGame();setState(GS.CHAR);CharCreator._draw();return;}
     _startNewGame();_loadSaveIntoGame(d);HubSystem.refresh();setState(GS.HUB);
-    Audio.stopMusic(); // ensure game music stops if somehow playing
+    Audio.stopMusic();
+    setTimeout(_updateHubContinueBtn,100);
   }
 }
 function slotDelete(e,s){
@@ -3763,14 +3806,52 @@ function _startNewGame(){
   _spawnEnemies();Zone._hud();UI.updateBars();UI.credit(0);
 }
 
-function _startMission(){
-  if(!Enemies.list.some(e=>e.alive))_spawnEnemies();
+// ── Mission snapshot — saved before deploying a side mission ─────────
+let _mainRunSnapshot=null;
+let _activeMissionIdx=-1;
+
+function _startMission(missionIdx){
+  Audio.uiClick();
+  const m=HubSystem.MISSIONS[missionIdx||0];
+  _activeMissionIdx=missionIdx||0;
+
+  // Snapshot the current main run so we can restore it when done
+  _mainRunSnapshot={
+    zone:Zone.zone,
+    killsToNext:Zone.killsToNext,
+    killsInZone:Zone.killsInZone,
+    credits:Player.credits,
+    hp:Player.hp,
+    armor:Player.armor,
+  };
+
+  // Apply mission modifiers
+  if(m.missionZone)Zone.zone=m.missionZone;
+  if(m.creditMult)Zone._creditMult=m.creditMult;
+  else Zone._creditMult=1;
+
+  // Generate a fresh map for the mission
+  Map3D.generate();
+  Player.mesh.position.set(0,0,0);
+  camera.position.copy(Player.mesh.position).add(CAM_OFF);
+  _camLook.copy(Player.mesh.position);
+
   HubSystem.shopInv=[];HubSystem.armoryInv=[];
+  _spawnEnemies();
+  // Add extra enemies for hostile missions
+  if(m.extraEnemies){
+    const sp=Map3D.spawnPts;
+    for(let i=0;i<m.extraEnemies;i++){
+      const pt=sp[~~(Math.random()*sp.length)];
+      if(pt)Enemies.spawn(pt,m.forceKey||null);
+    }
+  }
   Events.timer=60+Math.random()*30;
   if(Mercs.active)Mercs.spawnMesh();
-  setState(GS.MISSION);
-  Zone._hud();
+  setState(GS.MISSION);Zone._hud();
+  showBanner('▶ '+m.name.toUpperCase());
   setTimeout(()=>Audio.startMusic(),350);
+  document.getElementById('hub-continue-run').style.display='none';
 }
 
 function _spawnEnemies(){
@@ -3778,11 +3859,24 @@ function _spawnEnemies(){
   for(let i=0;i<toSpawn;i++){const pt=sp[i];const dx=pt.x-0,dz=pt.z-0;if(dx*dx+dz*dz>25)Enemies.spawn(pt);}
 }
 
+// Restore main run state after a side mission ends via hub
+function _restoreMainRun(){
+  if(!_mainRunSnapshot)return;
+  Zone.zone=_mainRunSnapshot.zone;
+  Zone.killsToNext=_mainRunSnapshot.killsToNext;
+  Zone.killsInZone=_mainRunSnapshot.killsInZone;
+  Zone._creditMult=1;
+  _mainRunSnapshot=null;_activeMissionIdx=-1;
+  Zone._hud();
+}
+
 let _fromMission=false;
 function GoToHub(){
   if(gameState!==GS.MISSION)return;
   if(_isDailyRun){DailyChallenge.recordScore(Enemies.totalKills,Zone.zone);_isDailyRun=false;}
   _fromMission=true;
+  // If we were on a side mission, restore the main run zone state
+  if(_mainRunSnapshot){_restoreMainRun();}
   Save.save();_refreshMenu();
   Audio.stopMusic();HubSystem.refresh();setState(GS.HUB);
   document.getElementById('hub-return-btn').style.display='block';
@@ -3894,21 +3988,40 @@ function deathReturnToHub(){
 }
 function deathGoHub(){deathReturnToHub();}
 
-// Return to the zone from hub (also used when entering hub mid-mission)
-function hubReturnToMission(){
-  if(gameState!==GS.HUB)return;
-  _fromMission=false;
+// ── CONTINUE RUN — drop back into the active zone ──────────────────
+function hubContinueRun(){
   Audio.uiClick();
   const rb=document.getElementById('hub-return-btn');
   if(rb)rb.style.display='none';
+  document.getElementById('hub-continue-run').style.display='none';
   setState(GS.MISSION);
   gameRunning=true;
   setTimeout(()=>Audio.startMusic(),300);
-  // Respawn near gravestone if we came from death
+  // Respawn near gravestone if available
   if(_gravePos&&Player.mesh){
     Player.mesh.position.set(_gravePos.x+2,0,_gravePos.z+2);
     camera.position.copy(Player.mesh.position).add(CAM_OFF);
   }
+}
+
+function _updateHubContinueBtn(){
+  const box=document.getElementById('hub-continue-run');
+  const zSpan=document.getElementById('hub-continue-zone');
+  const info=document.getElementById('hub-continue-info');
+  if(!box)return;
+  const hasRun=gameState===GS.HUB&&Map3D.rooms&&Map3D.rooms.length>0;
+  if(hasRun){
+    box.style.display='block';
+    if(zSpan)zSpan.textContent=Zone.zone;
+    if(info)info.textContent='Zone '+Zone.zone+' · '+Enemies.totalKills+' kills · '+Player.credits+' CR';
+  } else {
+    box.style.display='none';
+  }
+}
+
+function hubReturnToMission(){
+  if(gameState!==GS.HUB)return;
+  hubContinueRun();
 }
 
 // =====================================================================
@@ -4346,6 +4459,7 @@ document.querySelectorAll('.hub-tab').forEach(tab=>{
     document.querySelectorAll('.hub-panel').forEach(p=>p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('hub-'+tab.dataset.panel).classList.add('active');
+    if(tab.dataset.panel==='intel'){HubSystem.renderMissions();_updateHubContinueBtn();}
     if(tab.dataset.panel==='arena')HubSystem.renderArena();
     if(tab.dataset.panel==='mercs')HubSystem.renderMercs();
     if(tab.dataset.panel==='pass')BattlePass.renderHub();
