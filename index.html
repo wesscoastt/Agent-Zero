@@ -92,14 +92,17 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:#000;
 /* ──────────────────────────────────────────────────────
    HUB CITY
 ────────────────────────────────────────────────────── */
-#hub-screen{background:rgba(0,0,0,.97);z-index:60;overflow-y:auto;align-items:flex-start;
-  padding:0;} /* No top padding - header handles safe area */
-#hub-screen-inner{width:100%;max-width:480px;display:flex;flex-direction:column;padding-bottom:max(env(safe-area-inset-bottom,0px),20px);}
-#hub-header{width:100%;display:flex;align-items:center;justify-content:space-between;
-  padding:max(env(safe-area-inset-top,0px),12px) 14px 10px;
-  border-bottom:1px solid rgba(255,255,255,.06);
-  position:sticky;top:0;background:rgba(0,0,0,.99);z-index:2;}
-.hub-title{font-size:10px;letter-spacing:4px;color:#e67e22}
+#hub-screen{background:transparent;z-index:60;overflow:hidden;pointer-events:none;align-items:flex-start;
+  padding:0;}
+#hub-screen-inner{pointer-events:none;display:none;} /* hidden — panels open via NPC interaction */
+/* Hub NPC interaction panel — floats over 3D world */
+#hub-panel-overlay{position:fixed;inset:0;z-index:62;background:rgba(0,0,0,.88);display:none;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:60px;overflow-y:auto;pointer-events:auto;}
+/* Hub interaction prompt — shows when near NPC */
+#hub-interact-prompt{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px)+220px);left:50%;transform:translateX(-50%);background:rgba(0,10,6,.95);border:2px solid rgba(230,126,34,.6);padding:12px 24px;font-family:'Courier New',monospace;font-size:13px;letter-spacing:3px;color:#e67e22;z-index:60;white-space:nowrap;display:none;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+/* Hub HUD elements that stay visible in 3D world */
+#hub-world-hud{position:fixed;top:0;left:0;right:0;display:none;z-index:61;pointer-events:none;}
+#hub-world-hud .hwh-bar{display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,.92);border-bottom:1px solid rgba(230,126,34,.2);padding:max(env(safe-area-inset-top,0px),14px) 14px 10px;}
+#hub-return-btn{pointer-events:auto;}
 .hub-credits{font-size:9px;color:#aaa;letter-spacing:2px}
 #hub-tabs{display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,.06);width:100%;flex-wrap:wrap;
   position:sticky;top:var(--hub-header-h,52px);background:rgba(0,0,0,.99);z-index:1;}
@@ -1027,7 +1030,7 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
       <div class="cc-icon-btn sel" data-hair="bald"><canvas data-icon="hair_bald" width="40" height="40"></canvas><span>BALD</span></div>
       <div class="cc-icon-btn" data-hair="short"><canvas data-icon="hair_short" width="40" height="40"></canvas><span>SHORT</span></div>
       <div class="cc-icon-btn" data-hair="mohawk"><canvas data-icon="hair_mohawk" width="40" height="40"></canvas><span>MOHAWK</span></div>
-      <div class="cc-icon-btn" data-hair="dreads"><canvas data-icon="hair_dreads" width="40" height="40"></canvas><span>DREADS</span></div>
+      <div class="cc-icon-btn" data-hair="fade"><canvas data-icon="hair_fade" width="40" height="40"></canvas><span>TAPER</span></div>
       <div class="cc-icon-btn" data-hair="buzz"><canvas data-icon="hair_buzz" width="40" height="40"></canvas><span>BUZZ</span></div>
     </div>
   </div>
@@ -1370,6 +1373,38 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
   </button>
   <button onclick="Fishing.close()" style="padding:10px 24px;border:1px solid rgba(255,255,255,.1);background:transparent;color:#445;font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;cursor:pointer">LEAVE</button>
 </div>
+
+<!-- QUEST DIALOG -->
+<div id="quest-dialog" style="display:none;position:fixed;inset:0;z-index:190;background:rgba(0,0,0,.88);flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:max(env(safe-area-inset-bottom,0px),24px);font-family:'Courier New',monospace">
+  <div style="width:92%;max-width:400px;border:1px solid rgba(230,126,34,.4);background:#0a0806;padding:16px;margin-bottom:16px">
+    <div style="font-size:8px;letter-spacing:3px;color:#556;margin-bottom:6px">INCOMING TRANSMISSION</div>
+    <div id="quest-title" style="font-size:11px;letter-spacing:3px;color:#e67e22;margin-bottom:10px;border-bottom:1px solid rgba(230,126,34,.2);padding-bottom:8px"></div>
+    <div id="quest-npc-name" style="font-size:9px;letter-spacing:2px;color:#e67e22;margin-bottom:8px"></div>
+    <div id="quest-dialog-text" style="font-size:12px;color:#bcc8d4;letter-spacing:.5px;line-height:1.6;min-height:48px"></div>
+    <button id="quest-btn" style="margin-top:16px;width:100%;padding:12px;border:1px solid rgba(230,126,34,.4);background:rgba(230,126,34,.1);color:#e67e22;font-family:'Courier New',monospace;font-size:11px;letter-spacing:4px;cursor:pointer;touch-action:manipulation">NEXT</button>
+  </div>
+</div>
+
+<!-- HUB PANEL OVERLAY — opens when player interacts with NPC -->
+<div id="hub-panel-overlay">
+  <div style="width:92%;max-width:460px">
+    <div id="hub-panel-overlay-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div id="hub-panel-overlay-title" style="font-size:11px;letter-spacing:4px;color:#e67e22;font-family:'Courier New',monospace"></div>
+      <button onclick="HubWorld.closePanel()" ontouchend="event.preventDefault();HubWorld.closePanel()" style="padding:10px 18px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#bbb;font-family:'Courier New',monospace;font-size:11px;letter-spacing:3px;cursor:pointer;touch-action:manipulation">✕ CLOSE</button>
+    </div>
+    <div id="hub-panel-overlay-content"></div>
+  </div>
+</div>
+<!-- HUB WORLD HUD -->
+<div id="hub-world-hud">
+  <div class="hwh-bar">
+    <div style="font-size:9px;letter-spacing:3px;color:#e67e22;font-family:'Courier New',monospace">◈ SHADOW CITY</div>
+    <div style="font-size:10px;color:#ffd700;font-family:'Courier New',monospace">💰 <span id="hub-world-credits">0</span> CR</div>
+    <button id="hub-return-btn" onclick="hubReturnToMission()" style="display:none;padding:6px 12px;border:1px solid rgba(230,126,34,.4);background:rgba(230,126,34,.1);color:#e67e22;font-family:'Courier New',monospace;font-size:9px;letter-spacing:2px;cursor:pointer;touch-action:manipulation">↩ RETURN TO ZONE</button>
+  </div>
+</div>
+<!-- HUB INTERACTION PROMPT -->
+<div id="hub-interact-prompt">INTERACT</div>
 
 <!-- HUD -->
 <div id="hud">
@@ -1769,16 +1804,22 @@ Joystick.init();
 // =====================================================================
 const GS = { MENU:0, CHAR:1, HUB:2, MISSION:3, DEAD:4, SLOTS:5 };
 let gameState = GS.MENU;
+let prevState = GS.MENU;
 let gameRunning = false;
 
 function setState(s) {
+  prevState=gameState;
   gameState = s;
-  gameRunning = (s === GS.MISSION);
+  gameRunning = (s === GS.MISSION||s===GS.HUB);
   document.getElementById('main-menu').classList.toggle('on', s===GS.MENU);
   document.getElementById('slot-screen').classList.toggle('on', s===GS.SLOTS);
   document.getElementById('char-creator').classList.toggle('on', s===GS.CHAR);
   document.getElementById('hub-screen').classList.toggle('on', s===GS.HUB);
-  if(s===GS.HUB){setTimeout(_updateHubHeaderHeight,50);setTimeout(_updateHubContinueBtn,80);setTimeout(()=>StashShop.updateUI(),100);}
+  if(s===GS.HUB){
+    gameRunning=true; // keep 3D running
+    setTimeout(()=>HubWorld.enter(),50);
+  }
+  if(prevState===GS.HUB&&s!==GS.HUB){HubWorld.leave();}
   document.getElementById('hud').style.display = (s===GS.MISSION)?'block':'none';
   document.getElementById('btn-pause').style.display = (s===GS.MISSION)?'flex':'none';
   document.getElementById('pause-screen').classList.remove('on');
@@ -1915,7 +1956,7 @@ const Map3D = {
           this.spawnPts.push(candidates[0]); // fallback: center even if in furniture
         }
       }
-      if(r.type!=='start'&&Math.random()<0.6)this._chest(cx+(Math.random()-.5)*C.CELL,cz+(Math.random()-.5)*C.CELL);
+      if(r.type!=='start'&&Math.random()<0.6&&gameState!==GS.HUB)this._chest(cx+(Math.random()-.5)*C.CELL,cz+(Math.random()-.5)*C.CELL);
     }
     // Lights
     const amb=new THREE.AmbientLight(0x485868,3.2);scene.add(amb);this.lights.push(amb);
@@ -2749,7 +2790,7 @@ const Boss = {
 // =====================================================================
 const Grenades={
   list:[],
-  throw(origin,dir){const m=new THREE.Mesh(new THREE.SphereGeometry(.2,6,6),new THREE.MeshLambertMaterial({color:0x334422}));m.position.copy(origin);scene.add(m);const vel=dir.clone().multiplyScalar(10).add(new THREE.Vector3(0,5,0));this.list.push({mesh:m,vel,timer:2.5});},
+  throw(origin,dir){const m=new THREE.Mesh(new THREE.SphereGeometry(.2,6,6),new THREE.MeshLambertMaterial({color:0x334422}));m.position.copy(origin);scene.add(m);const vel=dir.clone().multiplyScalar(6).add(new THREE.Vector3(0,4,0));this.list.push({mesh:m,vel,timer:2.5});},
   update(dt){for(let i=this.list.length-1;i>=0;i--){const g=this.list[i];g.timer-=dt;g.vel.y-=12*dt;g.mesh.position.addScaledVector(g.vel,dt);g.mesh.rotation.x+=dt*5;if(g.mesh.position.y<.2){g.mesh.position.y=.2;g.vel.y*=-.3;g.vel.x*=.6;g.vel.z*=.6;}if(g.timer<=0){const pos=g.mesh.position.clone();scene.remove(g.mesh);this.list.splice(i,1);Bullets._blast(pos,65);Audio.explosion();Particles.burst(pos,0xff6600,IS_MOB?14:24);}}}
 };
 
@@ -3088,14 +3129,15 @@ const Player={
       if(hair==='short'){const h=box(.46,.1,.44,0x222222);h.position.set(0,2.06,0);root.add(h);}
       else if(hair==='mohawk'){const h=box(.1,.3,.4,0x222222);h.position.set(0,2.18,0);root.add(h);}
       else if(hair==='buzz'){const h=box(.44,.06,.42,0x333333);h.position.set(0,2.03,0);root.add(h);}
-      else if(hair==='dreads'){
-        // Dreads hang from top of head down — Y=2.0 is top of head
-        for(let i=0;i<5;i++){const d=new THREE.Mesh(new THREE.CylinderGeometry(.05,.03,.55,4),M(0x1a1a1a));d.position.set(-.18+i*.09,1.98,.0);d.rotation.x=-.25;root.add(d);}
+      else if(hair==='dreads'||hair==='fade'){
+        // Taper fade — flat top with tight sides
+        const ft=new THREE.Mesh(new THREE.BoxGeometry(.44,.1,.42),M(hairHex));ft.position.set(0,2.06,0);root.add(ft);
+        const ft2=new THREE.Mesh(new THREE.BoxGeometry(.4,.08,.38),M(hairHex));ft2.position.set(0,2.0,0);root.add(ft2);
       }
     } else {
       // Show hair under certain hats
-      if((hat==='beanie'||hat==='cap')&&(hair==='dreads')){
-        for(let i=0;i<4;i++){const d=new THREE.Mesh(new THREE.CylinderGeometry(.05,.03,.48,4),M(0x1a1a1a));d.position.set(-.14+i*.1,1.96,.0);d.rotation.x=-.25;root.add(d);}
+      if((hat==='beanie'||hat==='cap')&&(hair==='dreads'||hair==='fade')){
+        const ft=new THREE.Mesh(new THREE.BoxGeometry(.4,.08,.38),M(hairHex));ft.position.set(0,2.0,0);root.add(ft);
       }
     }
 
@@ -3223,6 +3265,7 @@ const Player={
   },
 
   shoot(){
+    if(gameState===GS.HUB)return; // no shooting in the hub
     if(!this.weapon||this.reloading||this.fireTimer>0)return;
     if(this.weapon.currentAmmo<=0){this.startReload();return;}
     this.weapon.currentAmmo--;this.fireTimer=this.weapon.fireRate;
@@ -3322,20 +3365,23 @@ const Player={
       const spd=C.PLAYER_SPD*(1+stats.spd+CharCreator.classBonus.speedBonus+this.bonusSpd);
       const sprint=Input.down('ShiftLeft')||Input.down('ShiftRight');
       const smult=sprint?C.SPRINT:1;
+      const inHub=gameState===GS.HUB;
       if(mag>.05){
         const nx=mx/mag,nz=mz/mag;
         const PAD=.55;
         const prevX=this.mesh.position.x,prevZ=this.mesh.position.z;
         this.mesh.position.x+=nx*spd*smult*dt;
-        if(!Map3D.isFloor(this.mesh.position.x+nx*PAD,this.mesh.position.z)||
+        if(!inHub&&(!Map3D.isFloor(this.mesh.position.x+nx*PAD,this.mesh.position.z)||
            !Map3D.isFloor(this.mesh.position.x-nx*PAD,this.mesh.position.z)||
-           Map3D.hitFurniture(this.mesh.position.x,this.mesh.position.z))
+           Map3D.hitFurniture(this.mesh.position.x,this.mesh.position.z)))
           this.mesh.position.x=prevX;
         this.mesh.position.z+=nz*spd*smult*dt;
-        if(!Map3D.isFloor(this.mesh.position.x,this.mesh.position.z+nz*PAD)||
+        if(!inHub&&(!Map3D.isFloor(this.mesh.position.x,this.mesh.position.z+nz*PAD)||
            !Map3D.isFloor(this.mesh.position.x,this.mesh.position.z-nz*PAD)||
-           Map3D.hitFurniture(this.mesh.position.x,this.mesh.position.z))
+           Map3D.hitFurniture(this.mesh.position.x,this.mesh.position.z)))
           this.mesh.position.z=prevZ;
+        // Clamp to hub bounds
+        if(inHub){this.mesh.position.x=Math.max(-24,Math.min(24,this.mesh.position.x));this.mesh.position.z=Math.max(-24,Math.min(24,this.mesh.position.z));}
         // ── Walking Animation ──
         this._walkT+=dt*(sprint?2.2:1.5);
         const swing=Math.sin(this._walkT*5.5)*(sprint?.42:.28);
@@ -3383,6 +3429,8 @@ const Player={
         try{InvUI.refresh();}catch(e){}
       }
     }
+    // ── Quest progress ──
+    try{Quests.checkProgress();}catch(e){}
     let _nearFish=null;
     if(Map3D.fishingHoles&&Map3D.fishingHoles.length){
       for(const h of Map3D.fishingHoles){
@@ -3837,7 +3885,7 @@ const CharCreator={
     // Hair beneath hat
     if(hair==='short'&&hat==='none'){ctx.fillStyle=hairCol;ctx.fillRect(28,8,34,8);}
     else if(hair==='mohawk'&&hat==='none'){ctx.fillStyle=hairCol;ctx.fillRect(40,2,10,10);}
-    else if(hair==='dreads'&&hat==='none'){ctx.fillStyle=hairCol;for(let i=0;i<5;i++){ctx.fillRect(28+i*7,24,5,18);}}
+    else if((hair==='dreads'||hair==='fade')&&hat==='none'){ctx.fillStyle=hairCol;ctx.fillRect(22,28,46,8);ctx.fillRect(24,36,42,5);}
     else if(hair==='buzz'&&hat==='none'){ctx.fillStyle=hairCol;ctx.fillRect(28,8,34,6);}
     // Hat
     if(hat==='helmet'){
@@ -3859,7 +3907,7 @@ const CharCreator={
       // no hat — show full hair on top of head
       if(hair==='short'){ctx.fillStyle=hairCol;ctx.fillRect(28,6,34,10);}
       else if(hair==='mohawk'){ctx.fillStyle=hairCol;ctx.fillRect(42,0,6,12);}
-      else if(hair==='dreads'){ctx.fillStyle=hairCol;for(let i=0;i<5;i++){ctx.fillRect(28+i*7,24,5,18);}}
+      else if(hair==='dreads'||hair==='fade'){ctx.fillStyle=hairCol;ctx.fillRect(22,28,46,8);ctx.fillRect(24,36,42,5);}
       else if(hair==='buzz'){ctx.fillStyle=hairCol;ctx.fillRect(28,6,34,6);}
     }
     // Vest badge — always says ZERO
@@ -4133,6 +4181,8 @@ function _spawnEnemies(){
   });
   Zone.killsToNext=Enemies.list.length;
   Zone._hud();
+  // Check quest after player is fully spawned and can see the world (5s delay)
+  setTimeout(()=>{ try{if(gameState===GS.MISSION)Quests.check();}catch(e){} },5000);
 }
 
 // Expose Enemies.spawnAt for direct placement
@@ -5302,17 +5352,20 @@ function loop(){
     if(!gameRunning)return;
     Input.updateWorld();
     Player.update(dt);
+    if(gameState===GS.MISSION){
     Bullets.update(dt);
     Enemies.update(dt);
     Boss.update(dt);
     Skills.update(dt);
     Grenades.update(dt);
     Loot.update(dt,Player.mesh.position);
+    }
     Particles.update(dt);
     Rain.update(dt);
     Events.update(dt);
     Mercs.update(dt);
     Zone._updatePortal(dt);
+    HubWorld.update();
     flicker(dt);
     const tgt=Player.mesh.position.clone().add(CAM_OFF);
     camera.position.lerp(tgt,7*dt);
@@ -5700,7 +5753,7 @@ const Audio={
   _rimshot(t,dest){
     const o=this.ctx.createOscillator(),g=this.ctx.createGain();
     o.type='triangle';o.frequency.setValueAtTime(900,t);o.frequency.exponentialRampToValueAtTime(200,t+.04);
-    g.gain.setValueAtTime(.35,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);
+    g.gain.setValueAtTime(.12,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);
     o.connect(g);g.connect(dest);o.start(t);o.stop(t+.06);
   },
   _pad007(freqs,t,dur,vol,dest){
@@ -7400,17 +7453,28 @@ const PixelIcons={
       ctx.fillRect(W*.3,H*.33,W*.06,H*.06);ctx.fillRect(W*.64,H*.33,W*.06,H*.06);
     },
     hair_dreads(ctx,W,H){
+      // Renamed slot used for Taper Fade — draw taper fade icon
       this._head(ctx,W,H);
-      // Dreads hang DOWN from the top/sides of the head
-      ctx.fillStyle='#1a1a1a';
-      const topY=H*.34;
-      for(let i=0;i<5;i++){
-        const x=W*(.28+i*.11);
-        const len=H*(.28+i%2*.08);
-        // Dread strand — tapers at bottom
-        ctx.fillRect(x,topY,W*.06,len);
-        ctx.fillRect(x+W*.01,topY+len,W*.04,H*.04);
-      }
+      // Flat top — slightly raised block on crown
+      ctx.fillStyle='#2a1a0a';
+      ctx.fillRect(W*.28,H*.15,W*.44,H*.16); // top flat section
+      ctx.fillRect(W*.3,H*.28,W*.4,H*.06);   // top line
+      // Very thin fade sides — barely visible strips
+      ctx.fillStyle='#1a1208';
+      ctx.fillRect(W*.28,H*.32,W*.06,H*.07); // left side tiny
+      ctx.fillRect(W*.66,H*.32,W*.06,H*.07); // right side tiny
+      // Fade gradient dots — lighter going down
+      ctx.fillStyle='rgba(40,25,10,.6)';ctx.fillRect(W*.28,H*.36,W*.06,H*.04);
+      ctx.fillRect(W*.66,H*.36,W*.06,H*.04);
+    },
+    hair_fade(ctx,W,H){
+      // Also draws taper fade
+      this._head(ctx,W,H);
+      ctx.fillStyle='#2a1a0a';
+      ctx.fillRect(W*.28,H*.15,W*.44,H*.16);
+      ctx.fillRect(W*.3,H*.28,W*.4,H*.06);
+      ctx.fillStyle='#1a1208';
+      ctx.fillRect(W*.28,H*.32,W*.06,H*.07);ctx.fillRect(W*.66,H*.32,W*.06,H*.07);
     },
     hair_buzz(ctx,W,H){
       this._head(ctx,W,H);
@@ -7810,10 +7874,17 @@ const Casino={
       race.horses.forEach((h,i)=>{
         const div=document.createElement('div');div.className='horse-card';
         const tag=h.odds<2?'<span style="color:#ff4;font-size:9px"> FAV</span>':h.odds>6?'<span style="color:#f84;font-size:9px"> LONG</span>':'';
-        div.innerHTML='<div style="font-size:22px">&#127939;</div>'+
-          '<div style="flex:1"><div style="font-size:12px;color:'+h.col+'">'+h.name+tag+'</div>'+
-          '<div style="font-size:10px;color:#556;margin-top:2px">ODDS: '+h.odds+'×</div></div>'+
-          '<div style="font-size:16px;color:#ffd700;font-weight:bold">'+h.odds+'×</div>';
+        // Build canvas portrait
+        const cvs=document.createElement('canvas');cvs.width=52;cvs.height=52;
+        cvs.style.cssText='flex-shrink:0;image-rendering:pixelated;border:1px solid rgba(255,255,255,.1)';
+        Casino.horses._drawHorse(cvs,h.name,h.col);
+        const info=document.createElement('div');info.style.cssText='flex:1;min-width:0;padding:0 8px';
+        info.innerHTML='<div style="font-size:12px;color:'+h.col+';font-family:\'Courier New\',monospace;letter-spacing:1px">'+h.name+tag+'</div>'+
+          '<div style="font-size:10px;color:#556;margin-top:3px;font-family:\'Courier New\',monospace">ODDS: '+h.odds+'×</div>';
+        const odds=document.createElement('div');odds.style.cssText='font-size:18px;color:#ffd700;font-weight:bold;font-family:\'Courier New\',monospace;flex-shrink:0';
+        odds.textContent=h.odds+'×';
+        div.style.cssText='display:flex;align-items:center;gap:4px';
+        div.appendChild(cvs);div.appendChild(info);div.appendChild(odds);
         div.onclick=()=>{
           document.querySelectorAll('.horse-card').forEach(c=>c.classList.remove('selected'));
           div.classList.add('selected');this._pick=i;
@@ -7839,7 +7910,10 @@ const Casino={
       const laneEls=horses.map((h,i)=>{
         const lane=document.createElement('div');lane.className='horse-lane';
         const runner=document.createElement('div');runner.className='horse-runner';
-        runner.innerHTML='<span style="color:'+h.col+'">'+(i===this._pick?'★':'')+'&#127939;</span>';
+        const mc=document.createElement('canvas');mc.width=28;mc.height=22;mc.style.cssText='image-rendering:pixelated;vertical-align:middle';
+        Casino.horses._drawHorseMini(mc,h.name,h.col,i===this._pick);
+        if(i===this._pick){const star=document.createElement('span');star.textContent='★';star.style.cssText='color:#ffd700;font-size:10px;margin-right:2px;vertical-align:middle';runner.appendChild(star);}
+        runner.appendChild(mc);
         runner.style.left='0%';lane.appendChild(runner);if(lanes)lanes.appendChild(lane);
         return runner;
       });
@@ -7857,8 +7931,164 @@ const Casino={
       };
       requestAnimationFrame(tick);
     },
+    _drawHorseMini(cvs,name,col,starred){
+      const ctx=cvs.getContext('2d');const W=cvs.width,H=cvs.height;
+      ctx.fillStyle='#08080f';ctx.fillRect(0,0,W,H);
+      const c=col;
+      // Simple side-view running horse silhouette
+      ctx.fillStyle=c;
+      // Body
+      ctx.fillRect(4,8,16,8);
+      // Head/neck
+      ctx.fillRect(18,4,6,8);ctx.fillRect(22,2,4,5);
+      // Legs (running pose)
+      ctx.fillRect(5,16,3,6);ctx.fillRect(10,16,3,5);ctx.fillRect(14,16,3,6);ctx.fillRect(18,16,3,5);
+      // Tail
+      ctx.fillStyle=col+'aa';ctx.fillRect(2,8,3,5);ctx.fillRect(1,12,2,4);
+      // Eye
+      ctx.fillStyle='#fff';ctx.fillRect(24,3,2,2);ctx.fillStyle='#000';ctx.fillRect(25,3,1,1);
+      // Name-specific accent
+      this._horseAccent(ctx,name,col,W,H);
+    },
+    _drawHorse(cvs,name,col){
+      const ctx=cvs.getContext('2d');const W=cvs.width,H=cvs.height;
+      const f=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,w,h);};
+      f(0,0,W,H,'#08080f');
+      // Full horse portrait — side view, larger
+      f(8,20,32,16,col);       // body
+      f(36,12,12,16,col);      // neck+head
+      f(42,8,10,8,col);        // head
+      f(42,6,6,5,col);         // snout
+      // Legs
+      f(10,36,5,12,col);f(17,36,5,11,col);f(28,36,5,12,col);f(35,36,5,11,col);
+      // Tail
+      ctx.fillStyle=col;ctx.fillRect(6,20,4,10);ctx.fillRect(4,28,4,8);ctx.fillRect(2,32,3,6);
+      // Eye highlight
+      f(46,9,3,3,'#fff');f(47,10,2,2,'#111');f(47,10,1,1,'#fff');
+      // Mane
+      ctx.fillStyle=col+'cc';
+      for(let i=0;i<4;i++)ctx.fillRect(36+i*3,10,4,6+i);
+      // Name-specific special art
+      this._horseAccentFull(ctx,name,col,W,H);
+    },
+    _horseAccent(ctx,name,col,W,H){
+      // Mini accents for race track
+      const n=name.toUpperCase();
+      if(n.includes('GHOST')){ctx.globalAlpha=.5;ctx.fillStyle='#fff';ctx.fillRect(2,2,W-4,H-4);ctx.globalAlpha=1;ctx.fillStyle='#fff';ctx.fillRect(24,3,2,2);}
+      else if(n.includes('IRON')){ctx.fillStyle='#888';ctx.fillRect(18,6,8,4);ctx.fillRect(4,12,18,2);}
+      else if(n.includes('NIGHT')||n.includes('PHANTOM')||n.includes('SHADOW')||n.includes('SILENT')){ctx.fillStyle='#0000aa';ctx.fillRect(0,0,W,H/2);ctx.globalAlpha=.7;ctx.fillStyle=col;ctx.fillRect(4,8,20,8);ctx.globalAlpha=1;}
+      else if(n.includes('GOLD')||n.includes('LUCKY')){ctx.fillStyle='#ffd700';for(let i=0;i<4;i++)ctx.fillRect(18+i*3,2,2,2);}
+      else if(n.includes('CHROME')||n.includes('BULLET')){ctx.fillStyle='#ccc';ctx.fillRect(22,8,6,3);ctx.fillRect(19,10,9,2);}
+      else if(n.includes('REAPER')||n.includes('DEMON')){ctx.fillStyle='#ff0000';ctx.fillRect(22,3,3,3);ctx.fillRect(24,2,2,2);}
+      else if(n.includes('VENOM')||n.includes('ACID')){ctx.fillStyle='#00ff44';ctx.fillRect(4,8,2,8);ctx.fillRect(10,12,2,4);}
+      else if(n.includes('DUST')||n.includes('SMOKE')){ctx.fillStyle='rgba(180,140,80,.5)';ctx.fillRect(0,0,W,H);}
+      else if(n.includes('NOVA')||n.includes('SPARK')){ctx.fillStyle='#ffffaa';ctx.fillRect(20,4,2,2);ctx.fillRect(24,6,2,2);ctx.fillRect(18,8,2,2);}
+      else if(n.includes('RUST')){ctx.fillStyle='#8B4513';ctx.fillRect(4,14,20,4);}
+      else if(n.includes('DIABLO')){ctx.fillStyle='#ff2200';ctx.fillRect(22,2,2,3);ctx.fillRect(25,2,2,3);}
+      else if(n.includes('BLOOD')||n.includes('MONEY')){ctx.fillStyle='#aa0000';ctx.fillRect(4,8,3,8);}
+      else if(n.includes('STREET')){ctx.fillStyle='#ff8800';ctx.fillRect(4,8,2,2);ctx.fillRect(8,8,2,2);}
+    },
+    _horseAccentFull(ctx,name,col,W,H){
+      const f=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,w,h);};
+      const n=name.toUpperCase();
+      if(n.includes('GHOST')){
+        // Transparent ghostly effect — white glow, faded body
+        ctx.globalAlpha=.4;f(8,20,32,16,'#ffffff');f(36,12,12,16,'#ffffff');ctx.globalAlpha=1;
+        f(44,10,4,3,'#aaccff');// glowing blue eyes
+        // Floating particles
+        f(6,10,3,3,'#ffffff88'.replace('88',''));ctx.globalAlpha=.3;f(4,8,4,4,'#fff');f(2,14,3,3,'#fff');ctx.globalAlpha=1;
+      } else if(n.includes('IRON')){
+        // Metal plates on body
+        f(10,20,8,8,'#999');f(20,20,8,8,'#aaa');f(30,20,8,8,'#888');
+        f(10,20,32,2,'#666');f(10,28,32,2,'#666');// plate seams
+        f(10,36,5,12,'#777');f(28,36,5,12,'#777');// armored legs
+        f(42,8,10,8,'#aaa');// metal helmet
+        f(36,12,3,16,'#666');// neck brace
+      } else if(n.includes('NIGHT')||n.includes('PHANTOM')){
+        // Dark with purple glow
+        ctx.globalAlpha=.6;f(0,0,W,H,'#110022');ctx.globalAlpha=1;
+        const gl=ctx.createRadialGradient(W/2,H/2,2,W/2,H/2,20);
+        gl.addColorStop(0,'rgba(100,0,200,.3)');gl.addColorStop(1,'transparent');
+        ctx.fillStyle=gl;ctx.fillRect(0,0,W,H);
+        f(44,10,3,3,'#aa44ff');// glowing purple eye
+      } else if(n.includes('GOLD')||n.includes('LUCKY')){
+        // Gold shimmer and crown
+        f(42,4,8,4,'#ffd700');// crown
+        f(43,3,2,2,'#ffd700');f(46,2,2,3,'#ffd700');f(49,3,2,2,'#ffd700');
+        // Gold sparkles
+        for(let i=0;i<6;i++){const sx=8+i*6,sy=16+~~(Math.random()*8);f(sx,sy,2,2,'#ffd700');}
+        f(44,10,3,3,'#ffee00');// bright eye
+      } else if(n.includes('BLADE')){
+        // Sleek black with blue edge lines
+        ctx.globalAlpha=.5;f(8,20,32,16,'#000');ctx.globalAlpha=1;
+        f(8,20,1,16,'#4488ff');f(40,20,1,16,'#4488ff');// edge highlights
+        f(36,12,1,16,'#4488ff');
+        f(44,10,3,3,'#4488ff');// blue eye
+      } else if(n.includes('CHROME')||n.includes('BULLET')){
+        // Chrome sheen
+        for(let i=0;i<4;i++){ctx.globalAlpha=.3+i*.1;f(8+i*6,20,6,16,'#ffffff');}ctx.globalAlpha=1;
+        f(44,10,3,3,'#cccccc');
+        f(36,12,12,4,'#ddd');// chrome neck highlight
+      } else if(n.includes('REAPER')){
+        // Skull motif + dark hood
+        ctx.globalAlpha=.7;f(8,20,32,16,'#111');ctx.globalAlpha=1;
+        f(44,8,6,7,'#e8e8e8');// skull face
+        f(45,9,2,2,'#000');f(48,9,2,2,'#000');// skull eyes
+        f(45,13,5,1,'#000');f(46,14,3,1,'#000');// skull teeth
+        f(6,14,4,14,'#222');// dark tail
+      } else if(n.includes('VENOM')){
+        // Green toxic drips
+        f(44,10,3,3,'#00ff44');
+        for(let i=0;i<5;i++)f(8+i*6,36,3,4+i%3,'#00aa22');// toxic leg drips
+        f(6,20,3,16,'#00aa22');
+      } else if(n.includes('ACID')){
+        // Dripping green acid
+        for(let i=0;i<8;i++){const ax=8+i*4;f(ax,26,3,6+~~(Math.random()*6),'#44ff00');ctx.globalAlpha=.5;f(ax-1,26,4,4,'#aaff00');ctx.globalAlpha=1;}
+        f(44,10,3,3,'#aaff00');
+      } else if(n.includes('DUST')){
+        // Dusty brown cloud
+        ctx.globalAlpha=.4;
+        for(let i=0;i<12;i++){f(~~(Math.random()*W),~~(Math.random()*H),4+~~(Math.random()*6),4+~~(Math.random()*4),'#c8a050');}
+        ctx.globalAlpha=1;f(44,10,3,3,'#cc9944');
+      } else if(n.includes('NOVA')){
+        // Electric sparks
+        f(44,10,3,3,'#ffffaa');
+        const sparks=[[10,18],[20,15],[30,18],[38,22],[15,32],[25,28]];
+        sparks.forEach(([sx,sy])=>{f(sx,sy,2,2,'#ffffaa');f(sx-1,sy+1,1,1,'#ffaa00');f(sx+1,sy-1,1,1,'#ffffff');});
+      } else if(n.includes('RUST')){
+        // Rusty texture
+        const rs=['#8B2500','#6B1a00','#aa3300','#772200'];
+        for(let i=0;i<20;i++)f(8+~~(Math.random()*34),20+~~(Math.random()*16),3,3,rs[~~(Math.random()*rs.length)]);
+        f(44,10,3,3,'#ff4400');
+      } else if(n.includes('DIABLO')){
+        // Red devil horns and fire
+        f(42,4,3,5,'#ff2200');f(46,3,3,5,'#ff2200');// horns
+        f(44,10,3,3,'#ff0000');// red eyes
+        for(let i=0;i<5;i++){const fx=8+i*6;f(fx,32,4,4+i,'#ff4400');ctx.globalAlpha=.6;f(fx,32,4,2,'#ffaa00');ctx.globalAlpha=1;}
+      } else if(n.includes('SILENT')){
+        // Dark silhouette, barely visible
+        ctx.globalAlpha=.8;f(0,0,W,H,'#050510');ctx.globalAlpha=1;
+        f(44,10,3,3,'#ff2200');// red scope eye
+        const gl2=ctx.createRadialGradient(44,10,1,44,10,8);
+        gl2.addColorStop(0,'rgba(255,0,0,.4)');gl2.addColorStop(1,'transparent');
+        ctx.fillStyle=gl2;ctx.fillRect(36,4,16,14);
+      } else if(n.includes('BLOOD')){
+        // Red splatter effect
+        ctx.fillStyle='#aa0000';
+        for(let i=0;i<8;i++){const bx=~~(Math.random()*W),by=~~(Math.random()*H);ctx.beginPath();ctx.arc(bx,by,1+~~(Math.random()*3),.0,Math.PI*2);ctx.fill();}
+        f(44,10,3,3,'#ff0000');
+      } else if(n.includes('SMOKE')){
+        // Smoke clouds
+        ctx.globalAlpha=.5;
+        for(let i=0;i<10;i++){ctx.fillStyle='#888';ctx.beginPath();ctx.arc(4+~~(Math.random()*W*.8),4+~~(Math.random()*H*.8),3+~~(Math.random()*6),0,Math.PI*2);ctx.fill();}
+        ctx.globalAlpha=1;f(44,10,3,3,'#aaa');
+      } else if(n.includes('STREET')){
+        // Graffiti tag strips
+        f(10,20,4,16,'#ff8800');f(18,20,4,16,'#ff2200');f(26,20,4,16,'#ffee00');
+        f(44,10,3,3,'#ff8800');
+      }
+    },
     _finish(winner,horses){
-      this._racing=false;
       const won=winner===this._pick;
       const h=horses[winner];
       const earn=won?~~(this._bet*h.odds):0;
@@ -8153,17 +8383,18 @@ function showBanner(msg,dur=2000){
 
 // ── WHAT'S NEW — rendered into main menu ──────────────────────────────
 const UPDATES=[
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Fishing holes in flooded/subway/industrial zones — 15 toxic fish to catch'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Underground Casino — Blackjack, Slots, Video Poker, Lucky Wheel, Horse Racing'},
-  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Enemies no longer one-shot you in Zone 1 — graduated difficulty across zones'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Soft aim assist on mobile — bullets nudge toward nearest enemy in your cone'},
-  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Hub RESUME button — return to active mission without deploying a new one'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Auto-equip best gear button in Stash tab'},
-  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'ZERO badge now visible on front of all armor types'},
-  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Minimap shows corridors and room types in color'},
-  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Blood splatter + fading pool decals on enemy death'},
-  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Colored loot beams — white to red by rarity'},
-  {date:'RECENT',tag:'FIX',col:'#3498db',text:'Character creator selections appear on deployed agent'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Hub tycoon — buy land, build your base room by room. Walk pads to purchase.'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Quest system — NPC quests every 2 zones with story dialogue and rewards'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Dragonborn + Commander Shepard mercs — FUS RO DAH shout & Biotic Charge'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Dreads hair replaced with Taper Fade — no more broken geometry'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Grenade throw distance reduced — no more yeet into next county'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Goldeneye track rattling fixed — rimshot volume reduced'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'FATE-style grave system — all bag items drop, walk over marker to recover'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Revive now spawns next to your gravestone, enemies respawn without resetting map'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Dragonborn, Shepard & George Droid — 8 total mercs with unique abilities'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Exit portal — kill all enemies, find the portal to advance to the next zone'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Progressive zone scaling — maps get bigger every zone you survive'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Fishing holes in flooded/subway/industrial zones — 15 toxic fish'},
 ];
 
 function _renderWhatsNew(){
@@ -8197,6 +8428,464 @@ function unlockAudio(){
 
 // Init systems that depend on late-defined objects
 CharCreator.init();
+// =====================================================================
+//  HUB WORLD — 3D interactive hub (replaces menu overlay)
+// =====================================================================
+const HubWorld={
+  _built:false,
+  _npcs:[], // {pos, label, panel, mesh}
+  _currentPanel:null,
+
+  // NPC definitions — where they stand and what panel they open
+  NPC_DEFS:[
+    {label:'MISSION TERMINAL',panel:'intel',x:-8,z:0,col:0xe67e22},
+    {label:'WEAPON DEALER',panel:'market',x:-4,z:5,col:0xe74c3c},
+    {label:'ARMOR VENDOR',panel:'armory',x:4,z:5,col:0x3498db},
+    {label:'SKILLS TRAINER',panel:'skills',x:8,z:0,col:0x2ecc71},
+    {label:'STASH',panel:'stash',x:8,z:-5,col:0x9b59b6},
+    {label:'MERCS',panel:'mercs',x:-8,z:-5,col:0xf39c12},
+    {label:'CASINO',panel:'casino',x:0,z:8,col:0xffd700},
+    {label:'STYLE',panel:'style',x:-4,z:-8,col:0xff88cc},
+    {label:'BATTLE PASS',panel:'pass',x:4,z:-8,col:0xffd700},
+  ],
+
+  build(){
+    if(this._built)return;
+    this._built=true;
+
+    // ── Generate a simple flat hub map using Map3D infrastructure ──────
+    // Override Map3D with a simple 32x32 all-floor grid (no rooms, no enemies)
+    const G=32;
+    Map3D._G=G;
+    const g=Array.from({length:G},()=>new Uint8Array(G).fill(1)); // all walkable
+    Map3D.grid=g;
+    Map3D.rooms=[{x:2,z:2,w:28,h:28,type:'start'}]; // one big open room
+    Map3D.spawnPts=[]; // NO spawn points — no enemies in hub
+    Map3D.collidables=[];Map3D.coverPts=[];Map3D.furniture=[];Map3D.fishingHoles=[];
+    Map3D.lights.forEach(l=>scene.remove(l));Map3D.lights=[];
+    Loot.chests=[];Loot.drops=[];
+
+    if(Map3D.group)scene.remove(Map3D.group);
+    Map3D.group=new THREE.Group();scene.add(Map3D.group);
+
+    // Simple hub floor and walls using Map3D._buildMesh with the open grid
+    Map3D._buildMesh(g,G);
+
+    // ── Now build hub world objects on top ─────────────────────────────
+    const G3=new THREE.Group();G3.name='hub_world';
+    const off=-(G/2)*8; // world offset
+
+    // Central fountain — SOLID base (collision via high position), animated water
+    const base=new THREE.Mesh(new THREE.CylinderGeometry(2.5,2.8,.6,8),new THREE.MeshLambertMaterial({color:0x334455}));
+    base.position.set(0,.3,0);G3.add(base);
+    // Solid pillar — player can't walk through
+    const pillar=new THREE.Mesh(new THREE.CylinderGeometry(.4,.4,3,8),new THREE.MeshLambertMaterial({color:0x445566}));
+    pillar.position.set(0,1.8,0);G3.add(pillar);
+    const cap=new THREE.Mesh(new THREE.CylinderGeometry(.8,.4,.5,8),new THREE.MeshLambertMaterial({color:0x556677}));
+    cap.position.set(0,3.25,0);G3.add(cap);
+    // Water bowl — static, no flicker (MeshBasicMaterial stays constant)
+    const bowl=new THREE.Mesh(new THREE.CylinderGeometry(2.2,.1,.3,12),new THREE.MeshLambertMaterial({color:0x1a1a2a}));
+    bowl.position.set(0,.55,0);G3.add(bowl);
+    const waterMesh=new THREE.Mesh(new THREE.CylinderGeometry(2.0,2.0,.08,12),new THREE.MeshBasicMaterial({color:0x0055cc,transparent:true,opacity:.8}));
+    waterMesh.position.set(0,.7,0);G3.add(waterMesh);
+    // Fountain collision block — invisible solid cylinder represented as 4 boxes
+    Map3D.furniture.push({userData:{solidBB:{min:{x:-2.8,y:0,z:-2.8},max:{x:2.8,y:4,z:2.8}}}});
+    // Fountain point light — static intensity, no flicker (noFlicker flag)
+    const gl0=new THREE.PointLight(0x4488ff,1.2,12);gl0.position.set(0,2,0);gl0.userData.noFlicker=true;G3.add(gl0);
+    // Animated water particles stored for update
+    this._fountainT=0;
+
+    // NPC stalls arranged in a circle around the fountain
+    const radius=10;
+    this._npcs=[];
+    this.NPC_DEFS.forEach((def,i)=>{
+      const angle=(i/this.NPC_DEFS.length)*Math.PI*2;
+      const nx=Math.sin(angle)*radius;
+      const nz=Math.cos(angle)*radius;
+      // Stall
+      const stall=new THREE.Mesh(new THREE.BoxGeometry(2.5,2.5,2),new THREE.MeshLambertMaterial({color:0x1a1a2a}));
+      stall.position.set(nx,1.25,nz);G3.add(stall);
+      const sign=new THREE.Mesh(new THREE.BoxGeometry(2.6,.4,2.1),new THREE.MeshLambertMaterial({color:def.col}));
+      sign.position.set(nx,2.8,nz);G3.add(sign);
+      // NPC figure facing inward
+      const npcG=new THREE.Group();
+      const inwardAngle=Math.atan2(-nx,-nz);
+      npcG.rotation.y=inwardAngle;
+      npcG.position.set(nx,0,nz);
+      const torso=new THREE.Mesh(new THREE.BoxGeometry(.5,.9,.4),new THREE.MeshLambertMaterial({color:def.col}));
+      torso.position.y=.8;npcG.add(torso);
+      const head=new THREE.Mesh(new THREE.BoxGeometry(.4,.4,.38),new THREE.MeshLambertMaterial({color:0xc8a882}));
+      head.position.y=1.5;npcG.add(head);
+      const ll=new THREE.Mesh(new THREE.BoxGeometry(.2,.6,.22),new THREE.MeshLambertMaterial({color:0x1a1a2a}));ll.position.set(-.16,.25,0);npcG.add(ll);
+      const rl=ll.clone();rl.position.set(.16,.25,0);npcG.add(rl);
+      G3.add(npcG);
+      const nl=new THREE.PointLight(def.col,.6,5);nl.position.set(nx,.8,nz);G3.add(nl);
+      this._npcs.push({x:nx,z:nz,label:def.label,panel:def.panel});
+    });
+
+    // Fishing hole — south of fountain
+    const fhBase=new THREE.Mesh(new THREE.BoxGeometry(3,.1,3),new THREE.MeshBasicMaterial({color:0x001133,transparent:true,opacity:.8}));
+    fhBase.position.set(0,.05,16);G3.add(fhBase);
+    const fhRim=new THREE.Mesh(new THREE.BoxGeometry(3.2,.2,3.2),new THREE.MeshLambertMaterial({color:0x1a1a1a}));
+    fhRim.position.set(0,.1,16);G3.add(fhRim);
+    const fhGl=new THREE.PointLight(0x00ff88,1.2,6);fhGl.position.set(0,1,16);fhGl.userData.noFlicker=true;G3.add(fhGl);
+    this._npcs.push({x:0,z:16,label:'🎣 FISH HERE',panel:'fishing'});
+
+    // Tycoon area — furthest south, clearly labeled with green glow pads
+    const tyFloor=new THREE.Mesh(new THREE.BoxGeometry(24,.15,16),new THREE.MeshLambertMaterial({color:0x0a180a}));
+    tyFloor.position.set(0,.07,28);G3.add(tyFloor);
+    // Tycoon border
+    [[0,20,24,.2],[0,36,24,.2],[11,28,.2,16],[-11,28,.2,16]].forEach(([x,z,w,d])=>{
+      const b=new THREE.Mesh(new THREE.BoxGeometry(w,.6,d),new THREE.MeshLambertMaterial({color:0x1a3a1a}));
+      b.position.set(x,.3,z);G3.add(b);
+    });
+    // Sign post
+    const tyPost=new THREE.Mesh(new THREE.BoxGeometry(.2,2,.2),new THREE.MeshLambertMaterial({color:0x335533}));
+    tyPost.position.set(0,1,21);G3.add(tyPost);
+    const tyGl=new THREE.PointLight(0x00ff44,.8,14);tyGl.position.set(0,2,28);tyGl.userData.noFlicker=true;G3.add(tyGl);
+    this._npcs.push({x:0,z:21,label:'⬡ BASE UPGRADES',panel:'tycoon'});
+
+    // Zone portal — north end behind vendors
+    const pMat=new THREE.MeshBasicMaterial({color:0x00aaff});
+    const lp=new THREE.Mesh(new THREE.BoxGeometry(.3,3.5,.3),pMat);lp.position.set(-1,1.75,-16);G3.add(lp);
+    const rp=new THREE.Mesh(new THREE.BoxGeometry(.3,3.5,.3),pMat);rp.position.set(1,1.75,-16);G3.add(rp);
+    const tp=new THREE.Mesh(new THREE.BoxGeometry(2.4,.3,.3),pMat);tp.position.set(0,3.5,-16);G3.add(tp);
+    const pFace=new THREE.Mesh(new THREE.BoxGeometry(1.8,3.2,.05),new THREE.MeshBasicMaterial({color:0x0033cc,transparent:true,opacity:.6}));
+    pFace.position.set(0,1.6,-16);G3.add(pFace);
+    const pGl=new THREE.PointLight(0x0066ff,2,8);pGl.position.set(0,2,-16);pGl.userData.noFlicker=true;G3.add(pGl);
+    this._npcs.push({x:0,z:-16,label:'↩ RETURN TO ZONE',panel:'zone_portal'});
+    scene.add(G3);this._group=G3;
+    const amb=new THREE.AmbientLight(0x445566,.9);amb.name='hub_ambient';scene.add(amb);
+  },
+
+  enter(){
+    try{this.build();}catch(e){console.warn('HubWorld.build error:',e.message);}
+    // Clear mission state — hub is a safe zone
+    try{Enemies.list.forEach(e=>scene.remove(e.mesh));Enemies.list=[];}catch(e){}
+    try{Bullets.pool.forEach(b=>{b.active=false;b.mesh&&(b.mesh.visible=false);});}catch(e){}
+    try{Loot.drops.forEach(d=>{scene.remove(d.mesh);if(d.glow)scene.remove(d.glow);});Loot.drops=[];}catch(e){}
+    try{Loot.chests.forEach(c=>scene.remove(c));Loot.chests=[];}catch(e){}
+    try{if(Boss.active){scene.remove(Boss.active.mesh);Boss.active=null;document.getElementById('boss-bar').style.display='none';}}catch(e){}
+    try{Grenades.list.forEach(g=>scene.remove(g.mesh));Grenades.list=[];}catch(e){}
+    const wh=document.getElementById('hub-world-hud');if(wh)wh.style.display='block';
+    const hud=document.getElementById('hud');if(hud)hud.style.display='none';
+    // Hide zone-specific UI — use correct element IDs
+    ['zone-info','pause-btn','btn-hub','fishing-prompt','wave-banner','boss-bar'].forEach(id=>{
+      const el=document.getElementById(id);if(el)el.style.display='none';
+    });
+    const mm=document.getElementById('minimap-container');if(mm)mm.style.display='none';
+    // Hide combat UI
+    ['weapon-hud','skill-bar','btn-fire','btn-roll','btn-reload'].forEach(id=>{
+      const el=document.getElementById(id);if(el){el.style.opacity='0';el.style.pointerEvents='none';}
+    });
+    const cr=document.getElementById('hub-world-credits');if(cr)cr.textContent=Player.credits;
+    // Place player at hub entrance
+    if(Player.mesh){
+      Player.mesh.position.set(0,0,-10);
+      camera.position.copy(Player.mesh.position).add(CAM_OFF);
+      _camLook.copy(Player.mesh.position);camera.lookAt(_camLook);
+    }
+    gameRunning=true;
+    try{_updateHubContinueBtn();}catch(e){}
+    try{HubSystem.refresh();}catch(e){console.warn('HubSystem.refresh err:',e.message);}
+  },
+
+  leave(){
+    const wh=document.getElementById('hub-world-hud');if(wh)wh.style.display='none';
+    const hud=document.getElementById('hud');if(hud)hud.style.display='block';
+    ['zone-info','pause-btn','btn-hub'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='';});
+    const mm=document.getElementById('minimap-container');if(mm)mm.style.display='';
+    ['weapon-hud','skill-bar','btn-fire','btn-roll','btn-reload'].forEach(id=>{const el=document.getElementById(id);if(el){el.style.opacity='1';el.style.pointerEvents='';}});
+    const ip=document.getElementById('hub-interact-prompt');if(ip)ip.style.display='none';
+    this.closePanel();
+  },
+
+  update(){
+    if(gameState!==GS.HUB||!Player.mesh)return;
+    const cr=document.getElementById('hub-world-credits');if(cr)cr.textContent=Player.credits;
+    const prompt=document.getElementById('hub-interact-prompt');
+    // Never show prompt when a panel is open
+    if(this._currentPanel){if(prompt)prompt.style.display='none';return;}
+    const pp=Player.mesh.position;
+    let nearest=null,nearestD=999;
+    for(const npc of this._npcs){
+      const dx=pp.x-npc.x,dz=pp.z-npc.z;
+      const d=Math.sqrt(dx*dx+dz*dz);
+      if(d<4&&d<nearestD){nearestD=d;nearest=npc;}
+    }
+    if(nearest){
+      if(prompt){
+        prompt.style.display='block';
+        prompt.textContent='[TAP] '+nearest.label;
+        prompt.onclick=()=>this.openPanel(nearest.panel,nearest.label);
+        prompt.ontouchend=(e)=>{e.preventDefault();this.openPanel(nearest.panel,nearest.label);};
+      }
+    } else {
+      if(prompt){prompt.style.display='none';prompt.onclick=null;}
+    }
+  },
+
+  openPanel(panel,label){
+    if(this._currentPanel===panel)return;
+    this._currentPanel=panel;
+    const prompt=document.getElementById('hub-interact-prompt');
+    if(prompt)prompt.style.display='none';
+    if(panel==='fishing'){try{Fishing.openNearest();}catch(e){}this._currentPanel=null;return;}
+    if(panel==='zone_portal'){try{hubReturnToMission();}catch(e){}this._currentPanel=null;return;}
+    const overlay=document.getElementById('hub-panel-overlay');
+    const titleEl=document.getElementById('hub-panel-overlay-title');
+    const content=document.getElementById('hub-panel-overlay-content');
+    if(!overlay||!content)return;
+    const themes={intel:{icon:'◈',col:'#e67e22'},market:{icon:'⚔',col:'#e74c3c'},armory:{icon:'⬡',col:'#3498db'},skills:{icon:'⚡',col:'#2ecc71'},stash:{icon:'⬡',col:'#9b59b6'},mercs:{icon:'★',col:'#f39c12'},casino:{icon:'◆',col:'#ffd700'},style:{icon:'✦',col:'#ff88cc'},pass:{icon:'★',col:'#ffd700'},arena:{icon:'⚔',col:'#e74c3c'},tycoon:{icon:'⬡',col:'#00aa44'}};
+    const t=themes[panel]||{icon:'◈',col:'#e67e22'};
+    if(titleEl){titleEl.textContent=t.icon+' '+label;titleEl.style.color=t.col;}
+    overlay.style.background='rgba(0,0,0,.92)';
+    overlay.style.display='flex';
+    gameRunning=false;
+    // Clear previous content
+    while(content.firstChild)content.removeChild(content.firstChild);
+    // Special cases
+    if(panel==='tycoon'){this._renderTycoon(content);return;}
+    // Map panel id
+    const panelMap={intel:'hub-intel',market:'hub-market',armory:'hub-armory',skills:'hub-skills',stash:'hub-stash',mercs:'hub-mercs',casino:'hub-casino',style:'hub-style',pass:'hub-pass',arena:'hub-arena'};
+    const srcId=panelMap[panel];
+    if(!srcId)return;
+    const src=document.getElementById(srcId);
+    if(!src)return;
+    // Move the actual panel div into the overlay (not a clone — preserves canvas/element refs)
+    src.style.display='block';
+    content.appendChild(src);
+    this._movedPanel=src; // remember to move it back on close
+    // Refresh the panel content now that it's visible and in DOM
+    try{
+      if(panel==='intel'){HubSystem.renderMissions();_updateHubContinueBtn();}
+      else if(panel==='market')HubSystem.renderMarket();
+      else if(panel==='armory')HubSystem.renderArmory();
+      else if(panel==='skills')HubSystem.renderSkills();
+      else if(panel==='stash'){HubSystem.renderStash();StashShop.updateUI();}
+      else if(panel==='mercs')HubSystem.renderMercs();
+      else if(panel==='casino'){Casino.open();}
+      else if(panel==='style')StyleSystem.render();
+      else if(panel==='pass')BattlePass.renderHub();
+      else if(panel==='arena')HubSystem.renderArena();
+    }catch(ex){console.warn('panel render err:',ex.message);}
+  },
+
+  _closedAt:0,
+
+  _renderTycoon(container){
+    HubTycoon.load();
+    container.innerHTML='<div style="font-size:9px;letter-spacing:3px;color:#00aa44;margin-bottom:12px;font-family:\'Courier New\',monospace">WALK OVER PADS IN THE SOUTH AREA TO BUILD</div>';
+    const grid=document.createElement('div');grid.style.cssText='display:flex;flex-direction:column;gap:6px';
+    const cats={foundation:['FOUNDATION TIER'],infrastructure:['INFRASTRUCTURE'],combat:['COMBAT UPGRADES'],comfort:['COMFORT & AMENITIES'],advanced:['ADVANCED UPGRADES']};
+    HubTycoon.UPGRADES.forEach(u=>{
+      const owned=HubTycoon.owns(u.id);
+      const canBuy=!u.requires||HubTycoon.owns(u.requires);
+      const row=document.createElement('div');
+      row.style.cssText=`display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid ${owned?'rgba(0,255,68,.25)':canBuy?'rgba(255,255,255,.1)':'rgba(255,255,255,.04)'};background:${owned?'rgba(0,100,30,.1)':'rgba(0,0,0,.2)'}`;
+      const icon=document.createElement('div');icon.style.cssText=`width:10px;height:10px;background:${owned?'#00ff44':canBuy?'#446644':'#223322'};flex-shrink:0;border-radius:50%`;
+      const info=document.createElement('div');info.style.flex='1';
+      info.innerHTML=`<div style="font-size:10px;color:${owned?'#00ff44':canBuy?'#bcc8d4':'#445'};font-family:'Courier New',monospace">${u.name}</div><div style="font-size:8px;color:#556;font-family:'Courier New',monospace">${u.desc}</div>`;
+      const price=document.createElement('div');price.style.cssText=`font-size:10px;color:${owned?'#00ff44':'#ffd700'};font-family:'Courier New',monospace;flex-shrink:0`;
+      price.textContent=owned?'BUILT':u.price+' CR';
+      row.appendChild(icon);row.appendChild(info);row.appendChild(price);
+      if(canBuy&&!owned){
+        const btn=document.createElement('button');
+        btn.style.cssText='padding:6px 10px;border:1px solid #00aa44;background:transparent;color:#00ff44;font-family:\'Courier New\',monospace;font-size:8px;cursor:pointer;touch-action:manipulation';
+        btn.textContent='BUILD';
+        btn.onclick=()=>{HubTycoon.buy(u.id);this._renderTycoon(container);};
+        btn.ontouchend=(e)=>{e.preventDefault();HubTycoon.buy(u.id);this._renderTycoon(container);};
+        row.appendChild(btn);
+      }
+      grid.appendChild(row);
+    });
+    container.appendChild(grid);
+  },
+
+  closePanel(){
+    this._currentPanel=null;
+    this._closedAt=Date.now();
+    // Move the panel div back to its original hidden container
+    if(this._movedPanel){
+      const dest=document.getElementById('hub-screen-inner');
+      if(dest){dest.appendChild(this._movedPanel);this._movedPanel.style.display='';}
+      this._movedPanel=null;
+    }
+    const overlay=document.getElementById('hub-panel-overlay');
+    if(overlay)overlay.style.display='none';
+    gameRunning=(gameState===GS.HUB);
+  },
+};
+// =====================================================================
+const Quests={
+  KEY:'az_quests',
+  active:null,
+  completed:[],
+  POOL:[
+    {id:'q1',zone:1,title:'SWEEP THE SECTOR',npc:'DISPATCH',
+     open:['Agent Zero. Intel reports hostiles in Sector Alpha. Clear them out.','"This is a test run. Show us what you\'ve got."','Objective: Eliminate all enemies in Zone 1.'],
+     close:['Zone secured. Good work, Zero.','Reward dispatched to your account.'],
+     reward:{credits:150,xp:200},type:'killAll'},
+    {id:'q2',zone:3,title:'RETRIEVE THE CACHE',npc:'QUARTERMASTER',
+     open:['We left a supply cache somewhere in Zone 3.','It\'s marked on your minimap. Find a chest and loot it.','Bring back anything useful.'],
+     close:['That\'s the stuff. Weapons-grade material.','Take the bonus.'],
+     reward:{credits:300,xp:400,weapon:true},type:'openChest'},
+    {id:'q3',zone:5,title:'HUNT THE ELITE',npc:'HANDLER',
+     open:['There\'s an Elite operative leading the resistance in Zone 5.','Marked target. High value. Eliminate on sight.','Don\'t let it reach the extraction point.'],
+     close:['Target neutralized. The resistance loses a commander.','The coin\'s in your account.'],
+     reward:{credits:500,xp:600},type:'killElite'},
+    {id:'q4',zone:7,title:'SCORCHED EARTH',npc:'GENERAL KADE',
+     open:['We\'re going loud, Zero. No survivors. No witnesses.','Every hostile in Zone 7 dies tonight.','This is off the books. Don\'t miss.'],
+     close:['Clean. Efficient. You\'re becoming a legend.','Don\'t spend it all in one place.'],
+     reward:{credits:750,xp:900},type:'killAll'},
+    {id:'q5',zone:10,title:'THE NEXUS BREACH',npc:'ORACLE',
+     open:['I\'ve been watching you, Zero. You\'re different.','The Nexus is the source of everything wrong with this sector.','Breach Zone 10. Find the boss. End it.'],
+     close:['The Nexus falls. The sector breathes again.','This isn\'t over. But you knew that.'],
+     reward:{credits:1200,xp:1500,weapon:true},type:'killBoss'},
+  ],
+  load(){try{const d=JSON.parse(localStorage.getItem(this.KEY));if(d){this.completed=d.completed||[];}}catch{}},
+  save(){try{localStorage.setItem(this.KEY,JSON.stringify({completed:this.completed}));}catch{}},
+  check(){
+    this.load();
+    const z=Zone.zone;
+    const q=this.POOL.find(q=>q.zone===z&&!this.completed.includes(q.id)&&!this.active);
+    if(q)this._start(q);
+  },
+  _start(q){
+    this.active=q;
+    this._showDialog(q.npc,q.open,q.title,'START');
+  },
+  complete(){
+    if(!this.active)return;
+    const q=this.active;
+    this.completed.push(q.id);
+    this.active=null;
+    this.save();
+    const r=q.reward;
+    if(r.credits){Player.credits+=r.credits;try{UI.credit(Player.credits);}catch(e){}}
+    if(r.xp)try{Player.gainXP(r.xp);}catch(e){}
+    if(r.weapon)try{Player.pickupWeapon(Loot.genWeapon('RARE'));}catch(e){}
+    this._showDialog(q.npc,q.close,q.title+' — COMPLETE','DONE');
+    showBanner('QUEST COMPLETE: '+q.title+' +'+r.credits+' CR');
+  },
+  checkProgress(){
+    if(!this.active)return;
+    const q=this.active;
+    if(q.type==='killAll'&&!Enemies.list.some(e=>e.alive))this.complete();
+    if(q.type==='killBoss'&&Boss&&!Boss.active&&Zone.zone>=q.zone)this.complete();
+  },
+  _showDialog(npc,lines,title,btnLabel){
+    const d=document.getElementById('quest-dialog');if(!d)return;
+    const nameEl=document.getElementById('quest-npc-name');
+    const textEl=document.getElementById('quest-dialog-text');
+    const titleEl=document.getElementById('quest-title');
+    const btn=document.getElementById('quest-btn');
+    if(nameEl)nameEl.textContent=npc;
+    if(titleEl)titleEl.textContent=title;
+    let idx=0;
+    const show=()=>{if(textEl)textEl.textContent=lines[idx]||'';};
+    show();
+    if(btn){
+      btn.textContent=idx<lines.length-1?'NEXT':btnLabel;
+      btn.onclick=()=>{
+        idx++;
+        if(idx<lines.length){show();btn.textContent=idx<lines.length-1?'NEXT':btnLabel;}
+        else{d.style.display='none';gameRunning=(gameState===GS.MISSION);}
+      };
+      btn.ontouchend=(e)=>{e.preventDefault();btn.onclick();};
+    }
+    d.style.display='flex';
+    gameRunning=false;
+  },
+};
+
+// =====================================================================
+//  HUB TYCOON — buy land, build your base
+// =====================================================================
+const HubTycoon={
+  KEY:'az_tycoon',
+  _mesh:null,
+  data:{landBought:false,upgrades:{}},
+  UPGRADES:[
+    // Foundation Tier
+    {id:'land',name:'BUY THE LAND',price:500,col:0x2a4a2a,desc:'Claim your plot in Shadow City. Unlocks all construction.',requires:null},
+    {id:'foundation',name:'CONCRETE FOUNDATION',price:300,col:0x3a3a3a,desc:'Solid base. Required for everything.',requires:'land'},
+    {id:'walls',name:'REINFORCED WALLS',price:500,col:0x4a4a4a,desc:'Bullet-resistant panels. Actual walls.',requires:'foundation'},
+    {id:'roof',name:'ARMORED ROOF',price:400,col:0x5a3a1a,desc:'Keeps the acid rain out.',requires:'walls'},
+    {id:'door',name:'BLAST DOOR',price:250,col:0x334455,desc:'Armored entry. Keypad access.',requires:'walls'},
+    {id:'floor_tiles',name:'FLOOR TILES',price:200,col:0x2a2a3a,desc:'Tactical grip flooring.',requires:'foundation'},
+    // Infrastructure
+    {id:'generator',name:'GENERATOR',price:600,col:0x2a2a2a,desc:'Powers all electrical upgrades.',requires:'walls'},
+    {id:'lighting',name:'INTERIOR LIGHTING',price:200,col:0x4a4a2a,desc:'LED tactical lighting rig.',requires:'generator'},
+    {id:'ventilation',name:'VENTILATION SYSTEM',price:350,col:0x3a3a4a,desc:'Filters toxic air. Passive +5 HP regen zone.',requires:'generator'},
+    {id:'security',name:'SECURITY CAMERAS',price:400,col:0x1a2a3a,desc:'Notifies of incoming threats. Minimap range +20%.',requires:'generator'},
+    // Combat Upgrades
+    {id:'workbench',name:'WEAPON WORKBENCH',price:350,col:0x4a2a0a,desc:'Modify weapons between zones. +5% damage.',requires:'foundation'},
+    {id:'ammo_press',name:'AMMO PRESS',price:450,col:0x3a2010,desc:'Start each zone with full ammo.',requires:'workbench'},
+    {id:'turret',name:'AUTO TURRET',price:800,col:0x3a0a0a,desc:'Automated defense. Shoots intruders.',requires:'generator'},
+    {id:'armory_rack',name:'ARMORY RACK',price:500,col:0x2a1a3a,desc:'Store 2 extra weapons between zones.',requires:'walls'},
+    {id:'grenade_bench',name:'GRENADE WORKBENCH',price:400,col:0x3a2a0a,desc:'Craft grenades. Start each zone with 2.',requires:'workbench'},
+    {id:'medstation',name:'MED STATION',price:450,col:0x0a3a0a,desc:'Full HP restore when entering hub.',requires:'walls'},
+    // Stash & Storage
+    {id:'stash_locker',name:'STASH LOCKER',price:400,col:0x1a3a4a,desc:'Stash +4 bag slots.',requires:'foundation'},
+    {id:'stash_ext1',name:'STASH EXTENSION I',price:600,col:0x1a4a5a,desc:'Stash +4 more slots.',requires:'stash_locker'},
+    {id:'stash_ext2',name:'STASH EXTENSION II',price:900,col:0x2a5a6a,desc:'Stash +4 more slots. Max size.',requires:'stash_ext1'},
+    {id:'weapon_locker',name:'WEAPON LOCKER',price:500,col:0x2a3a4a,desc:'Permanently store 3 weapons.',requires:'stash_locker'},
+    // Comfort & Amenities
+    {id:'fishing_hole',name:'FISHING HOLE',price:450,col:0x003322,desc:'Private fishing spot in your base.',requires:'land'},
+    {id:'cantina',name:'CANTINA',price:600,col:0x3a2a1a,desc:'Rest area. Passive +10% XP per zone.',requires:'floor_tiles'},
+    {id:'radio',name:'INTEL RADIO',price:300,col:0x1a2a1a,desc:'Better intel. Quest rewards +25%.',requires:'lighting'},
+    {id:'map_table',name:'TACTICAL MAP TABLE',price:500,col:0x1a2a3a,desc:'Minimap always visible in full detail.',requires:'lighting'},
+    {id:'merc_bunk',name:'MERC BUNK ROOM',price:600,col:0x2a1a2a,desc:'Mercs cost 15% less to hire.',requires:'walls'},
+    // Advanced Tier
+    {id:'lab',name:'RESEARCH LAB',price:1000,col:0x1a1a3a,desc:'Unlock exotic weapon blueprints.',requires:'generator'},
+    {id:'drone_bay',name:'DRONE BAY',price:1200,col:0x0a2a3a,desc:'Deploy scout drones. Enemy positions revealed.',requires:'lab'},
+    {id:'vault',name:'CREDIT VAULT',price:1500,col:0x3a2a0a,desc:'Store up to 10k CR. Interest: +1% per zone.',requires:'security'},
+    {id:'command_center',name:'COMMAND CENTER',price:2000,col:0x1a0a2a,desc:'All bonuses +10%. Zone portal cooldown removed.',requires:'lab'},
+    {id:'penthouse',name:'PENTHOUSE UPGRADE',price:3000,col:0x2a1a1a,desc:'Max everything. ZERO badge glows gold.',requires:'command_center'},
+  ],
+  load(){try{const d=JSON.parse(localStorage.getItem(this.KEY));if(d)this.data=d;}catch{this.data={landBought:false,upgrades:{}};}},
+  save(){try{localStorage.setItem(this.KEY,JSON.stringify(this.data));}catch{}},
+  owns(id){return!!this.data.upgrades[id];},
+  canAfford(u){return Player.credits>=u.price;},
+  buy(id){
+    const u=this.UPGRADES.find(u=>u.id===id);if(!u)return;
+    if(this.owns(id)){showBanner('ALREADY BUILT');return;}
+    if(u.requires&&!this.owns(u.requires)){showBanner('REQUIRES: '+u.requires.toUpperCase());return;}
+    if(!this.canAfford(u)){showBanner('NOT ENOUGH CREDITS — NEED '+u.price+' CR');return;}
+    Player.credits-=u.price;try{UI.credit(Player.credits);}catch(e){}
+    this.data.upgrades[id]=true;
+    if(id==='land')this.data.landBought=true;
+    if(id==='stash_upgrade')Armor.MAX_BAG=Math.min(24,Armor.MAX_BAG+4);
+    this.save();
+    this._buildInScene();
+    showBanner('BUILT: '+u.name);
+    try{Audio.uiClick();}catch(e){}
+    Save.save();
+  },
+  _buildInScene(){
+    // Remove old tycoon meshes
+    if(this._mesh){try{scene.remove(this._mesh);}catch(e){}}_this=this;
+    const g=new THREE.Group();
+    this.UPGRADES.forEach(u=>{
+      if(!this.owns(u.id)){
+        // Show purchase pad — glowing floor tile with price
+        const pad=new THREE.Mesh(new THREE.BoxGeometry(u.w,0.1,u.d),new THREE.MeshBasicMaterial({color:0x003300,transparent:true,opacity:.7}));
+        pad.position.set(u.x,0.05,u.z);pad.userData.tycoonId=u.id;pad.userData.isTycoonPad=true;g.add(pad);
+        const rim=new THREE.Mesh(new THREE.BoxGeometry(u.w+.1,0.05,u.d+.1),new THREE.MeshBasicMaterial({color:0x00aa44,transparent:true,opacity:.4}));
+        rim.position.set(u.x,0.08,u.z);g.add(rim);
+        // Floating price light
+        const gl=new THREE.PointLight(0x00ff44,.8,4);gl.position.set(u.x,1,u.z);g.add(gl);
+      } else {
+        // Built — show physical structure
+        const built=new THREE.Mesh(new THREE.BoxGeometry(u.w,1.5,u.d),new THREE.MeshLambertMaterial({color:u.col}));
+        built.position.set(u.x,.75,u.z);g.add(built);
+      }
+    });
+    scene.add(g);this._mesh=g;
+  },
+};
+
 StyleSystem.load();
 setTimeout(()=>PixelIcons.renderAll(),120);
 setTimeout(()=>_renderWhatsNew(),50);
