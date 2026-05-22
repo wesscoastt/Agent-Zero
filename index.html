@@ -897,6 +897,16 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
     <button class="mbtn" id="mb-new" onclick="menuNewGame()">NEW MISSION</button>
     <button class="mbtn" id="mb-load" onclick="menuLoad()">LOAD SAVE</button>
   </div>
+  <!-- WHAT'S NEW -->
+  <div id="whats-new" style="
+    margin-top:24px;width:88%;max-width:340px;
+    border:1px solid rgba(230,126,34,.18);
+    background:rgba(5,5,12,.85);
+    padding:14px 16px;
+  ">
+    <div style="font-size:8px;letter-spacing:4px;color:#e67e22;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,.06);padding-bottom:6px">◈ WHAT'S NEW</div>
+    <div id="whats-new-list" style="display:flex;flex-direction:column;gap:7px"></div>
+  </div>
 </div>
 
 <!-- LOGIN REWARD POPUP -->
@@ -1089,6 +1099,7 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
   </div>
   <div id="hub-stash" class="hub-panel">
     <div class="hub-section-title">STASH STORAGE <span id="stash-count" style="color:#334">(0/16)</span></div>
+    <button onclick="Player.autoEquipBest()" style="width:100%;padding:11px;border:1px solid rgba(230,126,34,.35);background:rgba(230,126,34,.08);color:#e67e22;font-family:'Courier New',monospace;font-size:10px;letter-spacing:3px;cursor:pointer;margin-bottom:10px;-webkit-tap-highlight-color:transparent">⬆ AUTO-EQUIP BEST GEAR</button>
     <div class="stash-grid" id="stash-grid"></div>
   </div>
   <div id="hub-arena" class="hub-panel">
@@ -1370,7 +1381,7 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
   <div id="boss-bar"><div id="boss-name">BOSS</div><div id="boss-hp-wrap"><div id="boss-hp-fill"></div></div></div>
   <div id="autosave-indicator"></div>
   <div id="loot-log"></div>
-  <div id="fishing-prompt" style="display:none;position:fixed;bottom:calc(env(safe-area-inset-bottom,0px)+240px);left:50%;transform:translateX(-50%);background:rgba(0,20,10,.88);border:1px solid rgba(0,255,100,.4);padding:10px 20px;font-family:'Courier New',monospace;font-size:11px;letter-spacing:3px;color:#00ff88;cursor:pointer;z-index:16;align-items:center;gap:8px;white-space:nowrap;-webkit-tap-highlight-color:transparent" onclick="Fishing.open(document.getElementById('fishing-prompt')._hole)">🎣 FISH HERE</div>
+  <div id="fishing-prompt" style="display:none;position:fixed;bottom:calc(env(safe-area-inset-bottom,0px)+180px);left:50%;transform:translateX(-50%);background:rgba(0,20,10,.95);border:1px solid rgba(0,255,100,.6);padding:13px 28px;font-family:'Courier New',monospace;font-size:13px;letter-spacing:4px;color:#00ff88;cursor:pointer;z-index:20;white-space:nowrap;-webkit-tap-highlight-color:transparent;box-shadow:0 0 24px rgba(0,255,100,.25);border-radius:2px" onclick="Fishing.openNearest()" ontouchend="event.preventDefault();Fishing.openNearest()">🎣 FISH HERE</div>
   <div id="dmg-layer"></div>
   <div id="dmg-flash"></div>
   <div id="skill-notify"></div>
@@ -2014,21 +2025,63 @@ const Map3D = {
   // ── Fishing hole: glowing pool with FISH prompt ──
   _fishHole(x,z,col,type){
     col=col||0x00ff88;type=type||'FLOODED';
-    // Water pool mesh
-    const pool=new THREE.Mesh(
-      new THREE.BoxGeometry(2.2,.06,2.2),
-      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.7})
+    const M=c=>new THREE.MeshBasicMaterial({color:c});
+    const Ml=c=>new THREE.MeshLambertMaterial({color:c,emissive:c,emissiveIntensity:.6});
+
+    // ── Sunken pool pit — recessed into the floor ──────────────────────
+    // Dark pit base (sunken below floor level)
+    const pit=new THREE.Mesh(new THREE.BoxGeometry(2.4,.3,2.4),M(0x030808));
+    pit.position.set(x,-.1,z);scene.add(pit);
+
+    // Water surface — bright and tinted
+    const water=new THREE.Mesh(
+      new THREE.BoxGeometry(2.2,.08,2.2),
+      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.82})
     );
-    pool.position.set(x,.03,z);this.group.add(pool);
-    // Ripple ring
-    const ring=new THREE.Mesh(
-      new THREE.BoxGeometry(2.6,.02,2.6),
-      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.3})
-    );
-    ring.position.set(x,.02,z);this.group.add(ring);
-    // Glow light under pool
-    const gl=new THREE.PointLight(col,2.5,5);gl.position.set(x,.5,z);scene.add(gl);this.lights.push(gl);
-    // Register fishing hole
+    water.position.set(x,.05,z);scene.add(water);
+
+    // Pool rim — raised concrete border (4 sides)
+    const rimMat=new THREE.MeshLambertMaterial({color:0x1a1a1a});
+    [
+      [0, 1.2, .1, 2.8, .22, .24],   // near
+      [0,-1.2, .1, 2.8, .22, .24],   // far
+      [ 1.2, 0, .1, .24, .22, 2.8],  // right
+      [-1.2, 0, .1, .24, .22, 2.8],  // left
+    ].forEach(([ox,oz,oy,w,h,d])=>{
+      const rim=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),rimMat);
+      rim.position.set(x+ox,oy,z+oz);scene.add(rim);
+    });
+
+    // ── Vertical glow beacon — clearly visible from camera ─────────────
+    const beamGeo=new THREE.CylinderGeometry(.06,.06,3.5,6);
+    const beamMat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.55});
+    const beam=new THREE.Mesh(beamGeo,beamMat);
+    beam.position.set(x,2.0,z);scene.add(beam);
+
+    // ── Floating rings (3 stacked halos at different heights) ──────────
+    [0.3, 0.9, 1.6].forEach((hy,i)=>{
+      const ring=new THREE.Mesh(
+        new THREE.BoxGeometry(2.4,.04,2.4),
+        new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.18-i*.04})
+      );
+      ring.position.set(x,hy,z);scene.add(ring);
+    });
+
+    // ── Fishing rod icon marker ─────────────────────────────────────────
+    // Vertical pole
+    const pole=new THREE.Mesh(new THREE.BoxGeometry(.06,.9,.06),Ml(0x8a6a3a));
+    pole.position.set(x-.8,.45,z-.8);scene.add(pole);
+    // Line going diagonally
+    const line=new THREE.Mesh(new THREE.BoxGeometry(.04,.04,.7),Ml(col));
+    line.rotation.z=Math.PI*.18;
+    line.position.set(x-.75,.9,z-.45);scene.add(line);
+
+    // ── Strong glow light ───────────────────────────────────────────────
+    const gl=new THREE.PointLight(col,3.5,7);gl.position.set(x,1,z);scene.add(gl);this.lights.push(gl);
+
+    // Ambient water glow at surface
+    const gl2=new THREE.PointLight(col,1.5,3);gl2.position.set(x,.1,z);scene.add(gl2);this.lights.push(gl2);
+
     this.fishingHoles.push({x,z,type,light:gl});
   },
 
@@ -2369,22 +2422,29 @@ const Enemies = {
   },
 
   spawn(pos,forceKey){
-    const keys=Object.keys(this.TYPES).filter(k=>k!=='ELITE');
-    const droneOk=Zone.zone>=3;
-    const available=droneOk?keys:keys.filter(k=>k!=='DRONE');
+    const z=Zone.zone;
+    // Gate enemy types by zone — zone 1 only rookies
+    let available=['SOLDIER'];
+    if(z>=2)available.push('RUSHER');
+    if(z>=3)available.push('DRONE');
+    if(z>=4)available.push('HEAVY');
+    if(z>=5)available.push('SNIPER');
     let key=forceKey||available[~~(Math.random()*available.length)];
-    if(!forceKey&&Zone.zone>=2&&Math.random()<.1)key='ELITE';
+    if(!forceKey&&z>=3&&Math.random()<.08)key='ELITE';
+    if(!forceKey&&z>=6&&Math.random()<.15)key='ELITE';
     const T=this.TYPES[key];
+    // Scale HP and damage gently with zone — but not aggressively early
+    const zScale=Math.max(1,1+z*.12);
+    const scaledT={...T,hp:~~(T.hp*zScale),maxHp:~~(T.hp*zScale),dmg:~~(T.dmg*(1+z*.08))};
     const {G,bodyMats,hpBar}=this._makeMesh(key,T);
     G.position.copy(pos).setY(key==='DRONE'?3.2:0);
     scene.add(G);
-    // Random elite modifier
     let modifier=null;
     if(key==='ELITE'){
       const mods=['ARMORED','BERSERKER','REGENERATOR','PHANTOM'];
       modifier=mods[~~(Math.random()*mods.length)];
     }
-    this.list.push({mesh:G,hpBar,bodyMats,key,T,hp:T.hp,maxHp:T.hp,alive:true,state:'chase',fireTimer:Math.random()*T.fRate,stateTimer:0,coverTarget:null,stunTimer:0,isDrone:key==='DRONE',modifier,dotTimer:0,slow:0});
+    this.list.push({mesh:G,hpBar,bodyMats,key,T:scaledT,hp:scaledT.hp,maxHp:scaledT.hp,alive:true,state:'chase',fireTimer:Math.random()*T.fRate,stateTimer:0,coverTarget:null,stunTimer:0,isDrone:key==='DRONE',modifier,dotTimer:0,slow:0,elite:key==='ELITE'});
   },
 
   hit(e,dmg,isCrit,isHead,element){
@@ -3007,15 +3067,73 @@ const Player={
     this.weapon.currentAmmo--;this.fireTimer=this.weapon.fireRate;
     const o=this.mesh.position.clone().add(new THREE.Vector3(0,1.1,0));
     const dmg=~~(this.weapon.damage*this.bonusDmg);
+    // ── Soft aim assist — nudge facing toward nearest enemy in a 50° cone ──
+    let aimDir=this.facing.clone();
+    if(IS_MOB){
+      let bestDot=-1,bestE=null;
+      for(const e of Enemies.list){
+        if(!e.alive)continue;
+        const ep=e.mesh.position;
+        const dx=ep.x-this.mesh.position.x,dz=ep.z-this.mesh.position.z;
+        const dist=Math.sqrt(dx*dx+dz*dz);
+        if(dist>22)continue;
+        const ex=dx/dist,ez=dz/dist;
+        const dot=this.facing.x*ex+this.facing.z*ez;
+        if(dot>0.6&&dot>bestDot){bestDot=dot;bestE=e;}// ~50° cone
+      }
+      if(bestE){
+        const ep=bestE.mesh.position;
+        const dx=ep.x-this.mesh.position.x,dz=ep.z-this.mesh.position.z;
+        const dist=Math.sqrt(dx*dx+dz*dz)||1;
+        // Blend: 60% aim assist on mobile, lighter for fast-fire weapons
+        const blend=this.weapon.pellets>1?0.3:0.6;
+        aimDir=new THREE.Vector3(
+          this.facing.x*(1-blend)+(dx/dist)*blend,
+          0,
+          this.facing.z*(1-blend)+(dz/dist)*blend
+        ).normalize();
+      }
+    }
     for(let p=0;p<this.weapon.pellets;p++)
-      Bullets.fire(o,this.facing,dmg,true,this.weapon.spread,this.weapon.element,this.weapon.isBlast);
+      Bullets.fire(o,aimDir,dmg,true,this.weapon.spread,this.weapon.element,this.weapon.isBlast);
     Audio.gunshot(this.weapon.type);
     UI.updateWeaponAmmo();
   },
   startReload(){if(this.reloading||!this.weapon||this.weapon.currentAmmo>=this.weapon.magazine)return;this.reloading=true;const reloadMult=1-SkillTree.nodes.reloadUp.lvl*.12;this.reloadTotal=this.weapon.reloadTime*reloadMult;this.reloadTimer=this.reloadTotal;Audio.reload();UI.showReload(true);},
   takeDmg(amt){if(this.dodging)return;if(this.shielded)amt*=.25;const abs=Math.min(this.armor,amt*(.3+Math.random()*.3));this.armor=Math.max(0,this.armor-abs);this.hp=Math.max(0,this.hp-(amt-abs));Audio.hit();UI.flashDmg();UI.updateBars();if(this.hp<=0)_die();},
 
-  save(){return{hp:this.hp,maxHp:this.maxHp,armor:this.armor,maxArmor:this.maxArmor,xp:this.xp,level:this.level,xpNext:this.xpNext,credits:this.credits,weapon:this.weapon,weaponBag:this.weaponBag};},
+  autoEquipBest(){
+    // Equip highest-damage weapon from bag
+    const allWeapons=[...this.weaponBag];
+    if(this.weapon)allWeapons.push(this.weapon);
+    allWeapons.sort((a,b)=>b.damage-a.damage);
+    if(allWeapons.length>0){
+      this.weapon=allWeapons[0];
+      this.weaponBag=allWeapons.slice(1);
+      this._updateWeaponMesh();
+      UI.updateWeaponHUD();
+    }
+    // Auto-equip best armor from stash
+    const slots=['helmet','chest','gloves','kneepads','backpack'];
+    const stash=HubSystem.stash||[];
+    const armor=stash.filter(i=>i&&i.kind==='armor');
+    for(const slot of slots){
+      const candidates=armor.filter(a=>a.slot===slot);
+      if(!candidates.length)continue;
+      candidates.sort((a,b)=>(b.armor||0)-(a.armor||0));
+      const best=candidates[0];
+      const current=Armor.equipped[slot];
+      if(!current||(best.armor||0)>(current.armor||0)){
+        Armor.equip(best);
+        HubSystem.stash=HubSystem.stash.filter(x=>x!==best);
+        if(current)HubSystem.stash.push(current);
+      }
+    }
+    try{InvUI.refresh();}catch(ex){}
+    showBanner('⬆ BEST GEAR EQUIPPED');
+    Audio.uiClick();
+    Save.save();
+  },
   load(d){if(d)Object.assign(this,d);},
 
   update(dt){
@@ -3078,15 +3196,15 @@ const Player={
     if(Input.down('KeyX'))Skills.activate(3);
     // ── Fishing hole proximity ──
     let _nearFish=null;
-    if(Map3D.fishingHoles){
+    if(Map3D.fishingHoles&&Map3D.fishingHoles.length){
       for(const h of Map3D.fishingHoles){
         const fdx=this.mesh.position.x-h.x,fdz=this.mesh.position.z-h.z;
-        if(fdx*fdx+fdz*fdz<7){_nearFish=h;break;}
+        if(fdx*fdx+fdz*fdz<9){_nearFish=h;break;}
       }
     }
+    Fishing._nearestHole=_nearFish||null;
     const fp=document.getElementById('fishing-prompt');
-    if(fp)fp.style.display=(_nearFish&&!_paused&&!Fishing.active)?'flex':'none';
-    if(_nearFish&&!_paused&&!Fishing.active)fp._hole=_nearFish;
+    if(fp)fp.style.display=(_nearFish&&!_paused&&!Fishing.active)?'block':'none';
     if(Input.down('KeyI'))InvUI.toggle();
     if(Input.down('KeyH')){GoToHub();}
     if(Input.down('KeyR')&&!this.reloading)this.startReload();
@@ -3752,23 +3870,46 @@ function deathRevive(cost){
   Save.save();
 }
 
+let _deathZone=0; // zone we died on, for hub → redeploy
+
 function deathReturnToHub(){
   Audio.uiClick();
   Audio.stopMusic();
   _fromMission=false;
-  Enemies.list.forEach(e=>scene.remove(e.mesh));Enemies.list=[];
-  if(Boss.active){scene.remove(Boss.active.mesh);Boss.active=null;
+  _deathZone=Zone.zone; // remember the zone
+  Enemies.list.forEach(e=>{try{scene.remove(e.mesh);}catch(ex){}});Enemies.list=[];
+  if(Boss.active){try{scene.remove(Boss.active.mesh);}catch(ex){}Boss.active=null;
     document.getElementById('boss-bar').style.display='none';}
   Zone.killsInZone=0;
-  Map3D.generate();
+  // DON'T generate a new map — keep the same map so player can find gravestone
+  // Just reinitialise player at spawn
   Player.init();CharCreator.apply();
   camera.position.copy(Player.mesh.position).add(CAM_OFF);
   _camLook.copy(Player.mesh.position);camera.lookAt(_camLook);
   HubSystem.refresh();setState(GS.HUB);
+  // Show "Return to Zone" button in hub header
+  const rb=document.getElementById('hub-return-btn');
+  if(rb){rb.style.display='block';rb.textContent='↩ RETURN TO ZONE '+_deathZone;}
   Save.save();_refreshMenu();
 }
-
 function deathGoHub(){deathReturnToHub();}
+
+// Return to the zone from hub (also used when entering hub mid-mission)
+function hubReturnToMission(){
+  if(gameState!==GS.HUB)return;
+  _fromMission=false;
+  Audio.uiClick();
+  const rb=document.getElementById('hub-return-btn');
+  if(rb)rb.style.display='none';
+  setState(GS.MISSION);
+  gameRunning=true;
+  setTimeout(()=>Audio.startMusic(),300);
+  // Respawn near gravestone if we came from death
+  if(_gravePos&&Player.mesh){
+    Player.mesh.position.set(_gravePos.x+2,0,_gravePos.z+2);
+    camera.position.copy(Player.mesh.position).add(CAM_OFF);
+  }
+}
 
 // =====================================================================
 //  LIGHT FLICKER
@@ -4303,7 +4444,11 @@ const Audio={
         // Menu music chain — completely separate
         this.menuGain=this.ctx.createGain();
         this.menuGain.gain.value=0;
-        this.menuGain.connect(this.masterGain);
+        // Compressor prevents clipping/rattling from layered instruments
+        const menuComp=this.ctx.createDynamicsCompressor();
+        menuComp.threshold.value=-14;menuComp.knee.value=6;
+        menuComp.ratio.value=4;menuComp.attack.value=0.003;menuComp.release.value=0.25;
+        this.menuGain.connect(menuComp);menuComp.connect(this.masterGain);
         // Game music chain — completely separate
         this.gameGain=this.ctx.createGain();
         this.gameGain.gain.value=0;
@@ -4434,14 +4579,14 @@ const Audio={
     if(!this.ctx)return;
     const o=this.ctx.createOscillator(),g=this.ctx.createGain();
     o.type='sine';o.frequency.setValueAtTime(80,t);o.frequency.exponentialRampToValueAtTime(45,t+.35);
-    g.gain.setValueAtTime(1.8,t);g.gain.exponentialRampToValueAtTime(.001,t+.55);
+    g.gain.setValueAtTime(0.7,t);g.gain.exponentialRampToValueAtTime(.001,t+.55);
     o.connect(g);g.connect(dest);o.start(t);o.stop(t+.6);
-    // Body noise
+    // Body noise — quieter to avoid rattle
     const sr=this.ctx.sampleRate,buf=this.ctx.createBuffer(1,~~(sr*.1),sr),d=buf.getChannelData(0);
     for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
     const n=this.ctx.createBufferSource(),f=this.ctx.createBiquadFilter(),ng=this.ctx.createGain();
     n.buffer=buf;f.type='lowpass';f.frequency.value=200;
-    ng.gain.setValueAtTime(.5,t);ng.gain.exponentialRampToValueAtTime(.001,t+.12);
+    ng.gain.setValueAtTime(0.18,t);ng.gain.exponentialRampToValueAtTime(.001,t+.12);
     n.connect(f);f.connect(ng);ng.connect(dest);n.start(t);
   },
   _orchSnare(t,dest){
@@ -6569,9 +6714,16 @@ const Casino={
 // =====================================================================
 const Fishing={
   active:false,_hole:null,_phase:'waiting',
+  _nearestHole:null, // set by player update loop every frame
   _catchPct:0,_zoneMin:.3,_zoneMax:.6,
   _biteTimer:0,_biteWindow:0,_tickerId:null,_animId:null,
   _canvas:null,_ctx:null,
+
+  openNearest(){
+    const h=this._nearestHole;
+    if(!h){return;}
+    this.open(h);
+  },
 
   FISH:{
     FLOODED:[
@@ -6784,6 +6936,34 @@ function showBanner(msg,dur=2000){
   _bannerTimer=setTimeout(()=>{wb.style.display='none';_bannerTimer=null;},dur+400);
 }
 
+// ── WHAT'S NEW — rendered into main menu ──────────────────────────────
+const UPDATES=[
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Fishing holes in flooded/subway/industrial zones — 15 toxic fish to catch'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Underground Casino — Blackjack, Slots, Video Poker, Lucky Wheel, Horse Racing'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Enemies no longer one-shot you in Zone 1 — graduated difficulty across zones'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Soft aim assist on mobile — bullets nudge toward nearest enemy in your cone'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Hub RESUME button — return to active mission without deploying a new one'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Auto-equip best gear button in Stash tab'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'ZERO badge now visible on front of all armor types'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Minimap shows corridors and room types in color'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Blood splatter + fading pool decals on enemy death'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Colored loot beams — white to red by rarity'},
+  {date:'RECENT',tag:'FIX',col:'#3498db',text:'Character creator selections appear on deployed agent'},
+];
+
+function _renderWhatsNew(){
+  const el=document.getElementById('whats-new-list');if(!el)return;
+  el.innerHTML='';
+  UPDATES.slice(0,8).forEach(u=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:flex-start;gap:8px;font-size:10px;line-height:1.5';
+    row.innerHTML=
+      '<span style="color:'+u.col+';letter-spacing:2px;font-size:8px;flex-shrink:0;padding-top:1px">'+u.tag+'</span>'+
+      '<span style="color:#8899aa;letter-spacing:.3px">'+u.text+'</span>';
+    el.appendChild(row);
+  });
+}
+
 Audio.init();
 
 // Menu background scene - minimal light, no crash risk
@@ -6801,9 +6981,10 @@ function unlockAudio(){
 }
 
 // Init systems that depend on late-defined objects
-CharCreator.init(); // must be after Tutorial, StoryIntro, PixelIcons are defined
+CharCreator.init();
 StyleSystem.load();
 setTimeout(()=>PixelIcons.renderAll(),120);
+setTimeout(()=>_renderWhatsNew(),50);
 
 // Measure hub header height so tabs stick correctly below it
 function _updateHubHeaderHeight(){
