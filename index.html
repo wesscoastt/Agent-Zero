@@ -5644,42 +5644,37 @@ const StyleSystem={
     this.colors.forEach((col,i)=>{
       const el=document.createElement('div');
       el.className='style-opt'+(i===this.sel.color?' sel':'');
-      el.style.background=col;
-      if(!this._unlocked.colors.includes(i)){el.style.opacity='.3';el.title='LOCKED';}
-      else{el.title=this.colorNames[i];}
-      el.onclick=()=>{if(!this._unlocked.colors.includes(i))return;this.sel.color=i;this.render();this._drawPreview();};
+      el.style.cssText='background:'+col+';cursor:pointer;-webkit-tap-highlight-color:transparent'+(this._unlocked.colors.includes(i)?'':';opacity:.3');
+      const fn=(()=>{const idx=i;return()=>{if(!this._unlocked.colors.includes(idx))return;this.sel.color=idx;this.render();this._drawPreview();}})();
+      el.onclick=fn;el.ontouchend=(ev)=>{ev.preventDefault();fn();};
       cc.appendChild(el);
     });
-    // Helmet — canvas drawn
     const hc=document.getElementById('style-helmet-opts');if(!hc)return;hc.innerHTML='';
     this.helmetOpts.forEach(h=>{
       const locked=!this._unlocked.helmets.includes(h.id);
-      const sel=this.sel.helmet===h.id;
       const wrap=document.createElement('div');
-      wrap.className='style-opt'+(sel?' sel':'');
-      if(locked)wrap.style.opacity='.3';
-      const cvs=document.createElement('canvas');cvs.width=44;cvs.height=44;
-      cvs.style.cssText='image-rendering:pixelated;display:block';
+      wrap.className='style-opt'+(this.sel.helmet===h.id?' sel':'');
+      wrap.style.cssText='cursor:pointer;-webkit-tap-highlight-color:transparent'+(locked?';opacity:.3':'');
+      const cvs=document.createElement('canvas');cvs.width=44;cvs.height=44;cvs.style.cssText='image-rendering:pixelated;display:block;pointer-events:none';
       this._drawHelmetOpt(cvs,h.id);wrap.appendChild(cvs);
-      const lbl=document.createElement('div');lbl.style.cssText='font-size:7px;color:#667;letter-spacing:1px;text-align:center;margin-top:2px';
+      const lbl=document.createElement('div');lbl.style.cssText='font-size:7px;color:#667;letter-spacing:1px;text-align:center;margin-top:2px;pointer-events:none';
       lbl.textContent=h.label;wrap.appendChild(lbl);
-      wrap.onclick=()=>{if(locked)return;this.sel.helmet=h.id;this.render();this._drawPreview();};
+      const fn=(()=>{const hid=h.id,lk=locked;return()=>{if(lk)return;this.sel.helmet=hid;this.render();this._drawPreview();}})();
+      wrap.onclick=fn;wrap.ontouchend=(ev)=>{ev.preventDefault();fn();};
       hc.appendChild(wrap);
     });
-    // Emotes — canvas drawn
     const ec=document.getElementById('style-emotes');if(!ec)return;ec.innerHTML='';
     this.emotes.forEach(e=>{
       const locked=!this._unlocked.emotes.includes(e.id);
-      const sel=this.sel.emote===e.id;
       const wrap=document.createElement('div');
-      wrap.className='style-opt'+(sel?' sel':'');
-      if(locked)wrap.style.opacity='.3';
-      const cvs=document.createElement('canvas');cvs.width=44;cvs.height=44;
-      cvs.style.cssText='image-rendering:pixelated;display:block';
+      wrap.className='style-opt'+(this.sel.emote===e.id?' sel':'');
+      wrap.style.cssText='cursor:pointer;-webkit-tap-highlight-color:transparent'+(locked?';opacity:.3':'');
+      const cvs=document.createElement('canvas');cvs.width=44;cvs.height=44;cvs.style.cssText='image-rendering:pixelated;display:block;pointer-events:none';
       this._drawEmoteOpt(cvs,e.id);wrap.appendChild(cvs);
-      const lbl=document.createElement('div');lbl.style.cssText='font-size:7px;color:#667;letter-spacing:1px;text-align:center;margin-top:2px';
+      const lbl=document.createElement('div');lbl.style.cssText='font-size:7px;color:#667;letter-spacing:1px;text-align:center;margin-top:2px;pointer-events:none';
       lbl.textContent=e.name;wrap.appendChild(lbl);
-      wrap.onclick=()=>{if(locked)return;this.sel.emote=e.id;this.render();this._drawPreview();};
+      const fn=(()=>{const eid=e.id,lk=locked;return()=>{if(lk)return;this.sel.emote=eid;this.render();this._drawPreview();}})();
+      wrap.onclick=fn;wrap.ontouchend=(ev)=>{ev.preventDefault();fn();};
       ec.appendChild(wrap);
     });
     this._drawPreview();
