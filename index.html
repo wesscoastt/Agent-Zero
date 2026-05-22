@@ -2850,6 +2850,7 @@ const Zone={
         if(this._portal){try{scene.remove(this._portal);}catch(e){}this._portal=null;}
         if(sv){sv.style.background='';sv.classList.remove('on');}
         this.zone++;
+        Mercs.onZoneComplete(); // tick merc contract down
         const bossZone=this.zone%3===0;
         Map3D.generate();
         const sp=Map3D.startPos();
@@ -4551,26 +4552,41 @@ const Events={
 const Mercs={
   active:null,
   mesh:null,
+  _zonesLeft:0,     // zones remaining for current merc contract
+  _walkT:0,         // walk animation timer
   ROSTER:[
-    {name:'VIPER',role:'Assault',bonus:'dmg',val:.25,desc:'High damage specialist.\n+25% weapon damage.',cost:400,col:'#e74c3c'},
-    {name:'SHADOW',role:'Infiltrator',bonus:'crit',val:.12,desc:'Critical hit expert.\n+12% crit chance.',cost:350,col:'#9b59b6'},
-    {name:'MEDIC',role:'Support',bonus:'regen',val:1,desc:'Combat medic.\nPassive 1HP/s regen.',cost:300,col:'#2ecc71'},
-    {name:'TANK',role:'Heavy',bonus:'armor',val:30,desc:'Armored juggernaut.\n+30 bonus armor.',cost:450,col:'#3498db'},
-    {name:'RECON',role:'Scout',bonus:'spd',val:.15,desc:'Rapid deployment.\n+15% move speed.',cost:280,col:'#f39c12'},
+    {name:'VIPER',role:'Assault',bonus:'dmg',val:.25,desc:'High damage specialist.\n+25% weapon damage.',cost:400,zones:1,col:'#e74c3c'},
+    {name:'SHADOW',role:'Infiltrator',bonus:'crit',val:.12,desc:'Critical hit expert.\n+12% crit chance.',cost:350,zones:1,col:'#9b59b6'},
+    {name:'MEDIC',role:'Support',bonus:'regen',val:1,desc:'Combat medic.\nPassive 1HP/s regen.',cost:300,zones:1,col:'#2ecc71'},
+    {name:'TANK',role:'Heavy',bonus:'armor',val:30,desc:'Armored juggernaut.\n+30 bonus armor.',cost:450,zones:1,col:'#3498db'},
+    {name:'RECON',role:'Scout',bonus:'spd',val:.15,desc:'Rapid deployment.\n+15% move speed.',cost:280,zones:1,col:'#f39c12'},
     {
       name:'GEORGE DROID',role:'Chaos Agent',bonus:'george',val:1,
       desc:'HE IS INEVITABLE.\nChaos aura: buffs everything, breaks everything.',
-      cost:1,col:'#ff6600',
-      quips:['UHH','YOINK','he protec but he also attac','george george george george','wah wah wah','hold on lemme check','POWER OVERWHELMING','no thoughts head empty'],
+      cost:750,zones:1,col:'#ff6600',
+      quips:['UHH','YOINK','he protec but he also attac','george george george george','wah wah wah','hold on lemme check','POWER OVERWHELMING','no thoughts head empty','need fent','bro I need fent rn','where the fent at','give me the fent','fent me bro'],
+    },
+    {
+      name:'DRAGONBORN',role:'Dovahkiin',bonus:'shout',val:1,
+      desc:'Last Dragonborn. Nord warrior.\nFUS RO DAH — shockwave knocks back all nearby enemies every 8s.',
+      cost:600,zones:1,col:'#c0c0c0',
+      _shoutTimer:0,
+    },
+    {
+      name:'COMMANDER SHEPARD',role:'N7 Spectre',bonus:'shepard',val:1,
+      desc:'I am Commander Shepard.\n+20% all damage. Squad tactics: boosts your skills cooldown by 25%.',
+      cost:700,zones:1,col:'#cc2020',
+      _biotic:0,
     },
   ],
   hire(m){
     if(Player.credits<m.cost)return;
     this.active=m;Player.credits-=m.cost;
+    this._zonesLeft=m.zones||1;
     try{UI.credit(Player.credits);}catch(e){}
     this._applyBonus(m);
     try{HubSystem.renderMercs();}catch(e){}
-    showBanner(m.name+' HIRED');
+    showBanner(m.name+' HIRED — '+this._zonesLeft+' ZONE CONTRACT');
     try{Audio.uiClick();}catch(e){}
   },
   _applyBonus(m){
@@ -4578,7 +4594,15 @@ const Mercs={
     if(m.bonus==='crit')Player.bonusCrit=(Player.bonusCrit||0)+m.val;
     if(m.bonus==='armor'){Player.maxArmor+=m.val;Player.armor+=m.val;}
     if(m.bonus==='spd')Player.bonusSpd=(Player.bonusSpd||0)+m.val;
-    if(m.bonus==='regen')Player._mercRegen=true;
+    if(m.bonus==='shout'){
+      // Dragonborn: FUS RO DAH every 8s (handled in update), also +15% dmg
+      Player.bonusDmg=(Player.bonusDmg||1)+.15;
+    }
+    if(m.bonus==='shepard'){
+      // Shepard: +20% damage, skill cooldown reduction
+      Player.bonusDmg=(Player.bonusDmg||1)+.20;
+      Player._shepardActive=true; // reduces skill CD in Skills.activate
+    }
     if(m.bonus==='george'){
       // George buffs EVERYTHING but is chaotic
       Player.bonusDmg=(Player.bonusDmg||1)+.4;
@@ -4751,6 +4775,86 @@ const Mercs={
       // Fast chevron on chest
       f(~~(W*.3),~~(H*.76),~~(W*.4),~~(H*.08),'#f39c12');
       f(~~(W*.36),~~(H*.82),~~(W*.28),~~(H*.06),'#f39c12');
+    } else if(name==='DRAGONBORN'){
+      // Iron helmet with horns, Nordic warrior, steely blue eyes
+      f(0,0,W,H,'#0a0808');
+      // Neck/shoulders — leather & fur
+      f(~~(W*.1),~~(H*.7),~~(W*.8),~~(H*.3),'#4a2a10');
+      f(~~(W*.05),~~(H*.72),~~(W*.2),~~(H*.22),'#889090');// left shoulder plate
+      f(~~(W*.75),~~(H*.72),~~(W*.2),~~(H*.22),'#889090');// right shoulder plate
+      // Face — nordic skin, strong jaw
+      f(~~(W*.2),~~(H*.3),~~(W*.6),~~(H*.48),'#c09060');
+      // Iron helmet — the iconic look
+      f(~~(W*.14),~~(H*.14),~~(W*.72),~~(H*.28),'#888888');
+      f(~~(W*.12),~~(H*.28),~~(W*.76),~~(H*.08),'#999');// brow guard
+      // Helmet nose guard
+      f(~~(W*.44),~~(H*.28),~~(W*.12),~~(H*.2),'#777');
+      f(~~(W*.46),~~(H*.3),~~(W*.08),~~(H*.16),'#888');
+      // LEFT HORN
+      f(~~(W*.14),~~(H*.08),~~(W*.1),~~(H*.16),'#c8b070');// base
+      f(~~(W*.08),~~(H*.04),~~(W*.08),~~(H*.1),'#c0a060');// middle
+      f(~~(W*.04),~~(H*.01),~~(W*.06),~~(H*.06),'#b89050');// tip
+      // RIGHT HORN
+      f(~~(W*.76),~~(H*.08),~~(W*.1),~~(H*.16),'#c8b070');
+      f(~~(W*.84),~~(H*.04),~~(W*.08),~~(H*.1),'#c0a060');
+      f(~~(W*.88),~~(H*.01),~~(W*.06),~~(H*.06),'#b89050');
+      // Eyes — ice blue, visible under helmet brow
+      f(~~(W*.24),~~(H*.34),~~(W*.16),~~(H*.08),'#0a1520');
+      f(~~(W*.26),~~(H*.35),~~(W*.12),~~(H*.06),'#3a7aaa');
+      f(~~(W*.28),~~(H*.36),~~(W*.06),~~(H*.03),'#88ccff');
+      f(~~(W*.56),~~(H*.34),~~(W*.16),~~(H*.08),'#0a1520');
+      f(~~(W*.58),~~(H*.35),~~(W*.12),~~(H*.06),'#3a7aaa');
+      f(~~(W*.6),~~(H*.36),~~(W*.06),~~(H*.03),'#88ccff');
+      // Stubble / beard hint
+      f(~~(W*.28),~~(H*.6),~~(W*.44),~~(H*.06),'#8a6840');
+      // Slight smirk
+      f(~~(W*.34),~~(H*.65),~~(W*.32),~~(H*.04),'#8a5035');
+      f(~~(W*.34),~~(H*.68),~~(W*.06),~~(H*.03),'#8a5035');
+      f(~~(W*.6),~~(H*.67),~~(W*.04),~~(H*.04),'#8a5035');
+      // Nordic cross chest emblem
+      f(~~(W*.44),~~(H*.78),~~(W*.12),~~(H*.18),'#aaaaaa');
+      f(~~(W*.38),~~(H*.84),~~(W*.24),~~(H*.06),'#aaaaaa');
+
+    } else if(name==='COMMANDER SHEPARD'){
+      // N7 armor — dark with red stripe, chiseled military face, blue eyes
+      f(0,0,W,H,'#050810');
+      // Dark N7 armor chest and neck
+      f(~~(W*.22),~~(H*.62),~~(W*.56),~~(H*.38),'#0d0d1a');
+      // N7 chest plate
+      f(~~(W*.18),~~(H*.68),~~(W*.64),~~(H*.3),'#1a1a2a');
+      f(~~(W*.18),~~(H*.68),~~(W*.1),~~(H*.3),'#cc0000');// red N7 stripe left
+      f(~~(W*.25),~~(H*.76),~~(W*.5),~~(H*.12),'#222233');// chest detail
+      // N7 badge
+      ctx.fillStyle='#fff';ctx.font=`bold ${~~(W*.14)}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('N7',W*.5,H*.82);
+      ctx.fillStyle='#cc0000';ctx.font=`bold ${~~(W*.09)}px monospace`;ctx.fillText('/',W*.6,H*.84);
+      // Face — square military jaw, caucasian
+      f(~~(W*.2),~~(H*.22),~~(W*.6),~~(H*.5),'#c4a878');
+      // Jaw line accent
+      f(~~(W*.2),~~(H*.62),~~(W*.6),~~(H*.04),'#b09060');
+      f(~~(W*.2),~~(H*.22),~~(W*.04),~~(H*.44),'#b09060');
+      f(~~(W*.76),~~(H*.22),~~(W*.04),~~(H*.44),'#b09060');
+      // Short military hair — dark crew cut
+      f(~~(W*.2),~~(H*.12),~~(W*.6),~~(H*.14),'#2a2010');
+      f(~~(W*.16),~~(H*.22),~~(W*.68),~~(H*.04),'#1a1408');
+      // Blue eyes — focused, intense
+      f(~~(W*.26),~~(H*.34),~~(W*.16),~~(H*.1),'#0a1020');
+      f(~~(W*.28),~~(H*.35),~~(W*.12),~~(H*.08),'#1a4a80');
+      f(~~(W*.3),~~(H*.36),~~(W*.07),~~(H*.05),'#4488cc');
+      f(~~(W*.32),~~(H*.37),~~(W*.03),~~(H*.03),'#88bbff');
+      f(~~(W*.54),~~(H*.34),~~(W*.16),~~(H*.1),'#0a1020');
+      f(~~(W*.56),~~(H*.35),~~(W*.12),~~(H*.08),'#1a4a80');
+      f(~~(W*.58),~~(H*.36),~~(W*.07),~~(H*.05),'#4488cc');
+      f(~~(W*.6),~~(H*.37),~~(W*.03),~~(H*.03),'#88bbff');
+      // Strong brow
+      f(~~(W*.25),~~(H*.3),~~(W*.18),~~(H*.04),'#3a2810');
+      f(~~(W*.53),~~(H*.3),~~(W*.18),~~(H*.04),'#3a2810');
+      // Flat nose bridge
+      f(~~(W*.45),~~(H*.44),~~(W*.1),~~(H*.12),'#b09060');
+      // Determined thin mouth
+      f(~~(W*.3),~~(H*.6),~~(W*.4),~~(H*.04),'#8a5035');
+      // N7 shoulder armor — dark red
+      f(~~(W*.08),~~(H*.56),~~(W*.14),~~(H*.28),'#cc1a1a');
+      f(~~(W*.78),~~(H*.56),~~(W*.14),~~(H*.28),'#1a1a2a');
     }
   },
 
@@ -4783,97 +4887,193 @@ const Mercs={
     const ball=box(.15,.15,.15,0xff0000);ball.position.set(.2,2.52,0);g.add(ball);
     return g;
   },
-  spawnMesh(){
-    if(this.mesh)scene.remove(this.mesh);
-    if(this.active&&this.active.bonus==='george'){
-      this.mesh=this._buildGeorgeMesh();
+
+  _buildDragonbornMesh(){
+    const g=new THREE.Group();
+    const b=(w,h,d,col)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:col}));
+    // Leather armor torso
+    const torso=b(.75,1.1,.5,0x4a2a10);torso.position.y=.9;g.add(torso);
+    const strap=b(.1,.9,.08,0x6a3a18);strap.rotation.z=.4;strap.position.set(0,.9,.26);g.add(strap);
+    const strap2=b(.1,.9,.08,0x6a3a18);strap2.rotation.z=-.4;strap2.position.set(0,.9,.26);g.add(strap2);
+    // Iron helmet
+    const helm=b(.62,.34,.58,0x888888);helm.position.y=1.88;g.add(helm);
+    const brow=b(.66,.1,.6,0x999);brow.position.y=1.68;g.add(brow);
+    const nose=b(.08,.18,.1,0x777);nose.position.set(0,1.72,.3);g.add(nose);
+    // Horns — the iconic part
+    const lhorn=b(.1,.32,.1,0xc8b070);lhorn.position.set(-.22,2.14,0);lhorn.rotation.z=.35;g.add(lhorn);
+    const rhorn=b(.1,.32,.1,0xc8b070);rhorn.position.set(.22,2.14,0);rhorn.rotation.z=-.35;g.add(rhorn);
+    // Face
+    const face=b(.5,.22,.5,0xc09060);face.position.y=1.58;g.add(face);
+    // Steel shoulder plate
+    const ls=b(.32,.22,.44,0x888888);ls.position.set(-.52,1.42,0);g.add(ls);
+    // Arms — bare skin
+    const la=b(.28,.72,.28,0xb08050);la.position.set(-.54,.9,0);g.add(la);
+    const ra=b(.28,.72,.28,0xb08050);ra.position.set(.54,.9,0);g.add(ra);
+    // Iron bracers
+    const lb=b(.32,.22,.32,0x888888);lb.position.set(-.54,.44,0);g.add(lb);
+    const rb=b(.32,.22,.32,0x888888);rb.position.set(.54,.44,0);g.add(rb);
+    // Legs + boots
+    const ll=b(.28,.72,.32,0x3a2010);ll.position.set(-.2,.2,0);g.add(ll);
+    const rl=b(.28,.72,.32,0x3a2010);rl.position.set(.2,.2,0);g.add(rl);
+    g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
+    return g;
+  },
+
+  _buildShepardMesh(){
+    const g=new THREE.Group();
+    const b=(w,h,d,col)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:col}));
+    // N7 dark armor
+    const torso=b(.72,1.1,.48,0x0d0d1a);torso.position.y=.9;g.add(torso);
+    const stripe=b(.08,1.1,.5,0xcc0000);stripe.position.set(-.36,.9,0);g.add(stripe);// N7 red stripe
+    // Shoulder armor
+    const ls=b(.28,.3,.5,0x1a1a2a);ls.position.set(-.54,1.4,0);g.add(ls);
+    const rs=b(.28,.3,.5,0x1a1a2a);rs.position.set(.54,1.4,0);g.add(rs);
+    const lsa=b(.3,.14,.52,0xcc1a1a);lsa.position.set(-.54,1.3,0);g.add(lsa);// red accent
+    // Head + collar
+    const head=b(.52,.5,.48,0xc4a878);head.position.y=1.65;g.add(head);
+    const hair=b(.54,.1,.5,0x1a1408);hair.position.y=1.88;g.add(hair);
+    const collar=b(.6,.16,.54,0x111122);collar.position.y=1.42;g.add(collar);
+    // Arms — N7 armor
+    const la=b(.26,.7,.3,0x111122);la.position.set(-.52,.9,0);g.add(la);
+    const ra=b(.26,.7,.3,0x111122);ra.position.set(.52,.9,0);g.add(ra);
+    // Omni-tool glow — right arm
+    const omni=b(.28,.2,.06,0xff6600);omni.material.emissive=new THREE.Color(0xff4400);omni.material.emissiveIntensity=.6;omni.position.set(.52,.7,.18);g.add(omni);
+    // Legs
+    const ll=b(.28,.7,.3,0x0d0d1a);ll.position.set(-.2,.2,0);g.add(ll);
+    const rl=b(.28,.7,.3,0x0d0d1a);rl.position.set(.2,.2,0);g.add(rl);
+    g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
+    return g;
+  },
+
+  // Called when player enters exit portal — tick down zone contract
+  onZoneComplete(){
+    if(!this.active)return;
+    this._zonesLeft--;
+    if(this._zonesLeft<=0){
+      showBanner(this.active.name+' CONTRACT EXPIRED — REHIRE AT THE HUB');
+      this.dismiss();
     } else {
+      showBanner(this.active.name+' — '+this._zonesLeft+' ZONE'+(this._zonesLeft>1?'S':'')+' LEFT');
+    }
+  },
+
+  spawnMesh(){
+    if(this.mesh){try{scene.remove(this.mesh);}catch(e){}this.mesh=null;}
+    if(!this.active)return;
+    const isGeorge=this.active.bonus==='george';
+    const isDragonborn=this.active.bonus==='shout';
+    const isShepard=this.active.bonus==='shepard';
+    if(isGeorge){
+      this.mesh=this._buildGeorgeMesh();
+    } else if(isDragonborn){
+      this.mesh=this._buildDragonbornMesh();
+    } else if(isShepard){
+      this.mesh=this._buildShepardMesh();
+    } else {
+      // Standard merc — full humanoid body with legs and arms
+      const c=parseInt((this.active.col||'#888').replace('#',''),16)||0x888888;
+      const skin=0xc8a882;
       const g=new THREE.Group();
-      const c=parseInt((this.active?.col||'#888').replace('#',''),16)||0x888888;
-      const torso=new THREE.Mesh(new THREE.BoxGeometry(.7,1.2,.5),new THREE.MeshLambertMaterial({color:c}));
-      torso.position.y=.8;g.add(torso);
-      const head=new THREE.Mesh(new THREE.BoxGeometry(.55,.55,.5),new THREE.MeshLambertMaterial({color:0xc8a882}));
-      head.position.y=1.7;g.add(head);
-      const ll=new THREE.Mesh(new THREE.BoxGeometry(.28,.7,.3),new THREE.MeshLambertMaterial({color:c}));ll.position.set(-.22,.2,0);g.add(ll);
-      const rl=ll.clone();rl.position.set(.22,.2,0);g.add(rl);
+      const mat=c=>new THREE.MeshLambertMaterial({color:c});
+      const box=(w,h,d,col)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(col));return m;};
+      // Torso
+      const torso=box(.65,1.0,.45,c);torso.position.y=.9;g.add(torso);
+      // Head
+      const head=box(.5,.5,.45,skin);head.position.y=1.65;g.add(head);
+      // Eyes
+      const le=box(.1,.1,.05,0x111111);le.position.set(-.12,1.68,.23);g.add(le);
+      const re=box(.1,.1,.05,0x111111);re.position.set(.12,1.68,.23);g.add(re);
+      // Helmet — colored by merc
+      const helm=box(.56,.3,.5,c);helm.position.y=1.9;g.add(helm);
+      // Left arm
+      const la=box(.25,.7,.3,c);la.position.set(-.47,.9,0);g.add(la);
+      // Right arm (holds weapon stub)
+      const ra=box(.25,.7,.3,c);ra.position.set(.47,.9,0);g.add(ra);
+      // Weapon stub
+      const gun=box(.08,.08,.55,0x333333);gun.position.set(.47,.9,-.42);g.add(gun);
+      // Left leg - stored as userData for animation
+      const ll=box(.27,.7,.3,0x1a1a2a);ll.position.set(-.18,.2,0);g.add(ll);
+      const rl=box(.27,.7,.3,0x1a1a2a);rl.position.set(.18,.2,0);g.add(rl);
+      // Color stripe / badge
+      const badge=box(.22,.2,.46,0xe67e22);badge.position.set(0,.9,.01);g.add(badge);
+      g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
       this.mesh=g;
     }
     this.mesh.position.copy(Player.mesh.position).add(new THREE.Vector3(2,0,0));
     scene.add(this.mesh);
   },
 
-  update(dt){
-    if(!this.active||!Player.mesh||!gameRunning)return;
-    if(this.active.bonus==='regen'||this.active.bonus==='george'){
-      Player.heal(1*dt);
-    }
-    if(this.mesh){
-      const pp=Player.mesh.position;
-      const isGeorge=this.active.bonus==='george';
-      // George wobbles and drifts chaotically
-      const wobble=isGeorge?Math.sin(Date.now()*.003)*1.2:0;
-      const targetX=pp.x+(isGeorge?2+wobble:2);
-      const targetZ=pp.z+(isGeorge?wobble*.5:0);
-      this.mesh.position.x+=(targetX-this.mesh.position.x)*(isGeorge?2:3)*dt;
-      this.mesh.position.z+=(targetZ-this.mesh.position.z)*(isGeorge?2:3)*dt;
-      this.mesh.position.y=isGeorge?Math.abs(Math.sin(Date.now()*.002))*.4:0;
-      if(isGeorge)this.mesh.rotation.y+=dt*.8; // george spins slowly
-
-      // George fires at EVERYTHING near him (and occasionally misses spectacularly)
-      const fireRate=isGeorge?0.8:0.4;
-      if(Math.random()<fireRate*dt){
-        for(const e of Enemies.list){
-          if(!e.alive)continue;
-          if(e.mesh.position.distanceTo(this.mesh.position)<(isGeorge?18:14)){
-            const dmg=isGeorge
-              ? ~~(5+Math.random()*60) // george: wildly inconsistent damage
-              : ~~(8+Math.random()*12+(Player.bonusDmg||1)*5);
-            Enemies.hit(e,dmg,false,false,null);
-            if(isGeorge&&Math.random()<.15){
-              // George quip
-              const q=this.active.quips[~~(Math.random()*this.active.quips.length)];
-              showBanner('GEORGE: '+q);
-            }
-            break;
-          }
-        }
-      }
-      // George occasionally heals himself by yoinking your ammo
-      if(isGeorge&&Math.random()<.002){
-        if(Player.weapon&&Player.weapon.currentAmmo>2){
-          Player.weapon.currentAmmo=Math.max(1,Player.weapon.currentAmmo-2);
-          UI.updateWeaponAmmo();
-          showBanner('GEORGE: yoink');
-        }
-      }
-    }
-  },
-  spawnMesh(){
-    if(!this.active||!Player.mesh)return;
-    if(this.mesh){scene.remove(this.mesh);this.mesh=null;}
-    const G=new THREE.Group();
-    const M=col=>new THREE.MeshLambertMaterial({color:col});
-    const box=(w,h,d,col)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(col));G.add(m);return m;};
-    const col=parseInt(this.active.col.replace('#',''),16);
-    const torso=box(.6,.7,.44,col);torso.position.set(0,1.1,0);
-    const head=box(.42,.4,.4,0xc8a080);head.position.set(0,1.82,0);
-    const ll=box(.28,.66,.3,0x1a1a1a);ll.position.set(-.18,.54,0);
-    const rl=box(.28,.66,.3,0x1a1a1a);rl.position.set(.18,.54,0);
-    const la=box(.2,.6,.2,col);la.position.set(-.44,.9,0);
-    const ra=box(.2,.6,.2,col);ra.position.set(.44,.9,0);
-    // Name tag
-    const tag=new THREE.Mesh(new THREE.PlaneGeometry(1.4,.18),new THREE.MeshBasicMaterial({color:col,side:THREE.DoubleSide}));
-    tag.position.set(0,2.3,0);G.add(tag);
-    G.position.copy(Player.mesh.position).add(new THREE.Vector3(2,0,0));
-    scene.add(G);this.mesh=G;
-  },
   dismiss(){
     if(!this.active)return;
-    if(this.mesh){scene.remove(this.mesh);this.mesh=null;}
-    UI.killFeed(`⚑ ${this.active.name} DISMISSED`,'#e74c3c');
-    this.active=null;this._mercRegen=false;
-    HubSystem.renderMercs();
+    if(this.mesh){try{scene.remove(this.mesh);}catch(e){}this.mesh=null;}
+    showBanner(this.active.name+' DISMISSED');
+    this.active=null;this._zonesLeft=0;
+    try{Player._mercRegen=false;Player._shepardActive=false;Player._georgeActive=false;}catch(e){}
+    try{HubSystem.renderMercs();}catch(e){}
   },
+
+  update(dt){
+    if(!this.active||!this.mesh||!Player.mesh||!gameRunning)return;
+    if(this.active.bonus==='regen'||this.active.bonus==='george')try{Player.heal(1*dt);}catch(e){}
+    const isGeorge=this.active.bonus==='george';
+    const isDragonborn=this.active.bonus==='shout';
+    const isShepard=this.active.bonus==='shepard';
+    const pp=Player.mesh.position;
+    const angle=Player.mesh.rotation.y;
+    const tx=pp.x+Math.sin(angle+Math.PI*.5)*2.2,tz=pp.z+Math.cos(angle+Math.PI*.5)*2.2;
+    const mdx=tx-this.mesh.position.x,mdz=tz-this.mesh.position.z;
+    const md=Math.sqrt(mdx*mdx+mdz*mdz);
+    const moving=md>0.4;
+    if(moving){
+      const spd=isGeorge?6:5;
+      this.mesh.position.x+=mdx/md*Math.min(md,spd*dt);
+      this.mesh.position.z+=mdz/md*Math.min(md,spd*dt);
+      if(!isGeorge)this.mesh.rotation.y=Math.atan2(mdx,mdz);
+    }
+    this.mesh.position.y=isGeorge?Math.abs(Math.sin(Date.now()*.002))*.3:0;
+    if(isGeorge)this.mesh.rotation.y+=dt*.6;
+    if(!isGeorge&&this.mesh.userData.ll){
+      if(moving)this._walkT+=dt*8;
+      const sw=moving?Math.sin(this._walkT)*.35:0;
+      this.mesh.userData.ll.rotation.x=sw;this.mesh.userData.rl.rotation.x=-sw;
+      if(this.mesh.userData.la)this.mesh.userData.la.rotation.x=-sw*.6;
+      if(this.mesh.userData.ra)this.mesh.userData.ra.rotation.x=sw*.6;
+    }
+    // Combat AI
+    if(Math.random()<(isGeorge?.9:.45)*dt){
+      for(const e of Enemies.list){
+        if(!e.alive)continue;
+        if(e.mesh.position.distanceTo(this.mesh.position)<(isGeorge?20:14)){
+          const dmg=isGeorge?~~(5+Math.random()*65):isDragonborn?~~(15+Math.random()*20):~~(8+Math.random()*14+(Player.bonusDmg||1)*4);
+          Enemies.hit(e,dmg,false,false,null);
+          if(isGeorge&&Math.random()<.2){showBanner('GEORGE: '+this.active.quips[~~(Math.random()*this.active.quips.length)]);}
+          break;
+        }
+      }
+    }
+    if(isGeorge&&Math.random()<.0018&&Player.weapon&&Player.weapon.currentAmmo>2){
+      Player.weapon.currentAmmo=Math.max(1,Player.weapon.currentAmmo-2);
+      try{UI.updateWeaponAmmo();}catch(e){}
+      showBanner('GEORGE: yoink');
+    }
+    if(isDragonborn){
+      this.active._shoutTimer=(this.active._shoutTimer||0)+dt;
+      if(this.active._shoutTimer>=8){
+        this.active._shoutTimer=0;showBanner('FUS RO DAH!');
+        for(const e of Enemies.list){if(!e.alive)continue;const ed=e.mesh.position.distanceTo(this.mesh.position);if(ed<12){const ex=e.mesh.position.x-this.mesh.position.x,ez=e.mesh.position.z-this.mesh.position.z;const en=Math.sqrt(ex*ex+ez*ez)||1;e.mesh.position.x+=ex/en*(12-ed)*.7;e.mesh.position.z+=ez/en*(12-ed)*.7;Enemies.hit(e,~~(30+Math.random()*25),false,false,null);e.stunTimer=1.5;}}
+        try{Audio.uiClick();}catch(ex){}
+      }
+    }
+    if(isShepard){
+      this.active._biotic=(this.active._biotic||0)+dt;
+      if(this.active._biotic>=12){
+        this.active._biotic=0;
+        let cl=null,cd=999;for(const e of Enemies.list){if(!e.alive)continue;const d=e.mesh.position.distanceTo(this.mesh.position);if(d<cd){cd=d;cl=e;}}
+        if(cl&&cd<18){this.mesh.position.copy(cl.mesh.position);Enemies.hit(cl,~~(60+Math.random()*40),false,false,null);cl.stunTimer=1.0;showBanner('SHEPARD: BIOTIC CHARGE!');try{Audio.uiClick();}catch(ex){}}
+      }
+    }
+  },
+
 };
 
 // =====================================================================
@@ -4941,31 +5141,42 @@ HubSystem.renderMercs=function(){
     const hired=Mercs.active&&Mercs.active.name===m.name;
     const isGeorge=m.bonus==='george';
     const div=document.createElement('div');
-    div.style.cssText=`border:1px solid ${hired?m.col:'rgba(255,255,255,.08)'};background:${hired?'rgba(255,140,0,.05)':'rgba(0,0,0,.2)'};padding:12px;margin-bottom:8px;display:flex;gap:12px;align-items:center`;
-    // Portrait canvas
-    const cvs=document.createElement('canvas');cvs.width=52;cvs.height=52;cvs.style.cssText='flex-shrink:0;image-rendering:pixelated;border:1px solid rgba(255,255,255,.1)';
+    div.style.cssText=`border:1px solid ${hired?m.col:'rgba(255,255,255,.08)'};background:${hired?'rgba(255,140,0,.05)':'rgba(0,0,0,.2)'};padding:10px;margin-bottom:8px;display:flex;flex-direction:row;gap:10px;align-items:flex-start;overflow:hidden;box-sizing:border-box`;
+    // Portrait canvas — fixed size, no flex growth
+    const cvs=document.createElement('canvas');
+    cvs.width=52;cvs.height=52;
+    cvs.style.cssText='flex:0 0 52px;width:52px;height:52px;image-rendering:pixelated;border:1px solid rgba(255,255,255,.1);display:block';
     const ctx=cvs.getContext('2d');
     ctx.fillStyle='#08080f';ctx.fillRect(0,0,52,52);
     Mercs._drawPortrait(ctx,m.name,52,52);
     div.appendChild(cvs);
-    // Info
-    const info=document.createElement('div');info.style.flex='1;min-width:0';
-    info.innerHTML=`<div style="font-size:11px;letter-spacing:2px;color:${m.col};font-family:'Courier New',monospace">${m.name}${hired?' [HIRED]':''}</div><div style="font-size:9px;color:#556;margin-top:3px;font-family:'Courier New',monospace">${m.role}</div><div style="font-size:9px;color:#778;margin-top:2px;font-family:'Courier New',monospace">${m.desc.split('\n')[1]}</div><div style="font-size:10px;color:#ffd700;margin-top:5px;font-family:'Courier New',monospace">${m.cost===1?'1 CR (CHAOS TAX)':m.cost+' CR'}</div>`;
+    // Info column — takes remaining space, no overflow
+    const info=document.createElement('div');
+    info.style.cssText='flex:1 1 0;min-width:0;overflow:hidden';
+    info.innerHTML=
+      `<div style="font-size:10px;letter-spacing:1px;color:${m.col};font-family:'Courier New',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.name}${hired?' ✓':''}</div>`+
+      `<div style="font-size:8px;color:#556;margin-top:2px;font-family:'Courier New',monospace">${m.role} · 1 zone</div>`+
+      `<div style="font-size:8px;color:#778;margin-top:2px;font-family:'Courier New',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.desc.split('\n')[1]}</div>`+
+      `<div style="font-size:10px;color:#ffd700;margin-top:4px;font-family:'Courier New',monospace">${hired?'<span style="color:#e67e22">'+Mercs._zonesLeft+(Mercs._zonesLeft>1?' ZONES':' ZONE')+' LEFT</span>':m.cost+' CR'}</div>`;
     div.appendChild(info);
-    // Hire/dismiss button
+    // Button column — fixed width, won't grow or shrink
+    const btnWrap=document.createElement('div');
+    btnWrap.style.cssText='flex:0 0 auto;display:flex;flex-direction:column;gap:4px;align-items:flex-end';
     const btn=document.createElement('button');
-    btn.style.cssText=`padding:9px 12px;border:1px solid ${m.col};background:transparent;color:${m.col};font-family:'Courier New',monospace;font-size:9px;letter-spacing:2px;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
+    btn.style.cssText=`padding:8px 10px;border:1px solid ${m.col};background:transparent;color:${m.col};font-family:'Courier New',monospace;font-size:8px;letter-spacing:1px;cursor:pointer;touch-action:manipulation;white-space:nowrap`;
     btn.textContent=hired?'ACTIVE':isGeorge?'UHH':'HIRE';
     btn.onclick=()=>{if(Mercs.active){Mercs.dismiss();}else{Mercs.hire(m);}};
     btn.ontouchend=(e)=>{e.preventDefault();if(Mercs.active){Mercs.dismiss();}else{Mercs.hire(m);}};
+    btnWrap.appendChild(btn);
     if(hired){
       const db=document.createElement('button');
-      db.style.cssText='padding:9px 10px;border:1px solid #e74c3c;background:transparent;color:#e74c3c;font-family:monospace;font-size:9px;cursor:pointer;margin-left:4px;touch-action:manipulation';
+      db.style.cssText='padding:8px 10px;border:1px solid #e74c3c;background:transparent;color:#e74c3c;font-family:monospace;font-size:8px;cursor:pointer;touch-action:manipulation;white-space:nowrap';
       db.textContent='FIRE';
       db.onclick=()=>Mercs.dismiss();
       db.ontouchend=(e)=>{e.preventDefault();Mercs.dismiss();};
-      div.appendChild(btn);div.appendChild(db);
-    } else {div.appendChild(btn);}
+      btnWrap.appendChild(db);
+    }
+    div.appendChild(btnWrap);
     el.appendChild(div);
   });
   const ad=document.getElementById('active-merc-display')||document.getElementById('mercs-active-display');
