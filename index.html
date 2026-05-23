@@ -98,7 +98,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:#000;
 /* Hub NPC interaction panel — floats over 3D world */
 #hub-panel-overlay{position:fixed;inset:0;z-index:62;background:rgba(0,0,0,.88);display:none;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:60px;overflow-y:auto;pointer-events:auto;}
 /* Hub interaction prompt — shows when near NPC */
-#hub-interact-prompt{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px)+180px);left:50%;transform:translateX(-50%);background:rgba(0,10,6,.95);border:2px solid rgba(230,126,34,.6);padding:14px 28px;font-family:'Courier New',monospace;font-size:14px;letter-spacing:3px;color:#e67e22;z-index:65;white-space:nowrap;display:none;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;border-radius:2px;box-shadow:0 0 20px rgba(230,126,34,.3);}
+#hub-interact-prompt{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px)+80px);left:50%;transform:translateX(-50%);background:rgba(0,8,4,.92);border:1px solid rgba(230,126,34,.5);padding:10px 20px;font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;color:#e67e22;z-index:65;white-space:nowrap;display:none;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;border-radius:2px;}
 /* Hub HUD elements that stay visible in 3D world */
 #hub-world-hud{position:fixed;top:0;left:0;right:0;display:none;z-index:61;pointer-events:none;max-height:60px;}
 #hub-world-hud .hwh-bar{display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,.92);border-bottom:1px solid rgba(230,126,34,.2);padding:max(env(safe-area-inset-top,0px),14px) 14px 10px;}
@@ -8881,7 +8881,7 @@ const HubWorld={
     const hud=document.getElementById('hud');if(hud)hud.style.display='block';
     ['zone-info','btn-pause','btn-hub'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='';});
     const mm=document.getElementById('minimap-container');if(mm)mm.style.display='';
-    ['weapon-hud','mob-skills','btn-fire','btn-roll','btn-reload'].forEach(id=>{const el=document.getElementById(id);if(el){el.style.opacity='1';el.style.pointerEvents='';}});
+    ['weapon-hud','mob-skills','btn-fire','btn-roll','btn-reload'].forEach(id=>{const el=document.getElementById(id);if(el){el.style.opacity='1';el.style.pointerEvents='';el.style.display='';}});
     const ip=document.getElementById('hub-interact-prompt');if(ip)ip.style.display='none';
     this.closePanel();
     setTimeout(()=>{try{Audio.startMusic();}catch(e){}},200);
