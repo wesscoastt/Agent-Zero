@@ -1811,6 +1811,7 @@ const Input = {
     this.world.set(ro.x+rd.x*t,0,ro.z+rd.z*t);
   },
   firing(){return this.mouse.btn||this.mFire;},
+  consumeFire(){this.mFire=false;}, // called by Player.shoot after firing
 };
 Input.init();
 
@@ -1825,6 +1826,7 @@ const Joystick = {
     // Mobile button wiring via click (reliable on iOS)
     document.getElementById('btn-roll').addEventListener('pointerdown',e=>{e.stopPropagation();Input.mDodge=true;});
     document.getElementById('btn-roll').addEventListener('pointerup',()=>Input.mDodge=false);
+    // Fire button — original working implementation
     document.getElementById('btn-fire').addEventListener('pointerdown',e=>{e.stopPropagation();Input.mFire=true;});
     document.getElementById('btn-fire').addEventListener('pointerup',()=>Input.mFire=false);
     document.getElementById('btn-fire').addEventListener('pointercancel',()=>Input.mFire=false);
@@ -1868,10 +1870,13 @@ function setState(s) {
   document.getElementById('char-creator').classList.toggle('on', s===GS.CHAR);
   document.getElementById('hub-screen').classList.toggle('on', s===GS.HUB);
   if(s===GS.HUB){
-    gameRunning=true; // keep 3D running
-    setTimeout(()=>HubWorld.enter(),50);
+    gameRunning=true;
+    HubWorld._enterTimer=setTimeout(()=>HubWorld.enter(),50);
   }
-  if(prevState===GS.HUB&&s!==GS.HUB){HubWorld.leave();}
+  if(prevState===GS.HUB&&s!==GS.HUB){
+    if(HubWorld._enterTimer){clearTimeout(HubWorld._enterTimer);HubWorld._enterTimer=null;}
+    HubWorld.leave();
+  }
   document.getElementById('hud').style.display = (s===GS.MISSION)?'block':'none';
   document.getElementById('btn-pause').style.display = (s===GS.MISSION)?'flex':'none';
   document.getElementById('pause-screen').classList.remove('on');
@@ -2706,11 +2711,26 @@ const Enemies = {
     this.totalKills++;
     try{BattlePass.addXP(elite?30:10);}catch(ex){}
     try{Player.gainXP(eT.xp);}catch(ex){}
-    Player.credits+=~~(eT.cr*(1+Zone.zone*.1));
+    const crMult=Player._bufordActive?1.4:1;
+    Player.credits+=~~(eT.cr*(1+Zone.zone*.1)*crMult);
     UI.credit(Player.credits);
     try{UI.kill(eT.label);}catch(ex){}
     try{Audio.enemyDie();}catch(ex){}
 
+    // Buford: 15% authority warning stun on kill
+    if(Player._bufordActive&&Math.random()<.15){
+      try{
+        // Stun all nearby enemies — "YOU ARE IN A HEAP OF TROUBLE, BOY"
+        const quotes=['"YOU SUMABITCH!"','"ILLEGAL U-TURN!"','"I\'M GONNA NAIL YOUR ASS!"','"STOP RIGHT THERE!"'];
+        showBanner(quotes[~~(Math.random()*quotes.length)]+' — PURSUIT MANDATE',1600);
+        for(const te of Enemies.list){
+          if(!te.alive)continue;
+          const dx=te.mesh.position.x-bp.x,dz=te.mesh.position.z-bp.z;
+          if(dx*dx+dz*dz<196)Enemies.stun(te,2);
+        }
+        try{Audio.uiClick();}catch(e){}
+      }catch(ex){}
+    }
     // Loot drops
     try{if(Math.random()<.55)Loot.spawnDrop(lx,lz);}catch(ex){}
     try{if(eKey==='HEAVY'&&Math.random()<.8)Loot.spawnDrop(lx,lz,'RARE',true);}catch(ex){}
@@ -3448,6 +3468,7 @@ const Player={
 
   update(dt){
     if(!this.mesh)return;
+    if(this.fireTimer>0)this.fireTimer-=dt;
     if(this.dodgeCd>0)this.dodgeCd-=dt;
     if(this.reloading){this.reloadTimer-=dt;UI.updateReloadBar(1-this.reloadTimer/this.reloadTotal);if(this.reloadTimer<=0){this.reloading=false;this.weapon.currentAmmo=this.weapon.magazine;UI.showReload(false);UI.updateWeaponHUD();}}
     if(this.dodging){this.dodgeTimer-=dt;this.mesh.position.addScaledVector(this.dodgeDir,15*dt);if(this.dodgeTimer<=0)this.dodging=false;}
@@ -4778,6 +4799,12 @@ const Mercs={
       cost:700,zones:1,col:'#cc2020',
       _biotic:0,
     },
+    {
+      name:'SHERIFF BUFORD',role:'Texas Law',bonus:'buford',val:1,
+      desc:'"You sumabitch!" — Buford T. Justice, Texas.\nPassive: PURSUIT MANDATE — enemies drop 40% more credits. Civilians (innocents) get real mad. Speed +10%. Every kill has a 15% chance to trigger a loud authority warning that stuns nearby enemies 2s.',
+      cost:550,zones:1,col:'#c89020',
+      _pursuitTimer:0,
+    },
   ],
   hire(m){
     if(Player.credits<m.cost)return;
@@ -4799,9 +4826,13 @@ const Mercs={
       Player.bonusDmg=(Player.bonusDmg||1)+.15;
     }
     if(m.bonus==='shepard'){
-      // Shepard: +20% damage, skill cooldown reduction
       Player.bonusDmg=(Player.bonusDmg||1)+.20;
-      Player._shepardActive=true; // reduces skill CD in Skills.activate
+      Player._shepardActive=true;
+    }
+    if(m.bonus==='buford'){
+      // Pursuit Mandate: +10% speed, +40% credit drops, 15% stun-on-kill authority warning
+      Player.bonusSpd=(Player.bonusSpd||0)+.10;
+      Player._bufordActive=true;
     }
     if(m.bonus==='george'){
       // George buffs EVERYTHING but is chaotic
@@ -5055,10 +5086,50 @@ const Mercs={
       // N7 shoulder armor — dark red
       f(~~(W*.08),~~(H*.56),~~(W*.14),~~(H*.28),'#cc1a1a');
       f(~~(W*.78),~~(H*.56),~~(W*.14),~~(H*.28),'#1a1a2a');
+    } else if(name==='SHERIFF BUFORD'){
+      // Buford T. Justice — wide Stetson hat, tan sheriff uniform, big gut, mustache
+      f(0,0,W,H,'#1a1208');
+      // Big Stetson hat (the widest hat you ever saw)
+      f(~~(W*.04),~~(H*.08),~~(W*.92),~~(H*.22),'#c8a020'); // wide brim
+      f(~~(W*.2),~~(H*.02),~~(W*.6),~~(H*.18),'#d4aa28');  // crown tall
+      f(~~(W*.22),~~(H*.04),~~(W*.56),~~(H*.02),'#b89018'); // hat band
+      // Hat band detail
+      f(~~(W*.22),~~(H*.04),~~(W*.56),~~(H*.025),'#8a6010');
+      // Face — big round red face
+      f(~~(W*.18),~~(H*.28),~~(W*.64),~~(H*.44),'#d4804a');
+      f(~~(W*.18),~~(H*.28),~~(W*.04),~~(H*.44),'#c07040');
+      f(~~(W*.78),~~(H*.28),~~(W*.04),~~(H*.44),'#c07040');
+      // Neck — thick
+      f(~~(W*.32),~~(H*.7),~~(W*.36),~~(H*.14),'#c07040');
+      // Big bushy mustache — grey/silver
+      f(~~(W*.22),~~(H*.54),~~(W*.56),~~(H*.1),'#888888');
+      f(~~(W*.24),~~(H*.52),~~(W*.52),~~(H*.06),'#999999');
+      f(~~(W*.22),~~(H*.54),~~(W*.1),~~(H*.06),'#777777'); // droop left
+      f(~~(W*.68),~~(H*.54),~~(W*.1),~~(H*.06),'#777777'); // droop right
+      // Squinting eyes — small and mean
+      f(~~(W*.26),~~(H*.38),~~(W*.16),~~(H*.07),'#0a0a0a');
+      f(~~(W*.28),~~(H*.39),~~(W*.1),~~(H*.05),'#3a2010');
+      f(~~(W*.58),~~(H*.38),~~(W*.16),~~(H*.07),'#0a0a0a');
+      f(~~(W*.6),~~(H*.39),~~(W*.1),~~(H*.05),'#3a2010');
+      // Angry eyebrows — furrowed
+      f(~~(W*.24),~~(H*.34),~~(W*.18),~~(H*.04),'#555533');
+      f(~~(W*.24),~~(H*.34),~~(W*.18),~~(H*.02),'#3a3a20');
+      f(~~(W*.58),~~(H*.34),~~(W*.18),~~(H*.04),'#555533');
+      f(~~(W*.58),~~(H*.34),~~(W*.18),~~(H*.02),'#3a3a20');
+      // Red nose — that complexion
+      f(~~(W*.41),~~(H*.47),~~(W*.18),~~(H*.1),'#cc5030');
+      // Mouth — shouting
+      f(~~(W*.3),~~(H*.63),~~(W*.4),~~(H*.05),'#882810');
+      // Tan sheriff uniform
+      f(~~(W*.1),~~(H*.72),~~(W*.8),~~(H*.28),'#c8a050');
+      // Sheriff badge — gold star
+      f(~~(W*.42),~~(H*.76),~~(W*.16),~~(H*.14),'#ffd700');
+      f(~~(W*.45),~~(H*.74),~~(W*.1),~~(H*.18),'#ffd700');
+      ctx.fillStyle='#8a6a00';ctx.font=`bold ${~~(W*.09)}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('★',W*.5,H*.84);
+      // Uniform collar
+      f(~~(W*.3),~~(H*.7),~~(W*.12),~~(H*.1),'#d8b060');
+      f(~~(W*.58),~~(H*.7),~~(W*.12),~~(H*.1),'#d8b060');
     }
-  },
-
-  _buildGeorgeMesh(){
     // George Droid — wide orange body, tiny arms, goofy proportions
     const g=new THREE.Group();
     const box=(w,h,d,col)=>{
@@ -5145,6 +5216,42 @@ const Mercs={
     return g;
   },
 
+  _buildBufordMesh(){
+    const g=new THREE.Group();
+    const b=(w,h,d,col)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:col}));
+    const TAN=0xc8a050, SKIN=0xd4804a, BADGE=0xffd700, DARK=0x2a2010;
+    // Big gut torso — noticeably wider/rounder than normal
+    const torso=b(.95,1.1,.6,TAN);torso.position.y=.9;g.add(torso);
+    // Pot belly protrusion
+    const belly=b(.8,.5,.2,TAN);belly.position.set(0,.7,.4);g.add(belly);
+    // Shirt collar
+    const collar=b(.7,.15,.62,0xe8c070);collar.position.y=1.42;g.add(collar);
+    // Sheriff badge — gold star on chest
+    const badge=b(.22,.22,.05,BADGE);badge.position.set(-.22,.95,.32);g.add(badge);
+    // Thick legs — big man energy
+    const ll=b(.35,.72,.36,TAN);ll.position.set(-.26,.2,0);g.add(ll);
+    const rl=b(.35,.72,.36,TAN);rl.position.set(.26,.2,0);g.add(rl);
+    // Boots
+    const lb=b(.37,.22,.38,DARK);lb.position.set(-.26,-.12,0);g.add(lb);
+    const rb=b(.37,.22,.38,DARK);rb.position.set(.26,-.12,0);g.add(rb);
+    // Thick arms
+    const la=b(.3,.72,.32,TAN);la.position.set(-.65,.85,0);g.add(la);
+    const ra=b(.3,.72,.32,TAN);ra.position.set(.65,.85,0);g.add(ra);
+    // Fat round head
+    const head=b(.7,.58,.6,SKIN);head.position.y=1.68;g.add(head);
+    // Big grey mustache
+    const stache=b(.56,.14,.08,0x999999);stache.position.set(0,1.54,.32);g.add(stache);
+    // Beady angry eyes
+    const le=b(.12,.1,.05,0x111111);le.position.set(-.18,1.76,.32);g.add(le);
+    const re=b(.12,.1,.05,0x111111);re.position.set(.18,1.76,.32);g.add(re);
+    // Stetson hat — big brim, tall crown
+    const brim=b(1.1,.1,.95,0xc8a020);brim.position.y=1.98;g.add(brim);
+    const crown=b(.72,.55,.6,0xd4aa28);crown.position.y=2.25;g.add(crown);
+    const band=b(.74,.08,.62,0x8a6010);band.position.y=2.0;g.add(band);
+    g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
+    return g;
+  },
+
   // Called when player enters exit portal — tick down zone contract
   onZoneComplete(){
     if(!this.active)return;
@@ -5163,12 +5270,15 @@ const Mercs={
     const isGeorge=this.active.bonus==='george';
     const isDragonborn=this.active.bonus==='shout';
     const isShepard=this.active.bonus==='shepard';
+    const isBuford=this.active.bonus==='buford';
     if(isGeorge){
       this.mesh=this._buildGeorgeMesh();
     } else if(isDragonborn){
       this.mesh=this._buildDragonbornMesh();
     } else if(isShepard){
       this.mesh=this._buildShepardMesh();
+    } else if(isBuford){
+      this.mesh=this._buildBufordMesh();
     } else {
       // Standard merc — full humanoid body with legs and arms
       const c=parseInt((this.active.col||'#888').replace('#',''),16)||0x888888;
@@ -5337,50 +5447,49 @@ HubSystem.renderArena=function(){
 HubSystem.renderMercs=function(){
   const el=document.getElementById('mercs-grid');if(!el)return;
   el.innerHTML='';
+  el.style.cssText='display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box';
   Mercs.ROSTER.forEach(m=>{
     const hired=Mercs.active&&Mercs.active.name===m.name;
     const isGeorge=m.bonus==='george';
-    const div=document.createElement('div');
-    div.style.cssText=`border:1px solid ${hired?m.col:'rgba(255,255,255,.08)'};background:${hired?'rgba(255,140,0,.05)':'rgba(0,0,0,.2)'};padding:10px;margin-bottom:8px;display:flex;flex-direction:row;gap:10px;align-items:flex-start;overflow:hidden;box-sizing:border-box`;
-    // Portrait canvas — fixed size, no flex growth
+    const card=document.createElement('div');
+    card.style.cssText=`border:1px solid ${hired?m.col:'rgba(255,255,255,.1)'};background:${hired?'rgba(255,140,0,.06)':'rgba(0,0,0,.25)'};padding:10px 12px;box-sizing:border-box;width:100%`;
+    // Row 1: portrait + name + button
+    const row1=document.createElement('div');
+    row1.style.cssText='display:flex;align-items:center;gap:10px;margin-bottom:6px';
     const cvs=document.createElement('canvas');
-    cvs.width=52;cvs.height=52;
-    cvs.style.cssText='flex:0 0 52px;width:52px;height:52px;image-rendering:pixelated;border:1px solid rgba(255,255,255,.1);display:block';
-    const ctx=cvs.getContext('2d');
-    ctx.fillStyle='#08080f';ctx.fillRect(0,0,52,52);
-    Mercs._drawPortrait(ctx,m.name,52,52);
-    div.appendChild(cvs);
-    // Info column — takes remaining space, no overflow
-    const info=document.createElement('div');
-    info.style.cssText='flex:1 1 0;min-width:0;overflow:hidden';
-    info.innerHTML=
-      `<div style="font-size:10px;letter-spacing:1px;color:${m.col};font-family:'Courier New',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.name}${hired?' ✓':''}</div>`+
-      `<div style="font-size:8px;color:#556;margin-top:2px;font-family:'Courier New',monospace">${m.role} · 1 zone</div>`+
-      `<div style="font-size:8px;color:#778;margin-top:2px;font-family:'Courier New',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.desc.split('\n')[1]}</div>`+
-      `<div style="font-size:10px;color:#ffd700;margin-top:4px;font-family:'Courier New',monospace">${hired?'<span style="color:#e67e22">'+Mercs._zonesLeft+(Mercs._zonesLeft>1?' ZONES':' ZONE')+' LEFT</span>':m.cost+' CR'}</div>`;
-    div.appendChild(info);
-    // Button column — fixed width, won't grow or shrink
-    const btnWrap=document.createElement('div');
-    btnWrap.style.cssText='flex:0 0 auto;display:flex;flex-direction:column;gap:4px;align-items:flex-end';
+    cvs.width=44;cvs.height=44;
+    cvs.style.cssText='flex-shrink:0;width:44px;height:44px;image-rendering:pixelated;border:1px solid rgba(255,255,255,.12)';
+    const ctx2=cvs.getContext('2d');
+    ctx2.fillStyle='#08080f';ctx2.fillRect(0,0,44,44);
+    Mercs._drawPortrait(ctx2,m.name,44,44);
+    row1.appendChild(cvs);
+    const nameBlock=document.createElement('div');
+    nameBlock.style.cssText='flex:1;min-width:0';
+    nameBlock.innerHTML=
+      `<div style="font-size:12px;letter-spacing:2px;color:${m.col};font-family:'Courier New',monospace;font-weight:bold">${m.name}${hired?' ✓':''}</div>`+
+      `<div style="font-size:9px;color:#667;margin-top:2px;font-family:'Courier New',monospace">${m.role} · ${m.zones||1} ZONE CONTRACT</div>`;
+    row1.appendChild(nameBlock);
     const btn=document.createElement('button');
-    btn.style.cssText=`padding:8px 10px;border:1px solid ${m.col};background:transparent;color:${m.col};font-family:'Courier New',monospace;font-size:8px;letter-spacing:1px;cursor:pointer;touch-action:manipulation;white-space:nowrap`;
+    btn.style.cssText=`flex-shrink:0;padding:8px 12px;border:1px solid ${m.col};background:transparent;color:${m.col};font-family:'Courier New',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;touch-action:manipulation`;
     btn.textContent=hired?'ACTIVE':isGeorge?'UHH':'HIRE';
-    btn.onclick=()=>{if(Mercs.active){Mercs.dismiss();}else{Mercs.hire(m);}};
-    btn.ontouchend=(e)=>{e.preventDefault();if(Mercs.active){Mercs.dismiss();}else{Mercs.hire(m);}};
-    btnWrap.appendChild(btn);
-    if(hired){
-      const db=document.createElement('button');
-      db.style.cssText='padding:8px 10px;border:1px solid #e74c3c;background:transparent;color:#e74c3c;font-family:monospace;font-size:8px;cursor:pointer;touch-action:manipulation;white-space:nowrap';
-      db.textContent='FIRE';
-      db.onclick=()=>Mercs.dismiss();
-      db.ontouchend=(e)=>{e.preventDefault();Mercs.dismiss();};
-      btnWrap.appendChild(db);
-    }
-    div.appendChild(btnWrap);
-    el.appendChild(div);
+    btn.onclick=()=>{if(hired){Mercs.dismiss();}else{Mercs.hire(m);}};
+    btn.ontouchend=(e)=>{e.preventDefault();if(hired){Mercs.dismiss();}else{Mercs.hire(m);}};
+    row1.appendChild(btn);
+    card.appendChild(row1);
+    // Row 2: description
+    const desc=document.createElement('div');
+    desc.style.cssText='font-size:9px;color:#889;font-family:"Courier New",monospace;line-height:1.4;border-top:1px solid rgba(255,255,255,.06);padding-top:6px';
+    desc.textContent=m.desc.replace(/\\n/g,' — ');
+    card.appendChild(desc);
+    // Row 3: cost / status
+    const foot=document.createElement('div');
+    foot.style.cssText='margin-top:6px;font-size:10px;font-family:"Courier New",monospace';
+    foot.innerHTML=hired
+      ?`<span style="color:#e67e22">${Mercs._zonesLeft} ZONE${Mercs._zonesLeft>1?'S':''} REMAINING — <span style="color:#e74c3c;cursor:pointer" onclick="Mercs.dismiss()">DISMISS</span></span>`
+      :`<span style="color:#ffd700">${m.cost} CR</span>`;
+    card.appendChild(foot);
+    el.appendChild(card);
   });
-  const ad=document.getElementById('active-merc-display')||document.getElementById('mercs-active-display');
-  if(ad)ad.textContent=Mercs.active?`ACTIVE: ${Mercs.active.name} · ${Mercs.active.desc.split('\n')[1]}`:'NO MERC HIRED';
 };
 
 // Extend HubSystem.refresh to include new tabs
@@ -5494,8 +5603,8 @@ function loop(){
     }
     UI.drawMinimap();
   }catch(ex){
-    // Log but don't crash — keep the RAF going
-    if(typeof console!=='undefined')console.warn('Loop error:',ex.message);
+    console.error('Loop error:',ex.message,ex.stack?.split('\n')[1]);
+    try{showBanner('ERR: '+ex.message.slice(0,40));}catch(e){}
   }
 }
 
@@ -8906,7 +9015,22 @@ const HubWorld={
     const hud=document.getElementById('hud');if(hud)hud.style.display='block';
     ['zone-info','btn-pause','btn-hub'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='';});
     const mm=document.getElementById('minimap-container');if(mm)mm.style.display='';
-    ['weapon-hud','mob-skills','btn-fire','btn-roll','btn-reload'].forEach(id=>{const el=document.getElementById(id);if(el){el.style.opacity='1';el.style.pointerEvents='';el.style.display='';}});
+    // Forcefully restore combat UI to mission state
+    const isMob=typeof IS_MOB!=='undefined'&&IS_MOB;
+    ['weapon-hud','mob-skills','btn-fire','btn-roll','btn-reload'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(!el)return;
+      el.style.opacity='1';
+      el.style.pointerEvents='';
+      // Mobile buttons use display:flex, desktop weapon-hud uses block
+      if(isMob&&['btn-fire','btn-roll','btn-reload','mob-skills'].includes(id)){
+        el.style.display='flex';
+      } else if(id==='weapon-hud'){
+        el.style.display='block';
+      } else {
+        el.style.display='';
+      }
+    });
     const ip=document.getElementById('hub-interact-prompt');if(ip)ip.style.display='none';
     this.closePanel();
     setTimeout(()=>{try{Audio.startMusic();}catch(e){}},200);
@@ -9232,11 +9356,6 @@ window.addEventListener('resize',()=>{
 });
 
 // ── BOOT SEQUENCE ──────────────────────────────────────────────────
-// Init systems
-Bullets.init();
-Particles.init();
-UI.init();
-Rain.init();
 
 // Start the render loop
 const menuAmb=new THREE.AmbientLight(0x111118,1);menuAmb.name='menuAmb';scene.add(menuAmb);
