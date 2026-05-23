@@ -98,7 +98,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:#000;
 /* Hub NPC interaction panel — floats over 3D world */
 #hub-panel-overlay{position:fixed;inset:0;z-index:62;background:rgba(0,0,0,.88);display:none;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:60px;overflow-y:auto;pointer-events:auto;}
 /* Hub interaction prompt — shows when near NPC */
-#hub-interact-prompt{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px)+80px);left:50%;transform:translateX(-50%);background:rgba(0,8,4,.92);border:1px solid rgba(230,126,34,.5);padding:10px 20px;font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;color:#e67e22;z-index:65;white-space:nowrap;display:none;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;border-radius:2px;}
+#hub-interact-prompt{position:fixed;left:0;right:0;bottom:0;padding:16px 0 calc(env(safe-area-inset-bottom,0px)+16px);text-align:center;background:rgba(0,15,8,.96);border-top:2px solid rgba(230,126,34,.6);font-family:'Courier New',monospace;font-size:13px;letter-spacing:3px;color:#e67e22;z-index:65;display:none;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
 /* Hub HUD elements that stay visible in 3D world */
 #hub-world-hud{position:fixed;top:0;left:0;right:0;display:none;z-index:61;pointer-events:none;max-height:60px;}
 #hub-world-hud .hwh-bar{display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,.92);border-bottom:1px solid rgba(230,126,34,.2);padding:max(env(safe-area-inset-top,0px),14px) 14px 10px;}
@@ -891,6 +891,7 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
 <!-- MAIN MENU -->
 <div id="main-menu" class="overlay on">
   <div class="scanlines"></div>
+  <!-- Title always visible, not in scroll -->
   <div id="menu-logo">
     <div class="menu-title">AGENT ZERO</div>
   </div>
@@ -900,15 +901,17 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
     <button class="mbtn" id="mb-new" onclick="menuNewGame()">NEW MISSION</button>
     <button class="mbtn" id="mb-load" onclick="menuLoad()">LOAD SAVE</button>
   </div>
-  <!-- WHAT'S NEW -->
-  <div id="whats-new" style="
-    margin-top:24px;width:88%;max-width:340px;
-    border:1px solid rgba(230,126,34,.18);
-    background:rgba(5,5,12,.85);
-    padding:14px 16px;
-  ">
-    <div style="font-size:8px;letter-spacing:4px;color:#e67e22;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,.06);padding-bottom:6px">◈ WHAT'S NEW</div>
-    <div id="whats-new-list" style="display:flex;flex-direction:column;gap:7px"></div>
+  <!-- WHAT'S NEW — scroll down to see -->
+  <div style="width:88%;max-width:340px;margin-top:20px;overflow-y:auto;max-height:38vh;-webkit-overflow-scrolling:touch;">
+    <div style="font-size:7px;letter-spacing:3px;color:#445;text-align:center;margin-bottom:6px;opacity:.6">▾ SCROLL FOR PATCH NOTES ▾</div>
+    <div id="whats-new" style="
+      border:1px solid rgba(230,126,34,.18);
+      background:rgba(5,5,12,.85);
+      padding:14px 16px;
+    ">
+      <div style="font-size:8px;letter-spacing:4px;color:#e67e22;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,.06);padding-bottom:6px">◈ WHAT'S NEW</div>
+      <div id="whats-new-list" style="display:flex;flex-direction:column;gap:7px"></div>
+    </div>
   </div>
 </div>
 
@@ -4442,22 +4445,42 @@ function deathGoHub(){deathReturnToHub();}
 
 // ── CONTINUE RUN — drop back into the active zone ──────────────────
 function hubContinueRun(){
-  Audio.uiClick();
+  try{Audio.uiClick();}catch(e){}
   const rb=document.getElementById('hub-return-btn');
   if(rb)rb.style.display='none';
-  document.getElementById('hub-continue-run').style.display='none';
+  const cr=document.getElementById('hub-continue-run');
+  if(cr)cr.style.display='none';
   setState(GS.MISSION);
   gameRunning=true;
-  // 4-second spawn protection — can't take damage while orienting
+  // Place player back where they were (or startPos if no saved position)
+  if(Player.mesh&&Map3D.rooms&&Map3D.rooms.length>0){
+    let px,pz;
+    if(HubWorld._savedPlayerPos&&Map3D.isFloor(HubWorld._savedPlayerPos.x,HubWorld._savedPlayerPos.z)){
+      px=HubWorld._savedPlayerPos.x;pz=HubWorld._savedPlayerPos.z;
+    } else {
+      const sp=Map3D.startPos();px=sp.x;pz=sp.z;
+    }
+    Player.mesh.position.set(px,0,pz);
+    camera.position.copy(Player.mesh.position).add(CAM_OFF);
+    _camLook.copy(Player.mesh.position);camera.lookAt(_camLook);
+    HubWorld._savedPlayerPos=null;
+  }
+  // Respawn enemies if zone was cleared before hub visit
+  const aliveCount=Enemies.list.filter(e=>e.alive).length;
+  if(aliveCount===0){
+    try{_spawnEnemies();}catch(e){}
+    showBanner('ENEMIES RESPAWNED — GOOD LUCK');
+  } else {
+    showBanner('BACK IN THE FIELD');
+  }
+  // Refresh HUD
+  try{Zone._hud();}catch(e){}
+  try{UI.updateBars();}catch(e){}
+  // Spawn protection
   Player._spawnShield=true;
   const sv=document.getElementById('shield-vfx');if(sv)sv.classList.add('on');
-  setTimeout(()=>{Player._spawnShield=false;if(sv)sv.classList.remove('on');},4000);
-  showBanner('OPERATIVE DEPLOYED — 4s SPAWN PROTECTION');
-  // Respawn near gravestone if available
-  if(_gravePos&&Player.mesh){
-    Player.mesh.position.set(_gravePos.x+2,0,_gravePos.z+2);
-    camera.position.copy(Player.mesh.position).add(CAM_OFF);
-  }
+  setTimeout(()=>{Player._spawnShield=false;if(sv)sv.classList.remove('on');},3000);
+  setTimeout(()=>{try{Audio.startMusic();}catch(e){}},300);
 }
 
 function _updateHubContinueBtn(){
@@ -8848,6 +8871,8 @@ const HubWorld={
 
   enter(){
     try{this.build();}catch(e){console.warn('HubWorld.build:',e.message);}
+    // Save player's in-mission position so hubContinueRun can restore them nearby
+    this._savedPlayerPos=Player.mesh?Player.mesh.position.clone():null;
     // Show hub geometry, hide mission geometry
     if(this._group)this._group.visible=true;
     if(Map3D.group)Map3D.group.visible=false;
