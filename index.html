@@ -2746,7 +2746,8 @@ const Enemies = {
         try{Audio.uiClick();}catch(e){}
       }catch(ex){}
     }
-    // Loot drops
+    // Give pet XP on kill
+    try{if(Mercs.active)Mercs.gainXP(elite?12:5);}catch(ex){}
     try{if(Math.random()<.55)Loot.spawnDrop(lx,lz);}catch(ex){}
     try{if(eKey==='HEAVY'&&Math.random()<.8)Loot.spawnDrop(lx,lz,'RARE',true);}catch(ex){}
     try{if(eKey==='ELITE')Loot.spawnDrop(lx,lz,'EPIC');}catch(ex){}
@@ -4006,10 +4007,110 @@ const HubSystem={
 
   renderArmory(){
     const cr=Player.credits;const grid=document.getElementById('armory-grid');if(!grid)return;grid.innerHTML='';
+
+    // ── ATTACHMENT SOCKETING (Torchlight gem-style) ──────────────────
+    const bag=Player._attachmentBag||[];
+    if(bag.length>0||true){ // always show section
+      const sec=document.createElement('div');
+      sec.style.cssText='margin-bottom:14px;border:1px solid rgba(0,255,200,.15);padding:10px';
+      sec.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;color:#00ffcc;margin-bottom:8px">🔧 ATTACHMENTS (${bag.length})</div>`;
+
+      if(bag.length===0){
+        sec.innerHTML+=`<div style="font-family:'Courier New',monospace;font-size:8px;color:#334">NO ATTACHMENTS — DROPS FROM ELITES &amp; BOSSES</div>`;
+      } else {
+        // Show each attachment with socket button
+        bag.forEach((att,ai)=>{
+          const row=document.createElement('div');
+          row.style.cssText=`display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)`;
+          row.innerHTML=`<span style="font-size:16px">${att.icon||'🔧'}</span><div style="flex:1;min-width:0"><div style="font-family:'Courier New',monospace;font-size:10px;color:${att.col||'#fff'}">${att.name}</div><div style="font-family:'Courier New',monospace;font-size:8px;color:#556">${att.slot} · ${att.desc}</div></div>`;
+
+          // Socket buttons for each equipped weapon
+          const weapons=[Player.weapon,...(Player.weaponBag||[])].filter(Boolean);
+          weapons.forEach((w,wi)=>{
+            if(!w.sockets||w.sockets.length===0)return;
+            const openSlot=w.sockets.findIndex(s=>!s);
+            if(openSlot===-1)return; // weapon full
+            const existing=w.attachments&&w.attachments[att.slot];
+            if(existing)return; // slot type already filled
+            const sbtn=document.createElement('button');
+            sbtn.style.cssText=`padding:5px 7px;border:1px solid ${att.col||'#888'};background:transparent;color:${att.col||'#fff'};font-family:'Courier New',monospace;font-size:7px;cursor:pointer;touch-action:manipulation;white-space:nowrap`;
+            sbtn.textContent='SLOT→'+(wi===0?'EQUIPPED':w.name.split(' ')[0]);
+            sbtn.onclick=sbtn.ontouchend=(e)=>{
+              if(e.type==='touchend')e.preventDefault();
+              attachToWeapon(w,att);
+              Player._attachmentBag.splice(ai,1);
+              this.renderArmory();
+            };
+            row.appendChild(sbtn);
+          });
+
+          // Socket into equipped armor
+          const armorPieces=Object.values(Armor.equipped||{}).filter(Boolean);
+          armorPieces.forEach((a)=>{
+            if(!a.sockets||a.sockets.length===0)return;
+            const openSlot=a.sockets.findIndex(s=>!s);
+            if(openSlot===-1)return;
+            if(a.attachments&&a.attachments[att.slot])return;
+            const abtn=document.createElement('button');
+            abtn.style.cssText=`padding:5px 7px;border:1px solid ${att.col||'#888'};background:transparent;color:${att.col||'#fff'};font-family:'Courier New',monospace;font-size:7px;cursor:pointer;touch-action:manipulation;white-space:nowrap`;
+            abtn.textContent='SLOT→'+a.slot.toUpperCase();
+            abtn.onclick=abtn.ontouchend=(e)=>{
+              if(e.type==='touchend')e.preventDefault();
+              attachToWeapon(a,att);
+              Player._attachmentBag.splice(ai,1);
+              this.renderArmory();
+            };
+            row.appendChild(abtn);
+          });
+          sec.appendChild(row);
+        });
+      }
+      grid.appendChild(sec);
+    }
+
+    // ── ACTIVE WEAPON SOCKETS ────────────────────────────────────────
+    if(Player.weapon){
+      const wsec=document.createElement('div');
+      wsec.style.cssText='margin-bottom:14px;border:1px solid rgba(255,200,0,.15);padding:10px';
+      const w=Player.weapon;
+      const atts=w.attachments||{};
+      const sockets=w.sockets||[];
+      wsec.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;color:#ffd700;margin-bottom:6px">⚔ ${w.name.split(' ').slice(0,3).join(' ')} — ${sockets.length} SOCKET${sockets.length!==1?'S':''}</div>`;
+      const slots=['OPTIC','MUZZLE','MAGAZINE','GRIP','UNDERBARREL'];
+      slots.forEach(slot=>{
+        const filled=atts[slot];
+        const row=document.createElement('div');
+        row.style.cssText='display:flex;align-items:center;gap:8px;padding:4px 0;font-family:"Courier New",monospace;font-size:9px;';
+        if(filled){
+          row.innerHTML=`<span style="color:${filled.col||'#fff'}">${filled.icon||'⊙'}</span><span style="color:#aaa;flex:1">${slot}: <span style="color:${filled.col}">${filled.name}</span> — ${filled.desc}</span>`;
+          const rm=document.createElement('button');
+          rm.style.cssText='padding:3px 6px;border:1px solid #e74c3c;background:transparent;color:#e74c3c;font-family:"Courier New",monospace;font-size:7px;cursor:pointer;touch-action:manipulation';
+          rm.textContent='REMOVE';
+          rm.onclick=rm.ontouchend=(e)=>{
+            if(e.type==='touchend')e.preventDefault();
+            delete w.attachments[slot];
+            Player._attachmentBag=Player._attachmentBag||[];
+            Player._attachmentBag.push(filled);
+            showBanner(filled.name+' REMOVED');
+            this.renderArmory();
+          };
+          row.appendChild(rm);
+        } else {
+          row.innerHTML=`<span style="color:#334">⊙</span><span style="color:#334;flex:1">${slot}: EMPTY</span>`;
+        }
+        wsec.appendChild(row);
+      });
+      grid.appendChild(wsec);
+    }
+
+    // ── BUY ARMOR (existing shop) ─────────────────────────────────────
+    const shopHdr=document.createElement('div');
+    shopHdr.style.cssText='font-family:"Courier New",monospace;font-size:9px;letter-spacing:3px;color:#3498db;margin-bottom:8px';
+    shopHdr.textContent='🛡 ARMORY STOCK';
+    grid.appendChild(shopHdr);
     this.armoryInv.forEach(item=>{
       const r=RARITY[item.rarity];const price=~~(item.sellValue*2.5);
       const el=document.createElement('div');el.className='shop-item';
-      // Canvas icon for armor slot
       const cvs=document.createElement('canvas');cvs.width=36;cvs.height=36;cvs.style.cssText='image-rendering:pixelated;flex-shrink:0;float:left;margin-right:8px';
       this._drawArmorIcon(cvs,item.slot,r.hex);
       el.appendChild(cvs);
@@ -4512,6 +4613,13 @@ function _spawnEnemies(){
   });
   Zone.killsToNext=Enemies.list.length;
   Zone._hud();
+  // Tycoon gameplay effects on zone start
+  try{
+    if(Player._ammoPress&&Player.weapon){Player.weapon.currentAmmo=Player.weapon.magazine;UI.updateWeaponAmmo();}
+    if(Player._grenadeBench){Skills.cds[2]=0;} // reset grenade cooldown = start with grenade ready
+    if(Player._ventilation){Player.heal(15);} // +15 HP per zone from ventilation
+    if(Player._cantinaXP){Player._xpBonus=(Player._xpBonus||1)*1.1;} // applied in gainXP
+  }catch(e){}
 
   // Apply modifier effects that need enemies already spawned
   if(Zone._modifier?.apply){
@@ -5028,15 +5136,106 @@ const Mercs={
       _pursuitTimer:0,
     },
   ],
+  // ── PET SYSTEM — Torchlight-style permanent companions ────────────
+  _xp:0, _level:1, _xpToNext:100,
+  _weapon:null,      // equipped weapon (can give them one from your stash)
+  _atHub:false,      // sent to hub to sell items (like Torchlight)
+  _sellQueue:[],     // items queued for selling
+  _zonesLeft:999,    // no longer used for expiry — pets are permanent
+
   hire(m){
-    if(Player.credits<m.cost)return;
+    if(Player.credits<m.cost){showBanner('NOT ENOUGH CREDITS');return;}
+    this.dismiss(); // always replaces current pet
     this.active=m;Player.credits-=m.cost;
-    this._zonesLeft=m.zones||1;
+    this._xp=0;this._level=1;this._xpToNext=100;
+    this._weapon=null;this._atHub=false;this._sellQueue=[];
     try{UI.credit(Player.credits);}catch(e){}
     this._applyBonus(m);
     try{HubSystem.renderMercs();}catch(e){}
-    showBanner(m.name+' HIRED — '+this._zonesLeft+' ZONE CONTRACT');
+    showBanner(m.name+' IS NOW YOUR COMPANION');
     try{Audio.uiClick();}catch(e){}
+    this._save();
+  },
+
+  gainXP(amt){
+    if(!this.active)return;
+    this._xp+=amt;
+    while(this._xp>=this._xpToNext){
+      this._xp-=this._xpToNext;
+      this._level++;
+      this._xpToNext=~~(this._xpToNext*1.4);
+      this._onLevelUp();
+    }
+    this._save();
+  },
+
+  _onLevelUp(){
+    showBanner('🐾 '+this.active.name+' → LVL '+this._level+'! STATS INCREASED',2500);
+    try{Audio.levelUp();}catch(e){}
+    // Every level improves the companion's combat effectiveness
+    // Applied in update() and _applyBonus dynamically via _level
+  },
+
+  // Give companion a weapon from inventory
+  equip(weapon){
+    if(!this.active||!weapon)return;
+    this._weapon=weapon;
+    // Remove from player bag
+    const bi=Player.weaponBag.indexOf(weapon);
+    if(bi!==-1)Player.weaponBag.splice(bi,1);
+    showBanner(this.active.name+' EQUIPPED: '+weapon.name.split(' ').slice(0,3).join(' '));
+    try{HubSystem.renderMercs();}catch(e){}
+    this._save();
+  },
+
+  // Send companion to hub to sell your items (Torchlight pet mechanic)
+  sendToHub(itemsToSell){
+    if(!this.active||this._atHub)return;
+    this._atHub=true;
+    this._sellQueue=itemsToSell||[];
+    // Sell all items after a delay, return when entering hub
+    const totalValue=this._sellQueue.reduce((s,i)=>{
+      const r=RARITY[i.rarity];return s+(r?r.cr*3:10);
+    },0);
+    showBanner(this.active.name+' HEADING TO HUB — WILL SELL '+this._sellQueue.length+' ITEMS',3000);
+    // Items are sold when player reaches hub
+    this._save();
+  },
+
+  returnFromHub(){
+    if(!this._atHub)return;
+    const cr=this._sellQueue.reduce((s,i)=>{const r=RARITY[i.rarity];return s+(r?r.cr*3:10);},0);
+    if(cr>0){Player.credits+=cr;try{UI.credit(Player.credits);}catch(e){}showBanner(this.active.name+' RETURNED — SOLD FOR '+cr+' CR',2500);}
+    this._atHub=false;this._sellQueue=[];
+    this._save();
+  },
+
+  _save(){
+    try{localStorage.setItem('az_pet',JSON.stringify({
+      name:this.active?.name||null,
+      xp:this._xp,level:this._level,xpToNext:this._xpToNext,
+      weaponName:this._weapon?.name||null,
+    }));}catch(e){}
+  },
+
+  _load(){
+    try{
+      const d=JSON.parse(localStorage.getItem('az_pet'));
+      if(!d||!d.name)return;
+      const m=this.ROSTER.find(r=>r.name===d.name);
+      if(!m)return;
+      this.active=m;
+      this._xp=d.xp||0;this._level=d.level||1;this._xpToNext=d.xpToNext||100;
+      this._applyBonus(m);
+    }catch(e){}
+  },
+
+  // Called on zone complete — pets stay forever, just get XP
+  onZoneComplete(){
+    if(!this.active)return;
+    const xpGain=20+Zone.zone*8;
+    this.gainXP(xpGain);
+    showBanner(this.active.name+' +'+xpGain+' XP [LVL '+this._level+']',1800);
   },
   _applyBonus(m){
     if(m.bonus==='dmg')Player.bonusDmg=(Player.bonusDmg||1)+m.val;
@@ -5381,156 +5580,170 @@ const Mercs={
     return g;
   },
 
-  _buildDragonbornMesh(){
+  // ── Shared mesh builder — used by spawnMesh AND hub wanderers ──
+  _buildMercMeshByName(name,colHex,bonus){
+    const col=parseInt((colHex||'#888').replace('#',''),16)||0x888888;
+    const b=(w,h,d,c)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:c}));
     const g=new THREE.Group();
-    const b=(w,h,d,col)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:col}));
-    // Leather armor torso
-    const torso=b(.75,1.1,.5,0x4a2a10);torso.position.y=.9;g.add(torso);
-    const strap=b(.1,.9,.08,0x6a3a18);strap.rotation.z=.4;strap.position.set(0,.9,.26);g.add(strap);
-    const strap2=b(.1,.9,.08,0x6a3a18);strap2.rotation.z=-.4;strap2.position.set(0,.9,.26);g.add(strap2);
-    // Iron helmet
-    const helm=b(.62,.34,.58,0x888888);helm.position.y=1.88;g.add(helm);
-    const brow=b(.66,.1,.6,0x999);brow.position.y=1.68;g.add(brow);
-    const nose=b(.08,.18,.1,0x777);nose.position.set(0,1.72,.3);g.add(nose);
-    // Horns — the iconic part
-    const lhorn=b(.1,.32,.1,0xc8b070);lhorn.position.set(-.22,2.14,0);lhorn.rotation.z=.35;g.add(lhorn);
-    const rhorn=b(.1,.32,.1,0xc8b070);rhorn.position.set(.22,2.14,0);rhorn.rotation.z=-.35;g.add(rhorn);
-    // Face
-    const face=b(.5,.22,.5,0xc09060);face.position.y=1.58;g.add(face);
-    // Steel shoulder plate
-    const ls=b(.32,.22,.44,0x888888);ls.position.set(-.52,1.42,0);g.add(ls);
-    // Arms — bare skin
-    const la=b(.28,.72,.28,0xb08050);la.position.set(-.54,.9,0);g.add(la);
-    const ra=b(.28,.72,.28,0xb08050);ra.position.set(.54,.9,0);g.add(ra);
-    // Iron bracers
-    const lb=b(.32,.22,.32,0x888888);lb.position.set(-.54,.44,0);g.add(lb);
-    const rb=b(.32,.22,.32,0x888888);rb.position.set(.54,.44,0);g.add(rb);
-    // Legs + boots
-    const ll=b(.28,.72,.32,0x3a2010);ll.position.set(-.2,.2,0);g.add(ll);
-    const rl=b(.28,.72,.32,0x3a2010);rl.position.set(.2,.2,0);g.add(rl);
-    g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
-    return g;
-  },
+    const n=name;
 
-  _buildShepardMesh(){
-    const g=new THREE.Group();
-    const b=(w,h,d,col)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:col}));
-    // N7 dark armor
-    const torso=b(.72,1.1,.48,0x0d0d1a);torso.position.y=.9;g.add(torso);
-    const stripe=b(.08,1.1,.5,0xcc0000);stripe.position.set(-.36,.9,0);g.add(stripe);// N7 red stripe
-    // Shoulder armor
-    const ls=b(.28,.3,.5,0x1a1a2a);ls.position.set(-.54,1.4,0);g.add(ls);
-    const rs=b(.28,.3,.5,0x1a1a2a);rs.position.set(.54,1.4,0);g.add(rs);
-    const lsa=b(.3,.14,.52,0xcc1a1a);lsa.position.set(-.54,1.3,0);g.add(lsa);// red accent
-    // Head + collar
-    const head=b(.52,.5,.48,0xc4a878);head.position.y=1.65;g.add(head);
-    const hair=b(.54,.1,.5,0x1a1408);hair.position.y=1.88;g.add(hair);
-    const collar=b(.6,.16,.54,0x111122);collar.position.y=1.42;g.add(collar);
-    // Arms — N7 armor
-    const la=b(.26,.7,.3,0x111122);la.position.set(-.52,.9,0);g.add(la);
-    const ra=b(.26,.7,.3,0x111122);ra.position.set(.52,.9,0);g.add(ra);
-    // Omni-tool glow — right arm
-    const omni=b(.28,.2,.06,0xff6600);omni.material.emissive=new THREE.Color(0xff4400);omni.material.emissiveIntensity=.6;omni.position.set(.52,.7,.18);g.add(omni);
-    // Legs
-    const ll=b(.28,.7,.3,0x0d0d1a);ll.position.set(-.2,.2,0);g.add(ll);
-    const rl=b(.28,.7,.3,0x0d0d1a);rl.position.set(.2,.2,0);g.add(rl);
-    g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
-    return g;
-  },
+    if(bonus==='george'||n==='GEORGE DROID'){
+      // Wide orange body, tiny arms, big round head, antenna
+      const torso=b(1.4,1.2,1.0,0xff6600);torso.position.set(0,.8,0);g.add(torso);
+      const ll=b(.35,.6,.35,0xff4400);ll.position.set(-.35,.2,0);g.add(ll);
+      const rl=b(.35,.6,.35,0xff4400);rl.position.set(.35,.2,0);g.add(rl);
+      const la=b(.2,.35,.2,0xff6600);la.position.set(-.85,.85,0);g.add(la);
+      const ra=b(.2,.35,.2,0xff6600);ra.position.set(.85,.85,0);g.add(ra);
+      const head=b(1.1,1.0,1.0,0xff7700);head.position.set(0,1.75,0);g.add(head);
+      const le=b(.15,.15,.05,0x111111);le.position.set(-.22,1.85,.51);g.add(le);
+      const re=b(.15,.15,.05,0x111111);re.position.set(.22,1.85,.51);g.add(re);
+      const mouth=b(.6,.1,.05,0x222222);mouth.position.set(0,1.55,.51);g.add(mouth);
+      const badge=b(.4,.35,.05,0xffdd00);badge.position.set(0,.9,.52);g.add(badge);
+      const ant=b(.06,.4,.06,0xaaaaaa);ant.position.set(.2,2.3,0);g.add(ant);
+      const ball=b(.15,.15,.15,0xff0000);ball.position.set(.2,2.52,0);g.add(ball);
+      g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
 
-  _buildBufordMesh(){
-    const g=new THREE.Group();
-    const b=(w,h,d,col)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:col}));
-    const TAN=0xc8a050, SKIN=0xd4804a, BADGE=0xffd700, DARK=0x2a2010;
-    // Big gut torso — noticeably wider/rounder than normal
-    const torso=b(.95,1.1,.6,TAN);torso.position.y=.9;g.add(torso);
-    // Pot belly protrusion
-    const belly=b(.8,.5,.2,TAN);belly.position.set(0,.7,.4);g.add(belly);
-    // Shirt collar
-    const collar=b(.7,.15,.62,0xe8c070);collar.position.y=1.42;g.add(collar);
-    // Sheriff badge — gold star on chest
-    const badge=b(.22,.22,.05,BADGE);badge.position.set(-.22,.95,.32);g.add(badge);
-    // Thick legs — big man energy
-    const ll=b(.35,.72,.36,TAN);ll.position.set(-.26,.2,0);g.add(ll);
-    const rl=b(.35,.72,.36,TAN);rl.position.set(.26,.2,0);g.add(rl);
-    // Boots
-    const lb=b(.37,.22,.38,DARK);lb.position.set(-.26,-.12,0);g.add(lb);
-    const rb=b(.37,.22,.38,DARK);rb.position.set(.26,-.12,0);g.add(rb);
-    // Thick arms
-    const la=b(.3,.72,.32,TAN);la.position.set(-.65,.85,0);g.add(la);
-    const ra=b(.3,.72,.32,TAN);ra.position.set(.65,.85,0);g.add(ra);
-    // Fat round head
-    const head=b(.7,.58,.6,SKIN);head.position.y=1.68;g.add(head);
-    // Big grey mustache
-    const stache=b(.56,.14,.08,0x999999);stache.position.set(0,1.54,.32);g.add(stache);
-    // Beady angry eyes
-    const le=b(.12,.1,.05,0x111111);le.position.set(-.18,1.76,.32);g.add(le);
-    const re=b(.12,.1,.05,0x111111);re.position.set(.18,1.76,.32);g.add(re);
-    // Stetson hat — big brim, tall crown
-    const brim=b(1.1,.1,.95,0xc8a020);brim.position.y=1.98;g.add(brim);
-    const crown=b(.72,.55,.6,0xd4aa28);crown.position.y=2.25;g.add(crown);
-    const band=b(.74,.08,.62,0x8a6010);band.position.y=2.0;g.add(band);
-    g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
-    return g;
-  },
+    }else if(bonus==='shout'||n==='DRAGONBORN'){
+      // Leather armor, iron helmet with horns, war axe on back
+      const torso=b(.75,1.1,.5,0x4a2a10);torso.position.y=.9;g.add(torso);
+      const strap=b(.1,.9,.08,0x6a3a18);strap.rotation.z=.4;strap.position.set(0,.9,.26);g.add(strap);
+      const strap2=strap.clone();strap2.rotation.z=-.4;g.add(strap2);
+      const helm=b(.62,.34,.58,0x888888);helm.position.y=1.88;g.add(helm);
+      const lhorn=b(.1,.38,.12,0xddddcc);lhorn.rotation.z=-.5;lhorn.position.set(-.3,2.12,0);g.add(lhorn);
+      const rhorn=b(.1,.38,.12,0xddddcc);rhorn.rotation.z=.5;rhorn.position.set(.3,2.12,0);g.add(rhorn);
+      const face=b(.5,.3,.1,0xc8a882);face.position.set(0,1.7,.3);g.add(face);
+      const beard=b(.44,.22,.1,0x554422);beard.position.set(0,1.52,.3);g.add(beard);
+      const la=b(.28,.75,.32,0x5a3418);la.position.set(-.56,.9,0);g.add(la);
+      const ra=b(.28,.75,.32,0x5a3418);ra.position.set(.56,.9,0);g.add(ra);
+      const axe=b(.06,.9,.12,0x888888);axe.rotation.z=.15;axe.position.set(-.45,1.1,-.28);g.add(axe);
+      const blade=b(.04,.35,.38,0xaaaaaa);blade.rotation.z=.15;blade.position.set(-.45,1.55,-.18);g.add(blade);
+      const ll=b(.3,.72,.34,0x3a1a08);ll.position.set(-.2,.22,0);g.add(ll);
+      const rl=ll.clone();rl.position.set(.2,.22,0);g.add(rl);
+      g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
 
-  // Called when player enters exit portal — tick down zone contract
-  onZoneComplete(){
-    if(!this.active)return;
-    this._zonesLeft--;
-    if(this._zonesLeft<=0){
-      showBanner(this.active.name+' CONTRACT EXPIRED — REHIRE AT THE HUB');
-      this.dismiss();
-    } else {
-      showBanner(this.active.name+' — '+this._zonesLeft+' ZONE'+(this._zonesLeft>1?'S':'')+' LEFT');
+    }else if(bonus==='shepard'||n==='COMMANDER SHEPARD'){
+      // N7 dark armor, red stripe, military face
+      const torso=b(.72,1.1,.48,0x0d0d1a);torso.position.y=.9;g.add(torso);
+      const stripe=b(.08,1.1,.5,0xcc0000);stripe.position.set(-.36,.9,0);g.add(stripe);
+      const ls=b(.28,.3,.5,0x1a1a2a);ls.position.set(-.54,1.4,0);g.add(ls);
+      const rs=ls.clone();rs.position.set(.54,1.4,0);g.add(rs);
+      const lsa=b(.3,.14,.52,0xcc1a1a);lsa.position.set(-.54,1.3,0);g.add(lsa);
+      const head=b(.52,.5,.48,0xc4a878);head.position.y=1.65;g.add(head);
+      const hair=b(.54,.1,.5,0x1a1408);hair.position.y=1.88;g.add(hair);
+      const collar=b(.6,.16,.54,0x111122);collar.position.y=1.42;g.add(collar);
+      const la=b(.26,.7,.3,0x111122);la.position.set(-.52,.9,0);g.add(la);
+      const ra=b(.26,.7,.3,0x111122);ra.position.set(.52,.9,0);g.add(ra);
+      const omni=b(.28,.2,.06,0xff6600);omni.material.emissive=new THREE.Color(0xff4400);omni.material.emissiveIntensity=.6;omni.position.set(.52,.7,.18);g.add(omni);
+      const ll=b(.28,.7,.3,0x0d0d1a);ll.position.set(-.2,.2,0);g.add(ll);
+      const rl=ll.clone();rl.position.set(.2,.2,0);g.add(rl);
+      g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
+
+    }else if(bonus==='buford'||n==='SHERIFF BUFORD'){
+      // Tan uniform, pot belly, big Stetson hat, gold badge
+      const torso=b(.95,1.1,.6,0xc8a050);torso.position.y=.9;g.add(torso);
+      const belly=b(.8,.5,.2,0xc8a050);belly.position.set(0,.7,.4);g.add(belly);
+      const collar=b(.7,.15,.62,0xe8c070);collar.position.y=1.42;g.add(collar);
+      const badge=b(.22,.22,.05,0xffd700);badge.position.set(-.22,.95,.32);g.add(badge);
+      const head=b(.7,.58,.6,0xd4804a);head.position.y=1.68;g.add(head);
+      const stache=b(.56,.14,.08,0x999999);stache.position.set(0,1.54,.32);g.add(stache);
+      const le=b(.12,.1,.05,0x111111);le.position.set(-.18,1.76,.32);g.add(le);
+      const re=le.clone();re.position.set(.18,1.76,.32);g.add(re);
+      const brim=b(1.1,.1,.95,0xc8a020);brim.position.y=1.98;g.add(brim);
+      const crown=b(.72,.55,.6,0xd4aa28);crown.position.y=2.25;g.add(crown);
+      const band=b(.74,.08,.62,0x8a6010);band.position.y=2.0;g.add(band);
+      const la=b(.3,.72,.32,0xc8a050);la.position.set(-.65,.85,0);g.add(la);
+      const ra=la.clone();ra.position.set(.65,.85,0);g.add(ra);
+      const ll=b(.35,.72,.36,0xc8a050);ll.position.set(-.26,.2,0);g.add(ll);
+      const rl=ll.clone();rl.position.set(.26,.2,0);g.add(rl);
+      g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
+
+    }else if(n==='VIPER'){
+      const torso=b(.6,1.0,.44,0xcc1a1a);torso.position.y=.9;g.add(torso);
+      const plate=b(.38,.5,.46,0xaa1010);plate.position.set(0,.95,0);g.add(plate);
+      const head=b(.46,.44,.42,0xc8a882);head.position.y=1.65;g.add(head);
+      const visor=b(.48,.18,.05,0xff3322);visor.material.emissive=new THREE.Color(0x880000);visor.material.emissiveIntensity=.4;visor.position.set(0,1.68,.22);g.add(visor);
+      const helm=b(.52,.28,.46,0xcc1a1a);helm.position.y=1.9;g.add(helm);
+      const la=b(.24,.7,.28,0xcc1a1a);la.position.set(-.46,.9,0);g.add(la);
+      const ra=la.clone();ra.position.set(.46,.9,0);g.add(ra);
+      const gun=b(.08,.1,.65,0x222222);gun.position.set(.46,.9,-.35);g.add(gun);
+      const ll=b(.24,.7,.28,0x1a1010);ll.position.set(-.16,.2,0);g.add(ll);
+      const rl=ll.clone();rl.position.set(.16,.2,0);g.add(rl);
+      g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
+
+    }else if(n==='SHADOW'){
+      const torso=b(.55,.95,.42,0x1a0a2a);torso.position.y=.9;g.add(torso);
+      const cloak=b(.62,.8,.44,0x220a33);cloak.position.set(0,1.05,0);g.add(cloak);
+      const head=b(.44,.42,.4,0x0a0a15);head.position.y=1.65;g.add(head);
+      const le2=b(.14,.1,.04,0xaa44ff);le2.material.emissive=new THREE.Color(0x8800ff);le2.material.emissiveIntensity=1;le2.position.set(-.12,1.67,.21);g.add(le2);
+      const re2=le2.clone();re2.position.set(.12,1.67,.21);g.add(re2);
+      const hood=b(.5,.32,.44,0x1a0a2a);hood.position.y=1.92;g.add(hood);
+      const la=b(.22,.65,.26,0x220a33);la.position.set(-.42,.88,0);g.add(la);
+      const ra=la.clone();ra.position.set(.42,.88,0);g.add(ra);
+      const ll=b(.22,.68,.26,0x0f0a18);ll.position.set(-.14,.18,0);g.add(ll);
+      const rl=ll.clone();rl.position.set(.14,.18,0);g.add(rl);
+      g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
+
+    }else if(n==='MEDIC'){
+      const torso=b(.6,.98,.44,0xeeeee8);torso.position.y=.9;g.add(torso);
+      const crossV=b(.1,.4,.46,0x22aa44);crossV.position.set(0,.95,0);g.add(crossV);
+      const crossH=b(.4,.1,.46,0x22aa44);crossH.position.set(0,.95,0);g.add(crossH);
+      const head=b(.46,.44,.42,0xc8a882);head.position.y=1.65;g.add(head);
+      const helm=b(.52,.28,.46,0xffffff);helm.position.y=1.9;g.add(helm);
+      const stripe=b(.52,.08,.47,0xdd1111);stripe.position.y=1.88;g.add(stripe);
+      const la=b(.24,.7,.28,0xeeeee8);la.position.set(-.46,.9,0);g.add(la);
+      const ra=la.clone();ra.position.set(.46,.9,0);g.add(ra);
+      const bag=b(.25,.3,.22,0x22aa44);bag.position.set(-.35,.55,0);g.add(bag);
+      const ll=b(.24,.7,.28,0xcccccc);ll.position.set(-.16,.2,0);g.add(ll);
+      const rl=ll.clone();rl.position.set(.16,.2,0);g.add(rl);
+      g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
+
+    }else if(n==='TANK'){
+      const torso=b(.9,1.05,.6,0x1a2a4a);torso.position.y=.95;g.add(torso);
+      const chest=b(.75,.55,.62,0x2a3a5a);chest.position.set(0,1.0,0);g.add(chest);
+      const head=b(.52,.48,.46,0xc8a882);head.position.y=1.7;g.add(head);
+      const helm=b(.6,.34,.52,0x2a3a5a);helm.position.y=1.96;g.add(helm);
+      const visorT=b(.42,.12,.04,0x4488ff);visorT.material.emissive=new THREE.Color(0x224488);visorT.material.emissiveIntensity=.3;visorT.position.set(0,1.7,.26);g.add(visorT);
+      const lsp=b(.38,.3,.46,0x334466);lsp.position.set(-.65,1.42,0);g.add(lsp);
+      const rsp=lsp.clone();rsp.position.set(.65,1.42,0);g.add(rsp);
+      const la=b(.3,.75,.34,0x2a3a5a);la.position.set(-.58,.9,0);g.add(la);
+      const ra=la.clone();ra.position.set(.58,.9,0);g.add(ra);
+      const ll=b(.3,.72,.34,0x1a2a3a);ll.position.set(-.2,.22,0);g.add(ll);
+      const rl=ll.clone();rl.position.set(.2,.22,0);g.add(rl);
+      g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
+
+    }else if(n==='RECON'){
+      const torso=b(.58,.92,.42,0xc8a030);torso.position.y=.88;g.add(torso);
+      const vest=b(.44,.5,.44,0xaa8820);vest.position.set(0,.92,0);g.add(vest);
+      const head=b(.44,.42,.4,0xc8a882);head.position.y=1.64;g.add(head);
+      const gog=b(.44,.16,.06,0xffaa00);gog.position.set(0,1.66,.22);g.add(gog);
+      const gl=b(.15,.12,.04,0x223322);gl.position.set(-.12,1.66,.24);g.add(gl);
+      const gr=gl.clone();gr.position.set(.12,1.66,.24);g.add(gr);
+      const helm=b(.5,.24,.44,0xb89020);helm.position.y=1.88;g.add(helm);
+      const la=b(.22,.66,.26,0xc8a030);la.position.set(-.44,.88,0);g.add(la);
+      const ra=la.clone();ra.position.set(.44,.88,0);g.add(ra);
+      const ll=b(.22,.68,.26,0xa07820);ll.position.set(-.15,.18,0);g.add(ll);
+      const rl=ll.clone();rl.position.set(.15,.18,0);g.add(rl);
+      g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
+
+    }else{
+      // Generic fallback
+      const torso=b(.6,.95,.44,col);torso.position.y=.9;g.add(torso);
+      const head=b(.46,.44,.42,0xc8a882);head.position.y=1.65;g.add(head);
+      const helm=b(.52,.28,.46,col);helm.position.y=1.9;g.add(helm);
+      const la=b(.24,.7,.28,col);la.position.set(-.46,.9,0);g.add(la);
+      const ra=la.clone();ra.position.set(.46,.9,0);g.add(ra);
+      const ll=b(.24,.7,.28,0x1a1a2a);ll.position.set(-.16,.2,0);g.add(ll);
+      const rl=ll.clone();rl.position.set(.16,.2,0);g.add(rl);
+      g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
     }
+    return g;
   },
 
   spawnMesh(){
     if(this.mesh){try{scene.remove(this.mesh);}catch(e){}this.mesh=null;}
-    if(!this.active)return;
-    const isGeorge=this.active.bonus==='george';
-    const isDragonborn=this.active.bonus==='shout';
-    const isShepard=this.active.bonus==='shepard';
-    const isBuford=this.active.bonus==='buford';
-    if(isGeorge){
-      this.mesh=this._buildGeorgeMesh();
-    } else if(isDragonborn){
-      this.mesh=this._buildDragonbornMesh();
-    } else if(isShepard){
-      this.mesh=this._buildShepardMesh();
-    } else if(isBuford){
-      this.mesh=this._buildBufordMesh();
-    } else {
-      // Standard merc — full humanoid body with legs and arms
-      const c=parseInt((this.active.col||'#888').replace('#',''),16)||0x888888;
-      const skin=0xc8a882;
-      const g=new THREE.Group();
-      const mat=c=>new THREE.MeshLambertMaterial({color:c});
-      const box=(w,h,d,col)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(col));return m;};
-      // Torso
-      const torso=box(.65,1.0,.45,c);torso.position.y=.9;g.add(torso);
-      // Head
-      const head=box(.5,.5,.45,skin);head.position.y=1.65;g.add(head);
-      // Eyes
-      const le=box(.1,.1,.05,0x111111);le.position.set(-.12,1.68,.23);g.add(le);
-      const re=box(.1,.1,.05,0x111111);re.position.set(.12,1.68,.23);g.add(re);
-      // Helmet — colored by merc
-      const helm=box(.56,.3,.5,c);helm.position.y=1.9;g.add(helm);
-      // Left arm
-      const la=box(.25,.7,.3,c);la.position.set(-.47,.9,0);g.add(la);
-      // Right arm (holds weapon stub)
-      const ra=box(.25,.7,.3,c);ra.position.set(.47,.9,0);g.add(ra);
-      // Weapon stub
-      const gun=box(.08,.08,.55,0x333333);gun.position.set(.47,.9,-.42);g.add(gun);
-      // Left leg - stored as userData for animation
-      const ll=box(.27,.7,.3,0x1a1a2a);ll.position.set(-.18,.2,0);g.add(ll);
-      const rl=box(.27,.7,.3,0x1a1a2a);rl.position.set(.18,.2,0);g.add(rl);
-      // Color stripe / badge
-      const badge=box(.22,.2,.46,0xe67e22);badge.position.set(0,.9,.01);g.add(badge);
-      g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
-      this.mesh=g;
-    }
+    if(!this.active||!Player.mesh)return;
+    this.mesh=this._buildMercMeshByName(this.active.name,this.active.col,this.active.bonus);
+    if(!this.mesh)return;
     this.mesh.position.copy(Player.mesh.position).add(new THREE.Vector3(2,0,0));
     scene.add(this.mesh);
   },
@@ -5538,15 +5751,20 @@ const Mercs={
   dismiss(){
     if(!this.active)return;
     if(this.mesh){try{scene.remove(this.mesh);}catch(e){}this.mesh=null;}
-    showBanner(this.active.name+' DISMISSED');
-    this.active=null;this._zonesLeft=0;
-    try{Player._mercRegen=false;Player._shepardActive=false;Player._georgeActive=false;}catch(e){}
+    showBanner(this.active.name+' DISMISSED — FAREWELL COMPANION');
+    this.active=null;this._xp=0;this._level=1;this._xpToNext=100;
+    try{Player._mercRegen=false;Player._shepardActive=false;Player._georgeActive=false;Player._bufordActive=false;}catch(e){}
+    try{localStorage.removeItem('az_pet');}catch(e){}
     try{HubSystem.renderMercs();}catch(e){}
   },
 
   update(dt){
-    if(!this.active||!this.mesh||!Player.mesh||!gameRunning)return;
-    if(this.active.bonus==='regen'||this.active.bonus==='george')try{Player.heal(1*dt);}catch(e){}
+    if(!this.active||!Player.mesh||!gameRunning)return;
+    // Return from hub sell trip when entering hub
+    if(this._atHub&&gameState===GS.HUB){this.returnFromHub();}
+    if(!this.mesh)return;
+    const lvlBonus=1+(this._level-1)*.12; // +12% per level
+    if(this.active.bonus==='regen'||this.active.bonus==='george')try{Player.heal(1*dt*lvlBonus);}catch(e){}
     const isGeorge=this.active.bonus==='george';
     const isDragonborn=this.active.bonus==='shout';
     const isShepard=this.active.bonus==='shepard';
@@ -5571,12 +5789,15 @@ const Mercs={
       if(this.mesh.userData.la)this.mesh.userData.la.rotation.x=-sw*.6;
       if(this.mesh.userData.ra)this.mesh.userData.ra.rotation.x=sw*.6;
     }
-    // Combat AI
+    // Combat AI — scales with pet level and equipped weapon
+    const lvlDmgBonus=1+(this._level-1)*.15;
+    const wepDmg=this._weapon?this._weapon.damage:0;
     if(Math.random()<(isGeorge?.9:.45)*dt){
       for(const e of Enemies.list){
         if(!e.alive)continue;
         if(e.mesh.position.distanceTo(this.mesh.position)<(isGeorge?20:14)){
-          const dmg=isGeorge?~~(5+Math.random()*65):isDragonborn?~~(15+Math.random()*20):~~(8+Math.random()*14+(Player.bonusDmg||1)*4);
+          const baseDmg=isGeorge?~~(5+Math.random()*65):isDragonborn?~~(15+Math.random()*20):~~(8+Math.random()*14+(Player.bonusDmg||1)*4+wepDmg*.5);
+          const dmg=~~(baseDmg*lvlDmgBonus);
           Enemies.hit(e,dmg,false,false,null);
           if(isGeorge&&Math.random()<.2){showBanner('GEORGE: '+this.active.quips[~~(Math.random()*this.active.quips.length)]);}
           break;
@@ -5668,47 +5889,120 @@ HubSystem.renderArena=function(){
 
 HubSystem.renderMercs=function(){
   const el=document.getElementById('mercs-grid');if(!el)return;
-  el.innerHTML='';
-  el.style.cssText='display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box';
+  el.innerHTML='';el.style.cssText='display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box';
+
+  // ── ACTIVE PET STATUS ───────────────────────────────────────────
+  if(Mercs.active){
+    const m=Mercs.active;
+    const pet=document.createElement('div');
+    pet.style.cssText=`border:1px solid ${m.col};background:rgba(0,0,0,.3);padding:12px;margin-bottom:4px`;
+    // Header
+    const hdr=document.createElement('div');
+    hdr.style.cssText='display:flex;align-items:center;gap:10px;margin-bottom:8px';
+    const cvs=document.createElement('canvas');cvs.width=48;cvs.height=48;
+    cvs.style.cssText='flex-shrink:0;width:48px;height:48px;image-rendering:pixelated;border:1px solid rgba(255,255,255,.15)';
+    const ctx2=cvs.getContext('2d');ctx2.fillStyle='#08080f';ctx2.fillRect(0,0,48,48);
+    Mercs._drawPortrait(ctx2,m.name,48,48);
+    hdr.appendChild(cvs);
+    const info=document.createElement('div');info.style.flex='1';
+    const xpPct=Math.min(100,~~(Mercs._xp/Mercs._xpToNext*100));
+    info.innerHTML=`
+      <div style="font-family:'Courier New',monospace;font-size:12px;letter-spacing:2px;color:${m.col};font-weight:bold">🐾 ${m.name}</div>
+      <div style="font-family:'Courier New',monospace;font-size:9px;color:#888;margin-top:2px">${m.role} · COMPANION LVL ${Mercs._level}</div>
+      <div style="margin-top:4px;background:rgba(255,255,255,.08);height:5px;border-radius:2px">
+        <div style="width:${xpPct}%;height:100%;background:${m.col};border-radius:2px;transition:width .3s"></div>
+      </div>
+      <div style="font-family:'Courier New',monospace;font-size:8px;color:#556;margin-top:2px">${Mercs._xp}/${Mercs._xpToNext} XP TO LVL ${Mercs._level+1}</div>
+    `;
+    hdr.appendChild(info);
+    pet.appendChild(hdr);
+    // Equipped weapon
+    const wpnLine=document.createElement('div');
+    wpnLine.style.cssText='font-family:"Courier New",monospace;font-size:9px;color:#667;margin-bottom:6px;padding:4px 6px;background:rgba(0,0,0,.2)';
+    wpnLine.textContent=Mercs._weapon?'⚔ '+Mercs._weapon.name.split(' ').slice(0,3).join(' '):'⚔ NO WEAPON EQUIPPED — GIVE ONE FROM BAG';
+    pet.appendChild(wpnLine);
+    // Stats
+    const stats=document.createElement('div');
+    stats.style.cssText='font-family:"Courier New",monospace;font-size:8px;color:#556;margin-bottom:8px';
+    stats.innerHTML=`DMG BONUS: +${~~((Mercs._level-1)*15)}% · KILL XP: ${20+Zone.zone*8}/zone`;
+    pet.appendChild(stats);
+    // Action buttons
+    const btnRow=document.createElement('div');
+    btnRow.style.cssText='display:flex;gap:6px;flex-wrap:wrap';
+    // Equip weapon from bag
+    if(Player.weaponBag&&Player.weaponBag.length>0){
+      Player.weaponBag.forEach(w=>{
+        const ebtn=document.createElement('button');
+        ebtn.style.cssText=`padding:6px 8px;border:1px solid #e67e22;background:transparent;color:#e67e22;font-family:'Courier New',monospace;font-size:8px;cursor:pointer;touch-action:manipulation`;
+        ebtn.textContent='EQUIP: '+w.name.split(' ').slice(0,2).join(' ');
+        ebtn.onclick=()=>Mercs.equip(w);ebtn.ontouchend=(e)=>{e.preventDefault();Mercs.equip(w);};
+        btnRow.appendChild(ebtn);
+      });
+    }
+    // Send to hub to sell
+    const bagItems=[...Player.weaponBag,...Armor.bag].filter(Boolean);
+    if(bagItems.length>0&&!Mercs._atHub){
+      const sbtn=document.createElement('button');
+      sbtn.style.cssText='padding:6px 8px;border:1px solid #3498db;background:transparent;color:#3498db;font-family:"Courier New",monospace;font-size:8px;cursor:pointer;touch-action:manipulation';
+      sbtn.textContent='📦 SEND TO SELL BAG ('+bagItems.length+')';
+      sbtn.onclick=()=>Mercs.sendToHub(bagItems);sbtn.ontouchend=(e)=>{e.preventDefault();Mercs.sendToHub(bagItems);};
+      btnRow.appendChild(sbtn);
+    }
+    if(Mercs._atHub){
+      const hubLabel=document.createElement('div');
+      hubLabel.style.cssText='font-family:"Courier New",monospace;font-size:9px;color:#3498db;padding:4px 0';
+      hubLabel.textContent='🏃 HEADING TO HUB TO SELL...';
+      btnRow.appendChild(hubLabel);
+    }
+    // Dismiss
+    const dbtn=document.createElement('button');
+    dbtn.style.cssText='padding:6px 8px;border:1px solid #e74c3c;background:transparent;color:#e74c3c;font-family:"Courier New",monospace;font-size:8px;cursor:pointer;touch-action:manipulation';
+    dbtn.textContent='DISMISS';dbtn.onclick=()=>Mercs.dismiss();dbtn.ontouchend=(e)=>{e.preventDefault();Mercs.dismiss();};
+    btnRow.appendChild(dbtn);
+    pet.appendChild(btnRow);
+    el.appendChild(pet);
+    // Separator
+    const sep=document.createElement('div');
+    sep.style.cssText='font-family:"Courier New",monospace;font-size:8px;letter-spacing:3px;color:#334;text-align:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)';
+    sep.textContent='— AVAILABLE COMPANIONS —';
+    el.appendChild(sep);
+  } else {
+    const empty=document.createElement('div');
+    empty.style.cssText='font-family:"Courier New",monospace;font-size:10px;color:#445;text-align:center;padding:12px;border:1px solid rgba(255,255,255,.06)';
+    empty.textContent='NO COMPANION — HIRE ONE BELOW';
+    el.appendChild(empty);
+  }
+
+  // ── ROSTER ──────────────────────────────────────────────────────
   Mercs.ROSTER.forEach(m=>{
     const hired=Mercs.active&&Mercs.active.name===m.name;
     const isGeorge=m.bonus==='george';
     const card=document.createElement('div');
-    card.style.cssText=`border:1px solid ${hired?m.col:'rgba(255,255,255,.1)'};background:${hired?'rgba(255,140,0,.06)':'rgba(0,0,0,.25)'};padding:10px 12px;box-sizing:border-box;width:100%`;
-    // Row 1: portrait + name + button
-    const row1=document.createElement('div');
-    row1.style.cssText='display:flex;align-items:center;gap:10px;margin-bottom:6px';
-    const cvs=document.createElement('canvas');
-    cvs.width=44;cvs.height=44;
-    cvs.style.cssText='flex-shrink:0;width:44px;height:44px;image-rendering:pixelated;border:1px solid rgba(255,255,255,.12)';
-    const ctx2=cvs.getContext('2d');
-    ctx2.fillStyle='#08080f';ctx2.fillRect(0,0,44,44);
-    Mercs._drawPortrait(ctx2,m.name,44,44);
-    row1.appendChild(cvs);
-    const nameBlock=document.createElement('div');
-    nameBlock.style.cssText='flex:1;min-width:0';
-    nameBlock.innerHTML=
-      `<div style="font-size:12px;letter-spacing:2px;color:${m.col};font-family:'Courier New',monospace;font-weight:bold">${m.name}${hired?' ✓':''}</div>`+
-      `<div style="font-size:9px;color:#667;margin-top:2px;font-family:'Courier New',monospace">${m.role} · ${m.zones||1} ZONE CONTRACT</div>`;
-    row1.appendChild(nameBlock);
-    const btn=document.createElement('button');
-    btn.style.cssText=`flex-shrink:0;padding:8px 12px;border:1px solid ${m.col};background:transparent;color:${m.col};font-family:'Courier New',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;touch-action:manipulation`;
-    btn.textContent=hired?'ACTIVE':isGeorge?'UHH':'HIRE';
-    btn.onclick=()=>{if(hired){Mercs.dismiss();}else{Mercs.hire(m);}};
-    btn.ontouchend=(e)=>{e.preventDefault();if(hired){Mercs.dismiss();}else{Mercs.hire(m);}};
-    row1.appendChild(btn);
+    card.style.cssText=`border:1px solid ${hired?m.col:'rgba(255,255,255,.08)'};background:${hired?'rgba(255,140,0,.04)':'rgba(0,0,0,.2)'};padding:10px 12px;box-sizing:border-box;width:100%;opacity:${hired?1:.9}`;
+    const row1=document.createElement('div');row1.style.cssText='display:flex;align-items:center;gap:10px;margin-bottom:6px';
+    const cvs2=document.createElement('canvas');cvs2.width=40;cvs2.height=40;
+    cvs2.style.cssText='flex-shrink:0;width:40px;height:40px;image-rendering:pixelated;border:1px solid rgba(255,255,255,.1)';
+    const ctx3=cvs2.getContext('2d');ctx3.fillStyle='#08080f';ctx3.fillRect(0,0,40,40);
+    Mercs._drawPortrait(ctx3,m.name,40,40);
+    row1.appendChild(cvs2);
+    const nb=document.createElement('div');nb.style.flex='1';
+    nb.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;color:${m.col}">${m.name}${hired?' 🐾':''}</div><div style="font-family:'Courier New',monospace;font-size:8px;color:#556;margin-top:2px">${m.role} · PERMANENT COMPANION</div>`;
+    row1.appendChild(nb);
+    if(!hired){
+      const btn=document.createElement('button');
+      btn.style.cssText=`flex-shrink:0;padding:7px 10px;border:1px solid ${m.col};background:transparent;color:${m.col};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation`;
+      btn.textContent=isGeorge?'UHH':'HIRE';
+      btn.onclick=()=>Mercs.hire(m);btn.ontouchend=(e)=>{e.preventDefault();Mercs.hire(m);};
+      row1.appendChild(btn);
+    }
     card.appendChild(row1);
-    // Row 2: description
     const desc=document.createElement('div');
-    desc.style.cssText='font-size:9px;color:#889;font-family:"Courier New",monospace;line-height:1.4;border-top:1px solid rgba(255,255,255,.06);padding-top:6px';
+    desc.style.cssText='font-family:"Courier New",monospace;font-size:8px;color:#556;line-height:1.4;border-top:1px solid rgba(255,255,255,.05);padding-top:5px';
     desc.textContent=m.desc.replace(/\\n/g,' — ');
     card.appendChild(desc);
-    // Row 3: cost / status
     const foot=document.createElement('div');
-    foot.style.cssText='margin-top:6px;font-size:10px;font-family:"Courier New",monospace';
-    foot.innerHTML=hired
-      ?`<span style="color:#e67e22">${Mercs._zonesLeft} ZONE${Mercs._zonesLeft>1?'S':''} REMAINING — <span style="color:#e74c3c;cursor:pointer" onclick="Mercs.dismiss()">DISMISS</span></span>`
-      :`<span style="color:#ffd700">${m.cost} CR</span>`;
+    foot.style.cssText='margin-top:5px;font-family:"Courier New",monospace;font-size:10px';
+    foot.innerHTML=hired?`<span style="color:#e67e22">ACTIVE COMPANION · LVL ${Mercs._level}</span>`:`<span style="color:#ffd700">${m.cost} CR — ONE TIME HIRE</span>`;
     card.appendChild(foot);
     el.appendChild(card);
   });
@@ -9345,17 +9639,20 @@ const HubWorld={
     this._npcs.push({x:0,z:-16,label:'↩ RETURN TO ZONE',panel:'zone_portal'});
     scene.add(G3);this._group=G3;
     this._hubMapGroup=Map3D.group; // also track hub floor group
-    // Hub ambient — remove any stale one first
-    const oldAmb=scene.getObjectByName('hub_ambient');if(oldAmb)scene.remove(oldAmb);
-    const amb=new THREE.AmbientLight(0x1a1a44,.7);amb.name='hub_ambient';scene.add(amb);
-    // Don't push to Map3D.lights — restored separately on leave
+    // Ambient light is added in enter() so it re-fires each visit
   },
 
   _savedMissionMap:null, // snapshot of Map3D before hub overwrites it
 
   enter(){
+    // Med station — full HP restore on hub enter
+    if(Player._hubMedStation){try{Player.hp=Player.maxHp;Player.armor=Player.maxArmor;UI.updateBars();}catch(e){}}
+    // Build hub geometry on first visit
     try{this.build();}catch(e){console.warn('HubWorld.build:',e.message);}
-    // Save player's in-mission position so hubContinueRun can restore them nearby
+    // Re-add hub ambient light every time (removed on leave)
+    const oldAmb=scene.getObjectByName('hub_ambient');if(oldAmb)scene.remove(oldAmb);
+    const hubAmb=new THREE.AmbientLight(0x1a1a44,.7);hubAmb.name='hub_ambient';scene.add(hubAmb);
+    // Save player's in-mission position
     this._savedPlayerPos=Player.mesh?Player.mesh.position.clone():null;
     // Show hub geometry, hide mission geometry
     if(this._group)this._group.visible=true;
@@ -9670,10 +9967,19 @@ const HubTycoon={
     Player.credits-=u.price;try{UI.credit(Player.credits);}catch(e){}
     this.data.upgrades[id]=true;
     if(id==='land')this.data.landBought=true;
-    if(id==='stash_upgrade')Armor.MAX_BAG=Math.min(24,Armor.MAX_BAG+4);
+    // ── GAMEPLAY EFFECTS ON PURCHASE ──────────────────────────────
+    if(id==='stash_locker'||id==='stash_ext1'||id==='stash_ext2')Armor.MAX_BAG=Math.min(24,Armor.MAX_BAG+4);
+    if(id==='medstation')Player._hubMedStation=true;   // heal on hub enter (applied in HubWorld.enter)
+    if(id==='ammo_press')Player._ammoPress=true;       // full ammo on zone start
+    if(id==='grenade_bench')Player._grenadeBench=true; // start zone with 2 grenades
+    if(id==='ventilation')Player._ventilation=true;    // +5 HP regen per zone (applied in _spawnEnemies)
+    if(id==='cantina')Player._cantinaXP=true;          // +10% XP
+    if(id==='merc_bunk')Player._mercDiscount=true;     // mercs 15% cheaper
+    if(id==='workbench')Player.bonusDmg=(Player.bonusDmg||1)+.05; // +5% dmg
+    if(id==='command_center'){Player.bonusDmg=(Player.bonusDmg||1)+.10;Player.bonusSpd=(Player.bonusSpd||0)+.10;}
     this.save();
     this._buildInScene();
-    showBanner('BUILT: '+u.name);
+    showBanner('◈ BUILT: '+u.name+' — '+u.desc,2500);
     try{Audio.uiClick();}catch(e){}
     Save.save();
   },
@@ -9684,6 +9990,531 @@ const HubTycoon={
 };
 
 // StyleSystem.load called in boot sequence below
+
+// ═══════════════════════════════════════════════════════════════════
+//  WANDERING HUB MERCS — NPCs patrol when no companion active
+// ═══════════════════════════════════════════════════════════════════
+HubWorld._wanderers=[];
+HubWorld._initWanderers=function(){
+  if(this._wanderers.length)return;
+  if(!this._group)return;
+  // Build each roster merc as a wandering NPC with their actual appearance
+  Mercs.ROSTER.forEach((m,i)=>{
+    if(Mercs.active&&Mercs.active.name===m.name)return; // skip active companion
+    const mesh=Mercs._buildMercMeshByName(m.name,m.col,m.bonus);
+    if(!mesh)return;
+    const angle=(i/Mercs.ROSTER.length)*Math.PI*2;
+    const r=8+Math.random()*6;
+    mesh.position.set(Math.sin(angle)*r,0,Math.cos(angle)*r);
+    mesh.scale.setScalar(.85); // slightly smaller than player
+    this._group.add(mesh);
+    this._wanderers.push({
+      mesh,name:m.name,
+      targetX:mesh.position.x,targetZ:mesh.position.z,
+      timer:2+Math.random()*4,walkT:0,
+    });
+  });
+};
+const _origHubUpdate=HubWorld.update.bind(HubWorld);
+HubWorld.update=function(){
+  _origHubUpdate();
+  if(gameState!==GS.HUB||!this._group)return;
+  // Init wanderers on first hub visit
+  if(this._wanderers.length===0&&this._built)this._initWanderers();
+  // Show wanderers only when no active companion
+  const hasPet=!!Mercs.active;
+  const dt=0.016;
+  this._wanderers.forEach(w=>{
+    w.mesh.visible=!hasPet;
+    if(hasPet)return;
+    w.timer-=dt;
+    if(w.timer<=0){
+      // Pick new wander target within plaza
+      const angle=Math.random()*Math.PI*2;
+      const r=3+Math.random()*12;
+      w.targetX=Math.max(-22,Math.min(22,Math.sin(angle)*r));
+      w.targetZ=Math.max(-22,Math.min(22,Math.cos(angle)*r));
+      w.timer=3+Math.random()*5;
+    }
+    const dx=w.targetX-w.mesh.position.x,dz=w.targetZ-w.mesh.position.z;
+    const d=Math.sqrt(dx*dx+dz*dz);
+    if(d>0.3){
+      const spd=1.5;
+      w.mesh.position.x+=dx/d*spd*dt;
+      w.mesh.position.z+=dz/d*spd*dt;
+      w.mesh.rotation.y=Math.atan2(dx,dz);
+      w.walkT+=dt*5;
+      const sw=Math.sin(w.walkT)*.3;
+      const ud=w.mesh.userData;
+      if(ud.ll)ud.ll.rotation.x=sw;if(ud.rl)ud.rl.rotation.x=-sw;
+      if(ud.la)ud.la.rotation.x=-sw*.5;if(ud.ra)ud.ra.rotation.x=sw*.5;
+    }
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  BOSS LOOT FOUNTAIN
+// ═══════════════════════════════════════════════════════════════════
+const _origBossKill=Boss._kill?Boss._kill.bind(Boss):null;
+Boss._kill=function(){
+  if(!this.active)return;
+  const pos=this.active.mesh.position.clone();
+  const T=this.active.T;
+  try{scene.remove(this.active.mesh);}catch(e){}
+  // LOOT FOUNTAIN — dramatic burst of drops
+  const dropCount=4+~~(Zone.zone*.3)+Zone.worldTier();
+  for(let i=0;i<dropCount;i++){
+    setTimeout(()=>{
+      const angle=Math.random()*Math.PI*2;
+      const r=1+Math.random()*4;
+      const rar=Math.random()<.3?'LEGENDARY':Math.random()<.5?'EPIC':'RARE';
+      const isWeapon=Math.random()<.5;
+      try{
+        if(isWeapon)Loot.drops.push({...Loot._makeDrop(Loot.genWeapon(rar),pos.x+Math.cos(angle)*r,pos.z+Math.sin(angle)*r)});
+        else Loot.drops.push({...Loot._makeDrop(Loot.genArmor(rar),pos.x+Math.cos(angle)*r,pos.z+Math.sin(angle)*r)});
+      }catch(e){}
+    },i*80);
+  }
+  // Screen flash + slow motion feel
+  const sf=document.createElement('div');
+  sf.style.cssText='position:fixed;inset:0;background:rgba(255,200,0,.35);z-index:8000;pointer-events:none;transition:opacity .6s';
+  document.body.appendChild(sf);
+  setTimeout(()=>{sf.style.opacity='0';setTimeout(()=>sf.remove(),600);},150);
+  showBanner('⚡ '+T.name+' DEFEATED — LOOT SURGE! ×'+dropCount+' DROPS',3500);
+  try{Particles.burst(pos,0xffd700,IS_MOB?20:40);}catch(e){}
+  try{const fl=new THREE.PointLight(0xffd700,25,20);fl.position.copy(pos);scene.add(fl);setTimeout(()=>scene.remove(fl),500);}catch(e){}
+  try{Player.gainXP(800+Zone.zone*50);}catch(e){}
+  try{BattlePass.addXP(1000);}catch(e){}
+  try{UI.killFeed('✦ BOSS LOOT SURGE — '+dropCount+' DROPS!','#ffd700');}catch(e){}
+  try{if(Mercs.active)Mercs.gainXP(200);}catch(e){}
+  this.active=null;
+  document.getElementById('boss-bar').style.display='none';
+  Zone.onKill();
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  ITEM AFFIXES — random modifiers on drops
+// ═══════════════════════════════════════════════════════════════════
+const AFFIXES={
+  weapon:[
+    {id:'rapid',     name:'RAPID',      apply:(w)=>w.fireRate=Math.max(.04,w.fireRate*.75),        desc:'↑ Fire rate +25%'},
+    {id:'brutal',    name:'BRUTAL',     apply:(w)=>w.damage=~~(w.damage*1.3),                      desc:'↑ Damage +30%'},
+    {id:'extended',  name:'EXTENDED',   apply:(w)=>w.magazine=~~(w.magazine*1.4),                  desc:'↑ Magazine +40%'},
+    {id:'vampiric',  name:'VAMPIRIC',   apply:(w)=>{w._vampiric=true;},                             desc:'↑ 5% dmg as HP on hit'},
+    {id:'explosive', name:'EXPLOSIVE',  apply:(w)=>{w.isBlast=true;w._blastAffix=true;},            desc:'↑ Shots explode on hit'},
+    {id:'cryo',      name:'CRYO',       apply:(w)=>{w.element='CRYO';},                             desc:'↑ Slows enemies'},
+    {id:'electric',  name:'ELECTRIC',   apply:(w)=>{w.element='ELECTRIC';},                         desc:'↑ Chains to nearby enemies'},
+    {id:'fire',      name:'INCENDIARY', apply:(w)=>{w.element='FIRE';},                             desc:'↑ Burns over time'},
+    {id:'snappy',    name:'SNAPPY',     apply:(w)=>w.reloadTime=Math.max(.5,w.reloadTime*.7),       desc:'↑ Reload -30%'},
+    {id:'accurate',  name:'ACCURATE',   apply:(w)=>w.spread=Math.max(.01,w.spread*.6),              desc:'↑ Spread -40%'},
+  ],
+  armor:[
+    {id:'fortified', name:'FORTIFIED',  apply:(a)=>a.armor=~~(a.armor*1.3),                         desc:'↑ Armor +30%'},
+    {id:'vital',     name:'VITAL',      apply:(a)=>a.hp=~~((a.hp||0)+20),                            desc:'↑ +20 max HP'},
+    {id:'swift',     name:'SWIFT',      apply:(a)=>a.spd=(a.spd||0)+.08,                             desc:'↑ Move speed +8%'},
+    {id:'recovery',  name:'RECOVERY',   apply:(a)=>a.cdr=(a.cdr||0)+.12,                             desc:'↑ Skill CD -12%'},
+    {id:'resistant', name:'RESISTANT',  apply:(a)=>a.dmgReduce=(a.dmgReduce||0)+.08,                 desc:'↑ -8% damage taken'},
+    {id:'lucky',     name:'LUCKY',      apply:(a)=>a.luck=(a.luck||0)+.1,                             desc:'↑ +10% rare drop chance'},
+    {id:'energized', name:'ENERGIZED',  apply:(a)=>a.cdr=(a.cdr||0)+.15,                             desc:'↑ Skill CD -15%'},
+  ],
+};
+function _rollAffixes(item){
+  const pool=item.kind==='weapon'?AFFIXES.weapon:AFFIXES.armor;
+  const rar=item.rarity;
+  const count=rar==='EXOTIC'?4:rar==='LEGENDARY'?3:rar==='EPIC'?2:rar==='RARE'?1:0;
+  item.affixes=[];
+  const used=new Set();
+  for(let i=0;i<count;i++){
+    const avail=pool.filter(a=>!used.has(a.id));
+    if(!avail.length)break;
+    const a=avail[~~(Math.random()*avail.length)];
+    used.add(a.id);item.affixes.push(a.id);
+    try{a.apply(item);}catch(e){}
+  }
+  return item;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  UNIDENTIFIED ITEMS — drops come ID'd after visiting Weapon Dealer
+// ═══════════════════════════════════════════════════════════════════
+function _unidentify(item){
+  if(!item||item.rarity==='COMMON'||item.rarity==='UNCOMMON')return item;
+  item.unidentified=true;
+  item._hiddenName=item.name;
+  item.name='?? '+item.rarity+' '+(item.kind==='weapon'?item.type:'ARMOR')+'??';
+  return item;
+}
+function identifyItem(item){
+  if(!item||!item.unidentified)return item;
+  item.unidentified=false;
+  item.name=item._hiddenName||item.name;
+  _rollAffixes(item);
+  showBanner('IDENTIFIED: '+item.name+(item.affixes?.length?' +'+item.affixes.length+' AFFIXES':''),2500);
+  return item;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ITEM SETS — matching pieces unlock bonuses
+// ═══════════════════════════════════════════════════════════════════
+const ITEM_SETS={
+  IRONCLAD:{
+    name:'IRONCLAD SET',col:'#4488ff',
+    pieces:['IRONCLAD HELM','IRONCLAD VEST','IRONCLAD GLOVES','IRONCLAD KNEES','IRONCLAD PACK'],
+    bonuses:{2:'armor+30',4:'dmg_reduce+15%',5:'on_kill_armor_restore'},
+  },
+  SHADOW:{
+    name:'SHADOW OPERATIVE',col:'#aa44ff',
+    pieces:['SHADOW MASK','SHADOW COAT','SHADOW GRIPS','SHADOW PADS','SHADOW SATCHEL'],
+    bonuses:{2:'spd+15%',4:'crit+20%',5:'invisible_after_kill_2s'},
+  },
+  REACTOR:{
+    name:'REACTOR CORE',col:'#ff6600',
+    pieces:['REACTOR HELM','REACTOR VEST','REACTOR GRIPS','REACTOR KNEES','REACTOR CORE'],
+    bonuses:{2:'elemental_dmg+25%',3:'skills_cd-20%',5:'explosion_on_dodge'},
+  },
+  ZERO:{
+    name:'AGENT ZERO',col:'#ffd700',
+    pieces:['ZERO HELM','ZERO COAT','ZERO GLOVES','ZERO KNEES','ZERO PACK'],
+    bonuses:{2:'all_stats+10%',4:'xp+25%',5:'companion_lvl_up_faster'},
+  },
+};
+function _checkSetBonuses(){
+  const equipped=Object.values(Armor.equipped||{}).filter(Boolean);
+  const setCounts={};
+  equipped.forEach(a=>{
+    if(a.setName){setCounts[a.setName]=(setCounts[a.setName]||0)+1;}
+  });
+  Player._activeSets=setCounts;
+  // Apply bonuses
+  let extraDmg=0,extraSpd=0,extraArmor=0,extraCrit=0;
+  Object.entries(setCounts).forEach(([sn,cnt])=>{
+    const set=ITEM_SETS[sn];if(!set)return;
+    if(cnt>=2&&set.bonuses[2]?.includes('armor'))extraArmor+=30;
+    if(cnt>=2&&set.bonuses[2]?.includes('spd'))extraSpd+=.15;
+    if(cnt>=2&&set.bonuses[2]?.includes('elemental'))Player._elementalBonus=1.25;
+    if(cnt>=2&&set.bonuses[2]?.includes('all_stats')){extraDmg+=.1;extraSpd+=.1;extraArmor+=10;}
+    if(cnt>=4&&set.bonuses[4]?.includes('crit'))extraCrit+=.20;
+    if(cnt>=4&&set.bonuses[4]?.includes('xp'))Player._setXPBonus=1.25;
+    if(cnt>=4&&set.bonuses[4]?.includes('dmg_reduce'))Player._dmgReduce=(Player._dmgReduce||1)-.15;
+  });
+  if(extraDmg)Player.bonusDmg=(Player.bonusDmg||1)+extraDmg;
+  if(extraSpd)Player.bonusSpd=(Player.bonusSpd||0)+extraSpd;
+  if(extraCrit)Player.bonusCrit=(Player.bonusCrit||0)+extraCrit;
+  if(extraArmor){Player.maxArmor=Math.max(Player.maxArmor,100+extraArmor);Player.armor=Math.min(Player.armor+extraArmor,Player.maxArmor);}
+  try{UI.updateBars();}catch(e){}
+}
+// Hook into Armor.equip
+const _origArmorEquip=Armor.equip.bind(Armor);
+Armor.equip=function(a){
+  _origArmorEquip(a);
+  _checkSetBonuses();
+  // Notify set progress
+  if(a.setName){
+    const cnt=Object.values(this.equipped||{}).filter(e=>e&&e.setName===a.setName).length;
+    const set=ITEM_SETS[a.setName];
+    if(set){const next=Object.keys(set.bonuses).map(Number).sort((x,y)=>x-y).find(n=>n>cnt);
+      showBanner(set.name+' '+cnt+'/5'+(next?' — NEXT BONUS AT '+next+'pc':'— FULL SET!'),2000);}
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  GEM SOCKETING — attachment system
+// ═══════════════════════════════════════════════════════════════════
+const GEMS={
+  RUBY:     {name:'RUBY',     col:'#ff2244',rarity:'RARE',    effect:'dmg',    val:.12,  desc:'+12% damage'},
+  SAPPHIRE: {name:'SAPPHIRE', col:'#2244ff',rarity:'RARE',    effect:'armor',  val:15,   desc:'+15 armor'},
+  EMERALD:  {name:'EMERALD',  col:'#22ff44',rarity:'EPIC',    effect:'regen',  val:2,    desc:'+2 HP/sec'},
+  TOPAZ:    {name:'TOPAZ',    col:'#ffaa00',rarity:'EPIC',    effect:'spd',    val:.10,  desc:'+10% speed'},
+  DIAMOND:  {name:'DIAMOND',  col:'#ffffff',rarity:'LEGENDARY',effect:'crit',  val:.10,  desc:'+10% crit'},
+  VOID:     {name:'VOID SHARD',col:'#aa00ff',rarity:'LEGENDARY',effect:'all',  val:.08,  desc:'+8% all stats'},
+  CIRCUIT:  {name:'CIRCUIT',  col:'#00ffee',rarity:'EPIC',    effect:'cdr',    val:.15,  desc:'-15% skill CD'},
+  BLOODSTONE:{name:'BLOODSTONE',col:'#880011',rarity:'RARE',  effect:'vamp',   val:.05,  desc:'5% lifesteal'},
+};
+const GEM_KEYS=Object.keys(GEMS);
+function dropGem(){
+  const weights={RARE:55,EPIC:35,LEGENDARY:10};
+  const pool=GEM_KEYS.filter(k=>GEMS[k]);
+  const rar=Math.random()<.1?'LEGENDARY':Math.random()<.4?'EPIC':'RARE';
+  const rarPool=pool.filter(k=>GEMS[k].rarity===rar);
+  return rarPool.length?GEMS[rarPool[~~(Math.random()*rarPool.length)]]:GEMS.RUBY;
+}
+function socketGem(item,gem){
+  if(!item||!gem)return;
+  if(!item.sockets||item.sockets.length===0){showBanner('NO SOCKET SLOTS — SOCKET AT ARMORY');return;}
+  const slot=item.sockets.findIndex(s=>!s);
+  if(slot===-1){showBanner('ALL SOCKETS FULL');return;}
+  item.sockets[slot]=gem;
+  // Apply gem effect
+  if(gem.effect==='dmg')item._gemDmg=(item._gemDmg||0)+gem.val;
+  if(gem.effect==='armor')item._gemArmor=(item._gemArmor||0)+gem.val;
+  if(gem.effect==='regen')item._gemRegen=(item._gemRegen||0)+gem.val;
+  if(gem.effect==='spd')item._gemSpd=(item._gemSpd||0)+gem.val;
+  if(gem.effect==='crit')item._gemCrit=(item._gemCrit||0)+gem.val;
+  if(gem.effect==='cdr')item._gemCDR=(item._gemCDR||0)+gem.val;
+  if(gem.effect==='vamp')item._gemVamp=(item._gemVamp||0)+gem.val;
+  if(gem.effect==='all'){item._gemDmg=(item._gemDmg||0)+gem.val;item._gemSpd=(item._gemSpd||0)+gem.val;}
+  showBanner('◈ '+gem.name+' SOCKETED — '+gem.desc,2000);
+  try{InvUI.refresh();}catch(e){}
+  try{_checkSetBonuses();}catch(e){}
+}
+// Add socket slots to items on generation (RARE+ gets 1, EPIC 2, LEGENDARY 2, EXOTIC 3)
+const _origGenWeapon=Loot.genWeapon.bind(Loot);
+Loot.genWeapon=function(rar){
+  const w=_origGenWeapon(rar);
+  const slots=rar==='EXOTIC'?3:rar==='LEGENDARY'?2:rar==='EPIC'?2:rar==='RARE'?1:0;
+  w.sockets=Array(slots).fill(null);
+  w.affixes=[];
+  // Unidentify RARE+ drops
+  if(rar==='RARE'||rar==='EPIC'||rar==='LEGENDARY'||rar==='EXOTIC')_unidentify(w);
+  return w;
+};
+const _origGenArmor=Loot.genArmor.bind(Loot);
+Loot.genArmor=function(rar){
+  const a=_origGenArmor(rar);
+  const slots=rar==='EXOTIC'?3:rar==='LEGENDARY'?2:rar==='EPIC'?2:rar==='RARE'?1:0;
+  a.sockets=Array(slots).fill(null);
+  a.affixes=[];
+  // 30% chance for set item on EPIC+
+  if((rar==='EPIC'||rar==='LEGENDARY'||rar==='EXOTIC')&&Math.random()<.3){
+    const setKeys=Object.keys(ITEM_SETS);
+    const setKey=setKeys[~~(Math.random()*setKeys.length)];
+    const set=ITEM_SETS[setKey];
+    const pieceIdx=~~(Math.random()*set.pieces.length);
+    a.name=set.pieces[pieceIdx];a.setName=setKey;
+    a._hiddenName=a.name;
+  }
+  if(rar==='RARE'||rar==='EPIC'||rar==='LEGENDARY'||rar==='EXOTIC')_unidentify(a);
+  return a;
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  WEAPON ATTACHMENTS — replaces gem socketing
+//  Slots: OPTIC, MUZZLE, MAGAZINE, GRIP, UNDERBARREL
+// ═══════════════════════════════════════════════════════════════════
+const ATTACHMENTS={
+  // OPTIC SLOT
+  RED_DOT:     {name:'RED DOT SIGHT',   slot:'OPTIC',  rarity:'RARE',    col:'#ff2244', icon:'🔴',
+                apply:(w)=>{w.spread=Math.max(.01,w.spread*.65);w.critChance=(w.critChance||.05)+.08;}, desc:'Spread -35% · Crit +8%'},
+  HOLOGRAPHIC: {name:'HOLOGRAPHIC',     slot:'OPTIC',  rarity:'EPIC',    col:'#00ffee', icon:'💠',
+                apply:(w)=>{w.spread=Math.max(.01,w.spread*.5);w.critChance=(w.critChance||.05)+.12;}, desc:'Spread -50% · Crit +12%'},
+  THERMAL:     {name:'THERMAL SCOPE',   slot:'OPTIC',  rarity:'LEGENDARY',col:'#ff8800',icon:'🔥',
+                apply:(w)=>{w.spread=Math.max(.01,w.spread*.4);w.critChance=(w.critChance||.05)+.18;w._thermal=true;}, desc:'Spread -60% · Crit +18% · See through walls'},
+  ACOG:        {name:'ACOG SCOPE',      slot:'OPTIC',  rarity:'RARE',    col:'#884400', icon:'🎯',
+                apply:(w)=>{w.spread=Math.max(.01,w.spread*.55);w.damage=~~(w.damage*1.1);}, desc:'Spread -45% · Damage +10%'},
+
+  // MUZZLE SLOT
+  SUPPRESSOR:  {name:'SUPPRESSOR',      slot:'MUZZLE', rarity:'RARE',    col:'#888888', icon:'🔇',
+                apply:(w)=>{w._suppressed=true;w.damage=~~(w.damage*.92);w.spread=Math.max(.01,w.spread*.8);}, desc:'Silent · Spread -20% · -8% dmg'},
+  COMPENSATOR: {name:'COMPENSATOR',     slot:'MUZZLE', rarity:'RARE',    col:'#aaaaaa', icon:'⚙',
+                apply:(w)=>{w.spread=Math.max(.01,w.spread*.7);w.fireRate=Math.max(.04,w.fireRate*.92);}, desc:'Spread -30% · Fire rate +8%'},
+  MUZZLE_BRAKE:{name:'MUZZLE BRAKE',    slot:'MUZZLE', rarity:'EPIC',    col:'#cccccc', icon:'💨',
+                apply:(w)=>{w.spread=Math.max(.01,w.spread*.55);w.damage=~~(w.damage*1.08);}, desc:'Spread -45% · Damage +8%'},
+  FLASH_HIDER: {name:'FLASH HIDER',     slot:'MUZZLE', rarity:'RARE',    col:'#444444', icon:'✦',
+                apply:(w)=>{w.spread=Math.max(.01,w.spread*.75);w.critChance=(w.critChance||.05)+.05;}, desc:'Spread -25% · Crit +5%'},
+
+  // MAGAZINE SLOT
+  EXTENDED_MAG:{name:'EXTENDED MAG',    slot:'MAGAZINE',rarity:'RARE',   col:'#3498db', icon:'📦',
+                apply:(w)=>{w.magazine=~~(w.magazine*1.4);w.currentAmmo=w.magazine;}, desc:'Mag +40%'},
+  DRUM_MAG:    {name:'DRUM MAGAZINE',   slot:'MAGAZINE',rarity:'EPIC',   col:'#2244aa', icon:'🔵',
+                apply:(w)=>{w.magazine=~~(w.magazine*1.8);w.currentAmmo=w.magazine;w.reloadTime*=1.3;}, desc:'Mag +80% · Reload +30%'},
+  FAST_MAG:    {name:'FAST MAG',        slot:'MAGAZINE',rarity:'RARE',   col:'#00aaff', icon:'⚡',
+                apply:(w)=>{w.reloadTime=Math.max(.5,w.reloadTime*.65);w.magazine=~~(w.magazine*1.2);}, desc:'Reload -35% · Mag +20%'},
+  INCENDIARY_MAG:{name:'INCENDIARY MAG',slot:'MAGAZINE',rarity:'EPIC',   col:'#ff6600', icon:'🔥',
+                apply:(w)=>{w.element='FIRE';w.magazine=~~(w.magazine*.85);}, desc:'Bullets ignite enemies · Mag -15%'},
+
+  // GRIP SLOT
+  FOREGRIP:    {name:'FOREGRIP',        slot:'GRIP',   rarity:'RARE',    col:'#885522', icon:'✋',
+                apply:(w)=>{w.spread=Math.max(.01,w.spread*.75);w.fireRate=Math.max(.04,w.fireRate*.95);}, desc:'Spread -25% · Fire rate +5%'},
+  ANGLED_GRIP: {name:'ANGLED GRIP',     slot:'GRIP',   rarity:'EPIC',    col:'#aa6633', icon:'📐',
+                apply:(w)=>{w.spread=Math.max(.01,w.spread*.6);w.damage=~~(w.damage*1.06);}, desc:'Spread -40% · Damage +6%'},
+  LASER_SIGHT: {name:'LASER SIGHT',     slot:'GRIP',   rarity:'EPIC',    col:'#ff0000', icon:'🔫',
+                apply:(w)=>{w.critChance=(w.critChance||.05)+.15;w._laserSight=true;}, desc:'Crit +15% · Always aimed'},
+
+  // UNDERBARREL SLOT
+  GRENADE_LAUNCHER:{name:'GRENADE LAUNCHER',slot:'UNDERBARREL',rarity:'LEGENDARY',col:'#ffaa00',icon:'💣',
+                apply:(w)=>{w._underGLauncher=true;}, desc:'Alt fire: grenade (10s CD)'},
+  SHOTGUN_RAIL:{name:'SHOTGUN RAIL',    slot:'UNDERBARREL',rarity:'EPIC',   col:'#888844', icon:'💥',
+                apply:(w)=>{w._underShotgun=true;}, desc:'Alt fire: close-range blast'},
+  BIPOD:       {name:'BIPOD',           slot:'UNDERBARREL',rarity:'RARE',   col:'#666666', icon:'⊥',
+                apply:(w)=>{w.damage=~~(w.damage*1.15);w.spread=Math.max(.01,w.spread*.8);}, desc:'Damage +15% · Spread -20%'},
+};
+const ATTACHMENT_KEYS=Object.keys(ATTACHMENTS);
+
+function dropAttachment(){
+  const roll=Math.random();
+  const rar=roll<.05?'LEGENDARY':roll<.25?'EPIC':'RARE';
+  const pool=ATTACHMENT_KEYS.filter(k=>ATTACHMENTS[k].rarity===rar);
+  const key=pool[~~(Math.random()*pool.length)];
+  return{...ATTACHMENTS[key],_key:key};
+}
+function attachToWeapon(weapon,attachment){
+  if(!weapon||!attachment)return;
+  weapon.attachments=weapon.attachments||{};
+  if(weapon.attachments[attachment.slot]){showBanner(attachment.slot+' SLOT OCCUPIED — REMOVE FIRST');return;}
+  weapon.attachments[attachment.slot]=attachment;
+  try{attachment.apply(weapon);}catch(e){}
+  showBanner('◈ '+attachment.name+' ATTACHED — '+attachment.desc,2500);
+  try{InvUI.refresh();}catch(e){}
+  try{UI.updateWeaponHUD();}catch(e){}
+}
+
+// Attachment drops from enemy kills (replaces gem drops)
+// Attached to the _origEnemiesKill hook already set — add attachment drop logic
+const _origKillForAttach=Enemies._kill.bind(Enemies);
+Enemies._kill=function(e){
+  // Remove the gem drop override and replace with attachment
+  _origKillForAttach(e);
+};
+// Override the gem drop in _kill — patch the existing Enemies._kill post-hoc
+const _patchedKill=Enemies._kill;
+Enemies._kill=function(e){
+  if(!e.alive)return;
+  e.alive=false;
+  const bp=e.mesh.position.clone();
+  const lx=bp.x+(Math.random()-.5)*2,lz=bp.z+(Math.random()-.5)*2;
+  const isDrone=e.isDrone,eKey=e.key,eT=e.T,elite=e.elite;
+  try{Particles.burst(bp,isDrone?0x4444ff:0xaa0000,IS_MOB?10:16);}catch(ex){}
+  // Blood pool
+  try{const pool=new THREE.Mesh(new THREE.BoxGeometry(.6+Math.random()*.4,.02,.6+Math.random()*.4),new THREE.MeshBasicMaterial({color:0x550000,transparent:true,opacity:.7}));pool.position.set(bp.x,.01,bp.z);scene.add(pool);let op=.7;const fade=setInterval(()=>{op-=.035;try{if(pool.material)pool.material.opacity=Math.max(0,op);}catch(ex){}if(op<=0){clearInterval(fade);try{scene.remove(pool);}catch(ex){}};},500);}catch(ex){}
+  try{scene.remove(e.mesh);}catch(ex){}
+  this.totalKills++;
+  try{BattlePass.addXP(elite?30:10);}catch(ex){}
+  const crMult=(Player._bufordActive?1.4:1)*(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1);
+  const xpMult=(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1);
+  Player.credits+=~~(eT.cr*(1+Zone.zone*.1)*crMult);
+  UI.credit(Player.credits);
+  try{Player.gainXP(~~(eT.xp*xpMult));}catch(ex){}
+  try{UI.killFeed(eT.label,'#e74c3c');}catch(ex){}
+  try{Audio.enemyDie();}catch(ex){}
+  // Buford stun proc
+  if(Player._bufordActive&&Math.random()<.15){
+    try{const quotes=['"YOU SUMABITCH!"','"ILLEGAL U-TURN!"','"I\'M GONNA NAIL YOUR ASS!"','"STOP RIGHT THERE!"'];showBanner(quotes[~~(Math.random()*quotes.length)]+' — PURSUIT MANDATE',1600);for(const te of Enemies.list){if(!te.alive)continue;const dx=te.mesh.position.x-bp.x,dz=te.mesh.position.z-bp.z;if(dx*dx+dz*dz<196)Enemies.stun(te,2);}try{Audio.uiClick();}catch(e){}}catch(ex){}
+  }
+  // Attachment drop (replaces gems — lore friendly)
+  if(Math.random()<(elite?.10:.025)){
+    const att=dropAttachment();
+    Player._attachmentBag=Player._attachmentBag||[];
+    Player._attachmentBag.push(att);
+    showBanner('🔧 ATTACHMENT: '+att.name+' ['+att.slot+'] — '+att.desc,2500);
+  }
+  // Pet XP
+  try{if(Mercs.active)Mercs.gainXP(elite?12:5);}catch(ex){}
+  // Loot drops
+  try{if(Math.random()<.55)Loot.spawnDrop(lx,lz);}catch(ex){}
+  try{if(eKey==='HEAVY'&&Math.random()<.8)Loot.spawnDrop(lx,lz,'RARE',true);}catch(ex){}
+  try{if(eKey==='ELITE')Loot.spawnDrop(lx,lz,'EPIC');}catch(ex){}
+  Zone.onKill();
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  SUBCLASSES — unlock at level 5, pick one permanently
+// ═══════════════════════════════════════════════════════════════════
+const Subclasses={
+  ASSAULT:{
+    name:'ASSAULT',col:'#e74c3c',icon:'💢',
+    desc:'Offensive specialist. Grenades become cluster bombs. +20% damage. Fire rate bonus stacks.',
+    apply(){
+      Player.bonusDmg=(Player.bonusDmg||1)+.20;
+      // Grenade becomes cluster
+      Player._subclass='ASSAULT';
+    },
+  },
+  GHOST:{
+    name:'GHOST',col:'#9b59b6',icon:'👻',
+    desc:'Infiltrator. Grenade becomes a decoy that draws enemies. +20% speed. Roll leaves a smoke cloud.',
+    apply(){
+      Player.bonusSpd=(Player.bonusSpd||0)+.20;
+      Player._subclass='GHOST';
+    },
+  },
+  ENGINEER:{
+    name:'ENGINEER',col:'#3498db',icon:'🔧',
+    desc:'Tech specialist. Grenade becomes a turret. Drone heals 50% more. Skill cooldowns -25%.',
+    apply(){
+      Player._subclass='ENGINEER';
+      // CDR handled in Skills.update
+    },
+  },
+  BERSERKER:{
+    name:'BERSERKER',col:'#ff6600',icon:'⚔',
+    desc:'Rage mode. +15% damage per kill (stacks 10x, resets on damage). Last Stand always active.',
+    apply(){
+      Player._subclass='BERSERKER';
+      Player._rageStacks=0;
+    },
+  },
+};
+// Check for subclass unlock every level up
+const _origGainXP=Player.gainXP.bind(Player);
+Player.gainXP=function(amt){
+  const multBonus=(Player._xpBonus||1)*(Player._setXPBonus||1)*(Player._cantinaXP?.1:0+1);
+  _origGainXP(~~(amt*multBonus));
+  // Offer subclass at level 5 if not yet chosen
+  if(this.level>=5&&!this._subclass&&!this._subclassOffered){
+    this._subclassOffered=true;
+    setTimeout(()=>_showSubclassPanel(),500);
+  }
+};
+function _showSubclassPanel(){
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;box-sizing:border-box';
+  overlay.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:14px;letter-spacing:4px;color:#e67e22;margin-bottom:6px">LEVEL 5 REACHED</div><div style="font-family:'Courier New',monospace;font-size:10px;color:#556;letter-spacing:2px;margin-bottom:20px">CHOOSE YOUR SUBCLASS — THIS IS PERMANENT</div>`;
+  Object.entries(Subclasses).forEach(([key,sc])=>{
+    const btn=document.createElement('div');
+    btn.style.cssText=`width:100%;max-width:320px;border:1px solid ${sc.col};background:rgba(0,0,0,.4);padding:14px 16px;margin-bottom:10px;cursor:pointer;touch-action:manipulation;box-sizing:border-box`;
+    btn.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:13px;letter-spacing:3px;color:${sc.col};margin-bottom:4px">${sc.icon} ${sc.name}</div><div style="font-family:'Courier New',monospace;font-size:9px;color:#778;line-height:1.5">${sc.desc}</div>`;
+    btn.onclick=btn.ontouchend=(e)=>{
+      if(e.type==='touchend')e.preventDefault();
+      sc.apply();Player._subclass=key;
+      showBanner('SUBCLASS SELECTED: '+sc.name,3000);
+      overlay.remove();
+      try{Save.save();}catch(ex){}
+    };
+    overlay.appendChild(btn);
+  });
+  document.body.appendChild(overlay);
+}
+// Apply subclass skill modifications
+const _origSkillsActivate=Skills.activate.bind(Skills);
+Skills.activate=function(i){
+  if(i===2&&Player._subclass==='ASSAULT'){
+    // Cluster bomb — throw 3 grenades in a spread
+    ['-.4,.0,.4'].join(',').split(',').forEach((off,j)=>{
+      setTimeout(()=>{
+        const dir=Player.facing.clone();dir.x+=parseFloat(off)*.5;
+        try{Grenades.throw(Player.mesh.position.clone().add(new THREE.Vector3(0,1.1,0)),dir.normalize());}catch(e){}
+      },j*80);
+    });
+    try{Audio.uiClick();}catch(e){}
+    this.cds[2]=this.defs[2].cd;return;
+  }
+  if(i===2&&Player._subclass==='GHOST'){
+    // Decoy — stuns all nearby enemies briefly
+    try{Enemies.list.forEach(e=>{if(e.alive&&e.mesh.position.distanceTo(Player.mesh.position)<14)Enemies.stun(e,2.5);});}catch(e){}
+    showBanner('DECOY DEPLOYED — ENEMIES FOOLED');
+    this.cds[2]=this.defs[2].cd;return;
+  }
+  if(i===2&&Player._subclass==='ENGINEER'){
+    // Turret — spawn a temporary turret that shoots nearby enemies
+    try{
+      const pos=Player.mesh.position.clone().add(Player.facing.clone().multiplyScalar(3));
+      let tTimer=8;
+      const tint=setInterval(()=>{
+        tTimer-=.1;if(tTimer<=0){clearInterval(tint);return;}
+        const nearest=Enemies.list.find(e=>e.alive&&e.mesh.position.distanceTo(pos)<10);
+        if(nearest)Enemies.hit(nearest,~~(25+Math.random()*15),false,false,null);
+      },100);
+      showBanner('TURRET DEPLOYED — 8s ACTIVE');
+    }catch(e){}
+    this.cds[2]=this.defs[2].cd;return;
+  }
+  // CDR bonus for ENGINEER
+  const cdrMult=Player._subclass==='ENGINEER'?1.25:1;
+  if(Player._subclass==='ENGINEER')this.defs.forEach(d=>d._engCDR=cdrMult);
+  _origSkillsActivate(i);
+};
+
+
 // Measure hub header height so tabs stick correctly below it
 const UPDATES=[
   {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Interactive 3D hub — walk around Shadow City, tap NPCs to open their shops'},
@@ -9757,6 +10588,7 @@ StyleSystem.load();
 try{BattlePass.load();}catch(e){}
 try{HubTycoon.load();}catch(e){}
 try{Quests.load();}catch(e){}
+try{Mercs._load();}catch(e){}
 
 // unlockAudio is called by the TAP TO START screen onclick
 function unlockAudio(){
