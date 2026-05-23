@@ -2502,10 +2502,11 @@ const Bullets = {
     }
   },
   _blast(pos,baseDmg){
-    for(const e of Enemies.list){if(!e.alive)continue;const d=e.mesh.position.distanceToSquared(pos);if(d<25)Enemies.hit(e,~~(baseDmg*.5*(1-Math.sqrt(d/25))),false);}
-    if(Boss.active){const d=Boss.active.mesh.position.distanceToSquared(pos);if(d<25)Boss.hit(~~(baseDmg*.4*(1-Math.sqrt(d/25))));}
-    Particles.burst(pos,0xff6600,IS_MOB?8:14);
-    const fl=new THREE.PointLight(0xff6600,18,12);fl.position.copy(pos);scene.add(fl);setTimeout(()=>scene.remove(fl),180);
+    const R2=64; // radius 8 units squared
+    for(const e of Enemies.list){if(!e.alive)continue;const d=e.mesh.position.distanceToSquared(pos);if(d<R2){const falloff=1-Math.sqrt(d/R2);Enemies.hit(e,~~(baseDmg*(0.4+0.6*falloff)),false);}}
+    if(Boss.active){const d=Boss.active.mesh.position.distanceToSquared(pos);if(d<R2)Boss.hit(~~(baseDmg*.5*(1-Math.sqrt(d/R2))));}
+    Particles.burst(pos,0xff6600,IS_MOB?12:20);
+    const fl=new THREE.PointLight(0xff8800,22,14);fl.position.copy(pos);scene.add(fl);setTimeout(()=>scene.remove(fl),200);
   },
 };
 
@@ -2528,12 +2529,12 @@ const Particles = {
 const Enemies = {
   list:[], spawnTimer:0, totalKills:0,
   TYPES:{
-    SOLDIER: {hp:80,dmg:10,spd:3.8,col:0x2d4a2d,fRate:.65,xp:25,cr:15,sz:[.8,1.7,.7],key:'SOLDIER',label:'SOLDIER'},
-    HEAVY:   {hp:240,dmg:18,spd:2.2,col:0x3a2010,fRate:1.1,xp:80,cr:50,sz:[1.1,1.9,1.0],key:'HEAVY',label:'HEAVY UNIT'},
-    RUSHER:  {hp:50,dmg:8,spd:7.0,col:0x8a1515,fRate:.8,xp:15,cr:8,sz:[.7,1.5,.6],key:'RUSHER',label:'RUSHER'},
-    SNIPER:  {hp:60,dmg:52,spd:2.5,col:0x1a2a3a,fRate:2.8,xp:40,cr:25,sz:[.7,1.8,.6],key:'SNIPER',label:'SNIPER'},
-    DRONE:   {hp:30,dmg:6,spd:6.5,col:0x222244,fRate:.4,xp:20,cr:12,sz:[.9,.25,.9],key:'DRONE',label:'COMBAT DRONE'},
-    ELITE:   {hp:180,dmg:22,spd:4.5,col:0x442200,fRate:.5,xp:100,cr:80,sz:[.85,1.75,.75],key:'ELITE',label:'ELITE AGENT'},
+    SOLDIER: {hp:70, dmg:8,  spd:3.8,col:0x2d4a2d,fRate:.70,xp:25,cr:15,sz:[.8,1.7,.7], key:'SOLDIER',label:'SOLDIER'},
+    HEAVY:   {hp:200,dmg:14, spd:2.2,col:0x3a2010,fRate:1.1, xp:80,cr:50,sz:[1.1,1.9,1.0],key:'HEAVY',  label:'HEAVY UNIT'},
+    RUSHER:  {hp:45, dmg:6,  spd:7.0,col:0x8a1515,fRate:.85,xp:15,cr:8, sz:[.7,1.5,.6], key:'RUSHER', label:'RUSHER'},
+    SNIPER:  {hp:55, dmg:32, spd:2.5,col:0x1a2a3a,fRate:3.2, xp:40,cr:25,sz:[.7,1.8,.6], key:'SNIPER', label:'SNIPER'},
+    DRONE:   {hp:28, dmg:5,  spd:6.5,col:0x222244,fRate:.45,xp:20,cr:12,sz:[.9,.25,.9], key:'DRONE',  label:'COMBAT DRONE'},
+    ELITE:   {hp:160,dmg:18, spd:4.5,col:0x442200,fRate:.55,xp:100,cr:80,sz:[.85,1.75,.75],key:'ELITE',label:'ELITE AGENT'},
   },
 
   _makeMesh(key,T){
@@ -2632,9 +2633,22 @@ const Enemies = {
     if(!forceKey&&z>=3&&Math.random()<.08)key='ELITE';
     if(!forceKey&&z>=6&&Math.random()<.15)key='ELITE';
     const T=this.TYPES[key];
-    // Scale HP and damage gently with zone — but not aggressively early
-    const zScale=Math.max(1,1+z*.12);
-    const scaledT={...T,hp:~~(T.hp*zScale),maxHp:~~(T.hp*zScale),dmg:~~(T.dmg*(1+z*.08))};
+    // ARPG scaling: gentle zones 1-5, meaningful 5-15, brutal 15+
+    // HP: soft cap early, exponential late — similar to Division gear score
+    const hpScale = z<=5  ? 1+z*.08                      // +8% per zone, zones 1-5
+                  : z<=15 ? 1.4+(z-5)*.18                // +18% per zone, zones 6-15 (max 3.2x)
+                  :         3.2+Math.pow(z-15,.9)*.28;   // power curve after zone 15
+    // Damage: stays low for first 3 zones, ramps after
+    const dmgScale= z<=3  ? 1+(z-1)*.05                  // barely increases zones 1-3
+                  : z<=10 ? 1.1+(z-3)*.10                // +10% per zone zones 4-10
+                  :         1.8+(z-10)*.12;               // harder ramp after zone 10
+    // Fire rate improves slightly with zone (enemies get trigger-happier)
+    const frMult = Math.max(0.55, 1-z*.025);             // up to 45% faster, min 55% of base interval
+    const scaledT={...T,
+      hp:~~(T.hp*hpScale), maxHp:~~(T.hp*hpScale),
+      dmg:~~(T.dmg*dmgScale),
+      fRate:T.fRate*frMult,
+    };
     const {G,bodyMats,hpBar}=this._makeMesh(key,T);
     G.position.copy(pos).setY(key==='DRONE'?3.2:0);
     scene.add(G);
@@ -2710,8 +2724,9 @@ const Enemies = {
     // Rewards and progression
     this.totalKills++;
     try{BattlePass.addXP(elite?30:10);}catch(ex){}
-    try{Player.gainXP(eT.xp);}catch(ex){}
-    const crMult=Player._bufordActive?1.4:1;
+    try{Player.gainXP(~~(eT.xp*xpMult));}catch(ex){}
+    const crMult=(Player._bufordActive?1.4:1)*(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1);
+    const xpMult=(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1);
     Player.credits+=~~(eT.cr*(1+Zone.zone*.1)*crMult);
     UI.credit(Player.credits);
     try{UI.kill(eT.label);}catch(ex){}
@@ -2826,14 +2841,35 @@ const Enemies = {
 // =====================================================================
 const Boss = {
   active: null,
+  // Name pools by archetype — picked randomly within type on spawn
+  _NAMES:{
+    TITAN:['IRON TITAN','STEEL COLOSSUS','BRASS BEHEMOTH','FORGED LEVIATHAN','CHROME TYRANT','VOID COLOSSUS'],
+    COMMANDER:['COMMANDER DRAKE','GENERAL VOSS','COLONEL REAPER','WARLORD KAINE','CAPTAIN OBLIQUE','MARSHAL VORN','DIRECTOR GRAVES'],
+    SENTINEL:['SENTINEL MK-VII','GUARDIAN PRIME','WARDEN UNIT-9','CITADEL OMEGA','FORTRESS PROTOCOL','BASTION X-13'],
+    PHANTOM:['PHANTOM ZERO','WRAITH ACTUAL','SPECTER ONE','GHOST SIGMA','NULL AGENT','ECHO KILLER'],
+    ARCHITECT:['THE ARCHITECT','THE BROKER','THE HERALD','THE ARCHIVIST','ZERO PRIME','NULL AUTHORITY'],
+  },
   TYPES:[
-    {name:'IRON TITAN',hp:1800,dmg:28,spd:2.5,col:0x222211,sz:[1.8,2.6,1.6],reward:'LEGENDARY'},
-    {name:'COMMANDER DRAKE',hp:1200,dmg:35,spd:3.5,col:0x1a0022,sz:[1.0,2.0,0.9],reward:'LEGENDARY'},
-    {name:'SENTINEL MK-VII',hp:2200,dmg:22,spd:2.0,col:0x001122,sz:[2.0,3.0,1.8],reward:'EXOTIC'},
+    {arch:'TITAN',    hp:1800,dmg:28,spd:2.5,col:0x222211,sz:[1.8,2.6,1.6],reward:'LEGENDARY',desc:'Unstoppable war machine. Slow but devastating.'},
+    {arch:'COMMANDER',hp:1200,dmg:35,spd:3.5,col:0x1a0022,sz:[1.0,2.0,0.9],reward:'LEGENDARY',desc:'Elite tactical commander. Shoots to kill.'},
+    {arch:'SENTINEL', hp:2200,dmg:22,spd:2.0,col:0x001122,sz:[2.0,3.0,1.8],reward:'EXOTIC',   desc:'Armored siege unit. High HP, high threat.'},
+    {arch:'PHANTOM',  hp:900, dmg:44,spd:5.5,col:0x110022,sz:[.9,1.9,.85],  reward:'LEGENDARY',desc:'Fast glass cannon. One-shots if you miss.'},
+    {arch:'ARCHITECT',hp:2800,dmg:18,spd:1.8,col:0x001a10,sz:[2.2,3.4,2.0],reward:'EXOTIC',   desc:'Ancient machine. Enormous. Near-unkillable.'},
   ],
+  _pickName(arch){
+    const pool=this._NAMES[arch]||['UNKNOWN ENTITY'];
+    return pool[~~(Math.random()*pool.length)];
+  },
 
   spawn(pos){
-    const T=this.TYPES[(Zone.zone-1)%this.TYPES.length];
+    const wt=Zone.worldTier();
+    // Pick boss type — higher world tiers unlock harder archetypes
+    const availTypes=wt>=3?this.TYPES:wt>=2?this.TYPES.slice(0,4):this.TYPES.slice(0,3);
+    const T={...availTypes[~~(Math.random()*availTypes.length)]};
+    T.name=this._pickName(T.arch);
+    // Scale boss HP and damage with zone AND world tier
+    const hpMult=1+Zone.zone*.2+wt*.3;
+    const dmgMult=1+(Zone.zone-1)*.08+(wt-1)*.1;
     const G=new THREE.Group();
     const M=col=>new THREE.MeshLambertMaterial({color:col});
     const box=(w,h,d,col)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(col));G.add(m);return m;};
@@ -2847,11 +2883,12 @@ const Boss = {
     const vs=new THREE.Mesh(new THREE.BoxGeometry(T.sz[0]*.5,.12,.07),new THREE.MeshBasicMaterial({color:0xff0000}));vs.position.set(0,T.sz[1]+.05,-T.sz[2]*.35);G.add(vs);
     const vl=new THREE.PointLight(0xff0000,3,8);vl.position.copy(vs.position);G.add(vl);
     G.position.copy(pos);scene.add(G);
-    this.active={mesh:G,T,hp:~~(T.hp*(1+Zone.zone*.2)),maxHp:~~(T.hp*(1+Zone.zone*.2)),fireTimer:0};
+    this.active={mesh:G,T,hp:~~(T.hp*hpMult),maxHp:~~(T.hp*hpMult),fireTimer:0,dmg:~~(T.dmg*dmgMult)};
     document.getElementById('boss-name').textContent=`⚠ ${T.name}`;
     document.getElementById('boss-bar').style.display='block';
     document.getElementById('boss-hp-fill').style.width='100%';
-    UI.killFeed(`⚠ BOSS ENGAGED: ${T.name}`,'#e74c3c');
+    UI.killFeed(`⚠ BOSS: ${T.name}`,'#e74c3c');
+    showBanner('⚠ '+T.name+' — '+T.desc,3000);
   },
 
   hit(dmg){
@@ -2896,7 +2933,7 @@ const Boss = {
       for(let i=0;i<3;i++){
         const spread=.12;
         const fd=new THREE.Vector3(dx+(Math.random()-.5)*spread*dist,0,dz+(Math.random()-.5)*spread*dist);
-        Bullets.fire(bp.clone().add(new THREE.Vector3(0,1.8,0)),fd,this.active.T.dmg,false,.06);
+        Bullets.fire(bp.clone().add(new THREE.Vector3(0,1.8,0)),fd,this.active.dmg||this.active.T.dmg,false,.06);
       }
     }
     bp.y=0;
@@ -2909,7 +2946,7 @@ const Boss = {
 const Grenades={
   list:[],
   throw(origin,dir){const m=new THREE.Mesh(new THREE.SphereGeometry(.2,6,6),new THREE.MeshLambertMaterial({color:0x334422}));m.position.copy(origin);scene.add(m);const vel=dir.clone().multiplyScalar(6).add(new THREE.Vector3(0,4,0));this.list.push({mesh:m,vel,timer:2.5});},
-  update(dt){for(let i=this.list.length-1;i>=0;i--){const g=this.list[i];g.timer-=dt;g.vel.y-=12*dt;g.mesh.position.addScaledVector(g.vel,dt);g.mesh.rotation.x+=dt*5;if(g.mesh.position.y<.2){g.mesh.position.y=.2;g.vel.y*=-.3;g.vel.x*=.6;g.vel.z*=.6;}if(g.timer<=0){const pos=g.mesh.position.clone();scene.remove(g.mesh);this.list.splice(i,1);Bullets._blast(pos,65);Audio.explosion();Particles.burst(pos,0xff6600,IS_MOB?14:24);}}}
+  update(dt){for(let i=this.list.length-1;i>=0;i--){const g=this.list[i];g.timer-=dt;g.vel.y-=12*dt;g.mesh.position.addScaledVector(g.vel,dt);g.mesh.rotation.x+=dt*5;if(g.mesh.position.y<.2){g.mesh.position.y=.2;g.vel.y*=-.3;g.vel.x*=.6;g.vel.z*=.6;}if(g.timer<=0){const pos=g.mesh.position.clone();scene.remove(g.mesh);this.list.splice(i,1);Bullets._blast(pos,120);Audio.explosion();Particles.burst(pos,0xff6600,IS_MOB?18:30);}}}
 };
 
 // =====================================================================
@@ -2917,8 +2954,51 @@ const Grenades={
 // =====================================================================
 const Zone={
   zone:1,killsInZone:0,killsToNext:10,
-  sectors:['ALPHA','BRAVO','CHARLIE','DELTA','ECHO','FOXTROT','GHOST','ZERO'],
-  diffMult(){return 1+(this.zone-1)*.18;},
+  _worldTier:1, // increases every 10 zones, multiplies all rewards
+  sectors:['ALPHA','BRAVO','CHARLIE','DELTA','ECHO','FOXTROT','GHOST','ZERO','SIGMA','OMEGA','VOID','NEXUS','ABYSS','PRIME','NULL'],
+
+  // ── Torchlight-style infinite scaling ────────────────────────────
+  // World Tier brackets (like Torchlight NG+ / Division World Tier)
+  worldTier(){return Math.floor((this.zone-1)/10)+1;},
+  // Reward multiplier — credits, xp scale with world tier
+  rewardMult(){
+    const wt=this.worldTier();
+    return 1+Math.log2(wt)*.8; // WT1=1x, WT2=1.8x, WT4=2.6x, WT8=3.4x
+  },
+  // Difficulty — soft cap at WT5 then gentle scaling forever
+  diffMult(){
+    const z=this.zone;
+    // Zones 1-5: tutorial ramp
+    if(z<=5)  return 1+z*.06;
+    // Zones 6-20: main progression
+    if(z<=20) return 1.3+(z-5)*.09;
+    // Zones 21-50: endgame ramp
+    if(z<=50) return 2.65+(z-20)*.055;
+    // Zone 50+: logarithmic forever — always challenging but never impossible
+    return 4.3+Math.log(z-49)*1.2;
+  },
+  // Zone modifier — special rules at milestone zones
+  _modifier:null,
+  _rollModifier(){
+    const z=this.zone;
+    if(z<3)return null; // no modifiers in tutorial zones
+    const roll=Math.random();
+    // Chance of elite modifier increases with zone depth
+    const chance=Math.min(.85, .15+(z*.015));
+    if(roll>chance)return null;
+    const mods=[
+      {id:'frenzy',  name:'FRENZY',      col:'#ff4400',desc:'All enemies +40% speed',   apply:()=>{Enemies.list.forEach(e=>{if(e.alive)e.T.spd*=1.4;}); }},
+      {id:'armored', name:'ARMORED',     col:'#4488ff',desc:'All enemies +60% HP',      apply:()=>{Enemies.list.forEach(e=>{if(e.alive){e.hp=~~(e.hp*1.6);e.maxHp=e.hp;}}); }},
+      {id:'volley',  name:'VOLLEY',      col:'#ff8800',desc:'Enemies fire 40% faster',  apply:()=>{Enemies.list.forEach(e=>{if(e.alive)e.T.fRate*=.6;}); }},
+      {id:'elite',   name:'ELITE WAVE',  col:'#aa00ff',desc:'Enemies are all elites',   apply:()=>{}}, // handled in spawn
+      {id:'horde',   name:'HORDE',       col:'#ff2200',desc:'+50% more enemies',        apply:()=>{}}, // handled in spawn
+      {id:'haunted', name:'HAUNTED',     col:'#44ffaa',desc:'Enemies respawn once',     apply:()=>{Enemies.list.forEach(e=>{e._haunted=true;}); }},
+      {id:'reward',  name:'BONANZA',     col:'#ffd700',desc:'+100% credits & XP',       apply:()=>{}}, // handled in kill
+    ];
+    // Higher zones unlock nastier modifiers
+    const pool=z>=10?mods:mods.slice(0,4);
+    return pool[~~(Math.random()*pool.length)];
+  },
   onKill(){
     this.killsInZone++;
     const anyAlive=Enemies.list.some(e=>e.alive);
@@ -3042,24 +3122,29 @@ const Zone={
   },
 
   _hud(){
-    const sn=this.sectors[Math.min(this.zone-1,this.sectors.length-1)];
-    document.getElementById('zone-name').textContent=`SECTOR ${sn} — ZONE ${String(this.zone).padStart(2,'0')}`;
+    const wt=this.worldTier();
+    const sn=this.sectors[(this.zone-1)%this.sectors.length];
+    const wtLabel=wt>1?` [WT${wt}]`:'';
+    document.getElementById('zone-name').textContent=`SECTOR ${sn} — ZONE ${this.zone}${wtLabel}`;
     const alive=Enemies.list.filter(e=>e.alive).length;
     const total=Enemies.list.length;
     const isBossZone=this.zone%3===0;
+    const modText=this._modifier?` · ${this._modifier.name}`:'';
     document.getElementById('zone-sub').textContent=
       isBossZone&&Boss.active?`BOSS ACTIVE — DEFEAT IT TO ADVANCE`:
       alive===0&&total>0?`ZONE CLEAR — ADVANCING...`:
-      total>0?`${alive} ENEMIES REMAINING`:
+      total>0?`${alive} ENEMIES REMAINING${modText}`:
       `EXPLORING...`;
     const pct=total>0?Math.min(1,(total-alive)/total)*100:0;
     const fill=document.getElementById('zone-progress-fill');
-    if(fill)fill.style.width=pct+'%';
+    if(fill){
+      fill.style.width=pct+'%';
+      fill.style.background=this._modifier
+        ?`linear-gradient(90deg,${this._modifier.col},#fff)`
+        :pct>=100?'linear-gradient(90deg,#f39c12,#fff700)':'linear-gradient(90deg,#e67e22,#f39c12)';
+    }
     const kl=document.getElementById('zone-kills-lbl');
     if(kl)kl.textContent=total>0?`${total-alive} / ${total}`:``;
-    // Flash bar based on progress
-    if(fill&&pct>=100)fill.style.background='linear-gradient(90deg,#f39c12,#fff700)';
-    else if(fill)fill.style.background='linear-gradient(90deg,#e67e22,#f39c12)';
   },
 };
 
@@ -3069,21 +3154,80 @@ const Zone={
 const SkillTree = {
   points:0,
   nodes:{
-    dmgUp:     {lvl:0,max:3,label:'DAMAGE UP',desc:'+ 15% per level',category:'COMBAT',bonus:e=>Player.bonusDmg=(1+e.lvl*.15)},
-    critUp:    {lvl:0,max:3,label:'CRITICAL HIT',desc:'+ 8% crit chance',category:'COMBAT',bonus:e=>Player.bonusCrit=e.lvl*.08},
-    penUp:     {lvl:0,max:2,label:'ARMOR PEN',desc:'+ 15% armor pen',category:'COMBAT',bonus:()=>{}},
-    speedUp:   {lvl:0,max:3,label:'MOVE SPEED',desc:'+ 8% movement',category:'TACTICAL',bonus:e=>Player.bonusSpd=e.lvl*.08},
-    dodgeUp:   {lvl:0,max:2,label:'EVASION',desc:'- 25% dodge CD',category:'TACTICAL',bonus:()=>{}},
-    reloadUp:  {lvl:0,max:3,label:'QUICK HANDS',desc:'- 12% reload time',category:'TACTICAL',bonus:()=>{}},
-    droneUp:   {lvl:0,max:2,label:'DRONE POWER',desc:'+ 30% drone heal',category:'TECH',bonus:()=>{}},
-    shieldUp:  {lvl:0,max:3,label:'SHIELD WALL',desc:'+ 20% shield dur',category:'TECH',bonus:()=>{}},
-    empUp:     {lvl:0,max:2,label:'EMP RADIUS',desc:'+ 30% EMP range',category:'TECH',bonus:()=>{}},
+    // ── COMBAT TREE ─────────────────────────────────────
+    dmgUp:      {lvl:0,max:5,label:'DAMAGE',        desc:'+12% damage/lvl',  category:'COMBAT', icon:'💢',col:'#e74c3c',req:null,
+                 bonus:n=>Player.bonusDmg=(1+n.lvl*.12)},
+    critUp:     {lvl:0,max:4,label:'CRIT CHANCE',   desc:'+6% crit/lvl',     category:'COMBAT', icon:'★', col:'#e74c3c',req:'dmgUp',
+                 bonus:n=>Player.bonusCrit=n.lvl*.06},
+    critDmg:    {lvl:0,max:3,label:'CRIT DAMAGE',   desc:'+25% crit dmg/lvl',category:'COMBAT', icon:'💥',col:'#e74c3c',req:'critUp',
+                 bonus:()=>{}},
+    armorPen:   {lvl:0,max:3,label:'ARMOR PEN',     desc:'+20% armor pen/lvl',category:'COMBAT',icon:'⬡', col:'#e74c3c',req:'dmgUp',
+                 bonus:()=>{}},
+    fireRate:   {lvl:0,max:3,label:'FIRE RATE',     desc:'-8% fire delay/lvl',category:'COMBAT',icon:'🔫',col:'#e74c3c',req:'dmgUp',
+                 bonus:n=>{if(Player.weapon)Player.weapon.fireRate=Math.max(.04,Player.weapon.fireRate*(1-n.lvl*.08));}},
+    blastRadius:{lvl:0,max:2,label:'BLAST RADIUS',  desc:'+20% AoE size/lvl', category:'COMBAT',icon:'💣',col:'#e74c3c',req:'armorPen',
+                 bonus:()=>{}},
+    overkill:   {lvl:0,max:1,label:'OVERKILL',      desc:'Excess dmg carries over to next target',category:'COMBAT',icon:'☠',col:'#e74c3c',req:'critDmg',
+                 bonus:()=>{}},
+
+    // ── SURVIVAL TREE ───────────────────────────────────
+    hpUp:       {lvl:0,max:5,label:'HEALTH',         desc:'+20 max HP/lvl',   category:'SURVIVAL',icon:'❤',col:'#2ecc71',req:null,
+                 bonus:n=>{Player.maxHp=100+(n.lvl*20);Player.hp=Math.min(Player.hp,Player.maxHp);}},
+    armorUp:    {lvl:0,max:4,label:'ARMOR',          desc:'+15 max armor/lvl',category:'SURVIVAL',icon:'🛡',col:'#2ecc71',req:'hpUp',
+                 bonus:n=>{Player.maxArmor=100+(n.lvl*15);Player.armor=Math.min(Player.armor,Player.maxArmor);}},
+    regen:      {lvl:0,max:3,label:'REGEN',          desc:'+1 HP/sec per lvl',category:'SURVIVAL',icon:'💉',col:'#2ecc71',req:'hpUp',
+                 bonus:n=>Player._passiveRegen=n.lvl},
+    toughness:  {lvl:0,max:3,label:'TOUGHNESS',      desc:'-8% dmg taken/lvl',category:'SURVIVAL',icon:'🦺',col:'#2ecc71',req:'armorUp',
+                 bonus:n=>Player._dmgReduce=1-n.lvl*.08},
+    lastStand:  {lvl:0,max:1,label:'LAST STAND',     desc:'Survive one lethal hit per zone',category:'SURVIVAL',icon:'🔱',col:'#2ecc71',req:'toughness',
+                 bonus:()=>{}},
+    combat_medic:{lvl:0,max:2,label:'COMBAT MEDIC',  desc:'+30% healing received/lvl',category:'SURVIVAL',icon:'➕',col:'#2ecc71',req:'regen',
+                 bonus:()=>{}},
+    bulletproof:{lvl:0,max:1,label:'BULLETPROOF',    desc:'Armor absorbs 20% more damage',category:'SURVIVAL',icon:'⚙',col:'#2ecc71',req:'armorUp',
+                 bonus:()=>{}},
+
+    // ── TECH TREE ───────────────────────────────────────
+    droneUp:    {lvl:0,max:3,label:'DRONE POWER',    desc:'+30% drone heal/lvl',category:'TECH',  icon:'🤖',col:'#3498db',req:null,
+                 bonus:()=>{}},
+    empUp:      {lvl:0,max:3,label:'EMP RADIUS',     desc:'+30% EMP range/lvl',category:'TECH',   icon:'⚡',col:'#3498db',req:'droneUp',
+                 bonus:()=>{}},
+    shieldUp:   {lvl:0,max:3,label:'SHIELD WALL',    desc:'+25% shield dur/lvl',category:'TECH',  icon:'🔷',col:'#3498db',req:null,
+                 bonus:()=>{}},
+    techJunkie: {lvl:0,max:2,label:'TECH JUNKIE',    desc:'-15% skill CD/lvl', category:'TECH',   icon:'🔧',col:'#3498db',req:'droneUp',
+                 bonus:n=>{}},// handled in Skills.update via cdrBonus
+    overclock:  {lvl:0,max:1,label:'OVERCLOCK',      desc:'Skills active 40% longer',category:'TECH',icon:'🔬',col:'#3498db',req:'techJunkie',
+                 bonus:()=>{}},
+    nanobots:   {lvl:0,max:2,label:'NANOBOTS',       desc:'Drone also repairs armor',category:'TECH',icon:'🧬',col:'#3498db',req:'empUp',
+                 bonus:()=>{}},
+    chainEMP:   {lvl:0,max:1,label:'CHAIN EMP',       desc:'EMP chains to 3 nearby enemies',category:'TECH',icon:'🌐',col:'#3498db',req:'empUp',
+                 bonus:()=>{}},
+
+    // ── OPERATIVE TREE ─────────────────────────────────
+    speedUp:    {lvl:0,max:4,label:'MOVE SPEED',     desc:'+8% speed/lvl',    category:'OPERATIVE',icon:'🏃',col:'#9b59b6',req:null,
+                 bonus:n=>Player.bonusSpd=n.lvl*.08},
+    reloadUp:   {lvl:0,max:3,label:'QUICK HANDS',    desc:'-12% reload time/lvl',category:'OPERATIVE',icon:'🔄',col:'#9b59b6',req:null,
+                 bonus:()=>{}},
+    dodgeUp:    {lvl:0,max:3,label:'EVASION',        desc:'-20% dodge CD/lvl',category:'OPERATIVE',icon:'💨',col:'#9b59b6',req:'speedUp',
+                 bonus:()=>{}},
+    ammoHog:    {lvl:0,max:2,label:'AMMO HOG',       desc:'+25% mag size/lvl',category:'OPERATIVE',icon:'📦',col:'#9b59b6',req:'reloadUp',
+                 bonus:n=>{if(Player.weapon)Player.weapon.magazine=~~(Player.weapon.magazine*(1+n.lvl*.25));}},
+    scavenger:  {lvl:0,max:2,label:'SCAVENGER',      desc:'+20% credits from kills/lvl',category:'OPERATIVE',icon:'💰',col:'#9b59b6',req:null,
+                 bonus:n=>{}},// handled in kill
+    ghosting:   {lvl:0,max:1,label:'GHOSTING',       desc:'First hit of each zone is guaranteed crit',category:'OPERATIVE',icon:'👻',col:'#9b59b6',req:'dodgeUp',
+                 bonus:()=>{}},
+    tactician:  {lvl:0,max:1,label:'TACTICIAN',      desc:'Spawn with full ammo + 1 extra skill charge',category:'OPERATIVE',icon:'🗺',col:'#9b59b6',req:'ammoHog',
+                 bonus:()=>{}},
   },
+
   upgrade(key){
     const n=this.nodes[key];if(!n||n.lvl>=n.max||this.points<=0)return;
+    // Check prerequisite
+    if(n.req&&(!this.nodes[n.req]||this.nodes[n.req].lvl===0)){showBanner('REQUIRES: '+this.nodes[n.req].label);return;}
     n.lvl++;this.points--;n.bonus(n);
-    HubSystem.renderSkills();
-    UI.updateBars();
+    try{HubSystem.renderSkills();}catch(e){}
+    try{UI.updateBars();}catch(e){}
+    try{Audio.uiClick();}catch(e){}
+    showBanner('✦ '+n.label+' → LVL '+n.lvl);
   },
 };
 
@@ -3470,6 +3614,8 @@ const Player={
     if(!this.mesh)return;
     if(this.fireTimer>0)this.fireTimer-=dt;
     if(this.dodgeCd>0)this.dodgeCd-=dt;
+    // Passive regen from REGEN skill
+    if(this._passiveRegen&&this._passiveRegen>0&&this.hp<this.maxHp)this.heal(this._passiveRegen*dt);
     if(this.reloading){this.reloadTimer-=dt;UI.updateReloadBar(1-this.reloadTimer/this.reloadTotal);if(this.reloadTimer<=0){this.reloading=false;this.weapon.currentAmmo=this.weapon.magazine;UI.showReload(false);UI.updateWeaponHUD();}}
     if(this.dodging){this.dodgeTimer-=dt;this.mesh.position.addScaledVector(this.dodgeDir,15*dt);if(this.dodgeTimer<=0)this.dodging=false;}
 
@@ -3627,7 +3773,22 @@ const UI={
     // Keep max 4 entries
     while(log.children.length>4)log.removeChild(log.firstChild);
   },
-  dmgNum(worldPos,dmg,isCrit,isHead){if(!isHead&&!isCrit&&Math.random()>.7)return;const v=worldPos.clone().project(camera);const sx=(v.x*.5+.5)*window.innerWidth,sy=(-v.y*.5+.5)*window.innerHeight;const el=document.createElement('div');el.className='dnum';el.style.left=(sx+(Math.random()-.5)*36)+'px';el.style.top=sy+'px';el.style.color=isHead?'#ff4400':isCrit?'#ff8800':'#ffffff';el.style.fontSize=isHead?'20px':isCrit?'17px':'12px';el.textContent=isHead?`💥${dmg}`:isCrit?`★${dmg}★`:dmg;document.getElementById('dmg-layer').appendChild(el);setTimeout(()=>el.remove(),920);},
+  dmgNum(worldPos,dmg,isCrit,isHead){
+    if(!dmg||dmg<=0)return;
+    const v=worldPos.clone().project(camera);
+    if(v.z>1||v.z<-1)return; // behind camera
+    const sx=(v.x*.5+.5)*window.innerWidth;
+    const sy=(-v.y*.5+.5)*window.innerHeight;
+    const el=document.createElement('div');
+    el.className='dnum';
+    const col=isHead?'#ff2200':isCrit?'#ff8800':dmg>=50?'#ffdd00':dmg>=25?'#ff6633':'#dddddd';
+    const sz=isHead?22:isCrit?19:dmg>=50?17:dmg>=25?14:11;
+    el.style.cssText=`left:${sx+(Math.random()-.5)*40}px;top:${sy}px;color:${col};font-size:${sz}px;font-weight:bold;text-shadow:0 0 6px ${col},1px 1px 2px #000;pointer-events:none;position:fixed;z-index:9000;font-family:'Courier New',monospace;transition:transform .5s ease-out,opacity .5s ease-out`;
+    el.textContent=isHead?`💥${dmg}`:isCrit?`★${dmg}★`:dmg;
+    document.getElementById('dmg-layer').appendChild(el);
+    requestAnimationFrame(()=>{el.style.transform=`translateY(-${30+Math.random()*20}px)`;el.style.opacity='0';});
+    setTimeout(()=>el.remove(),600);
+  },
   headshot(){try{const el=document.getElementById('headshot-text');if(el){el.style.opacity='1';setTimeout(()=>el.style.opacity='0',700);}}catch(e){}},
   kill(label){this.killFeed(`✕  ${label} — ELIMINATED`,'#e74c3c');},
   killFeed(msg,col){try{const f=document.getElementById('kill-feed');if(!f)return;const el=document.createElement('div');el.className='kentry';el.style.color=col||'#e74c3c';el.textContent=msg;f.appendChild(el);setTimeout(()=>el.remove(),2400);while(f.children.length>5)f.removeChild(f.firstChild);}catch(e){}},
@@ -3889,20 +4050,48 @@ const HubSystem={
   },
 
   renderSkills(){
-    document.getElementById('skill-pts-display').textContent=`${SkillTree.points} POINTS`;
+    document.getElementById('skill-pts-display').textContent=`${SkillTree.points} SP`;
     const container=document.getElementById('skill-tree-ui');if(!container)return;container.innerHTML='';
-    const categories=['COMBAT','TACTICAL','TECH'];
-    categories.forEach(cat=>{
-      const row=document.createElement('div');row.innerHTML=`<div style="font-size:7px;letter-spacing:3px;color:#334;margin-bottom:6px">${cat}</div>`;
-      const nodeRow=document.createElement('div');nodeRow.className='skill-tree-row';
-      Object.entries(SkillTree.nodes).forEach(([key,n])=>{
-        if(n.category!==cat)return;
-        const el=document.createElement('div');el.className='skill-node'+(n.lvl>=n.max?' maxed':'');
-        el.innerHTML=`<div class="skill-node-name">${n.label}</div><div class="skill-node-desc">${n.desc}</div><div class="skill-node-level">${n.lvl}/${n.max} ${n.lvl>=n.max?'[MAX]':SkillTree.points>0?'[CLICK TO UPGRADE]':'[NEED POINTS]'}</div>`;
-        el.addEventListener('click',()=>SkillTree.upgrade(key));
-        nodeRow.appendChild(el);
+    const TREES=[
+      {id:'COMBAT',   label:'COMBAT',    col:'#e74c3c', icon:'💢'},
+      {id:'SURVIVAL', label:'SURVIVAL',  col:'#2ecc71', icon:'❤'},
+      {id:'TECH',     label:'TECH',      col:'#3498db', icon:'⚡'},
+      {id:'OPERATIVE',label:'OPERATIVE', col:'#9b59b6', icon:'🏃'},
+    ];
+    TREES.forEach(tree=>{
+      const section=document.createElement('div');
+      section.style.cssText='margin-bottom:18px';
+      // Tree header
+      const hdr=document.createElement('div');
+      hdr.style.cssText=`display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(0,0,0,.3);border-left:3px solid ${tree.col};margin-bottom:8px`;
+      hdr.innerHTML=`<span style="font-size:14px">${tree.icon}</span><span style="font-family:'Courier New',monospace;font-size:11px;letter-spacing:3px;color:${tree.col}">${tree.label}</span>`;
+      section.appendChild(hdr);
+      // Nodes
+      const nodes=Object.entries(SkillTree.nodes).filter(([,n])=>n.category===tree.id);
+      const grid=document.createElement('div');
+      grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 4px';
+      nodes.forEach(([key,n])=>{
+        const locked=n.req&&(!SkillTree.nodes[n.req]||SkillTree.nodes[n.req].lvl===0);
+        const maxed=n.lvl>=n.max;
+        const canUp=!locked&&!maxed&&SkillTree.points>0;
+        const card=document.createElement('div');
+        card.style.cssText=`padding:8px 10px;border:1px solid ${maxed?tree.col:locked?'rgba(255,255,255,.06)':'rgba(255,255,255,.12)'};background:${maxed?'rgba(255,255,255,.05)':locked?'rgba(0,0,0,.1)':'rgba(0,0,0,.2)'};opacity:${locked?.4:1};cursor:${canUp?'pointer':'default'}`;
+        // Pip bar
+        const pips=Array.from({length:n.max},(_,i)=>`<span style="display:inline-block;width:10px;height:4px;margin-right:2px;background:${i<n.lvl?tree.col:'rgba(255,255,255,.15)'};border-radius:1px"></span>`).join('');
+        card.innerHTML=`
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:1px;color:${maxed?tree.col:locked?'#445':'#ccc'}">${n.icon||''} ${n.label}</span>
+            <span style="font-family:'Courier New',monospace;font-size:8px;color:${maxed?tree.col:'#556'}">${n.lvl}/${n.max}</span>
+          </div>
+          <div style="margin-bottom:4px">${pips}</div>
+          <div style="font-family:'Courier New',monospace;font-size:8px;color:#556;line-height:1.3">${locked?'⚠ REQ: '+(SkillTree.nodes[n.req]?.label||'?'):n.desc}</div>
+          ${canUp?`<div style="font-family:'Courier New',monospace;font-size:7px;color:${tree.col};margin-top:4px;letter-spacing:1px">▶ TAP TO UPGRADE</div>`:''}
+        `;
+        if(canUp)card.addEventListener('click',()=>SkillTree.upgrade(key));
+        if(canUp)card.addEventListener('touchend',e=>{e.preventDefault();SkillTree.upgrade(key);});
+        grid.appendChild(card);
       });
-      row.appendChild(nodeRow);container.appendChild(row);
+      section.appendChild(grid);container.appendChild(section);
     });
   },
 
@@ -4265,43 +4454,76 @@ function _spawnEnemies(){
   const G=Map3D._G||C.GRID;
   const off=-(G/2)*C.CELL;
   const z=Zone.zone;
+  const wt=Zone.worldTier();
   const totalRooms=Map3D.rooms.filter(r=>r.type!=='start').length||1;
+
+  // Roll zone modifier
+  Zone._modifier=Zone._rollModifier();
+  if(Zone._modifier){
+    setTimeout(()=>showBanner('⚡ '+Zone._modifier.name+' — '+Zone._modifier.desc,3000),500);
+  }
+  const isHorde=Zone._modifier?.id==='horde';
+  const isEliteWave=Zone._modifier?.id==='elite';
 
   Map3D.rooms.forEach((room,ri)=>{
     if(room.type==='start')return;
     const cx=off+(room.x+room.w/2)*C.CELL;
     const cz=off+(room.z+room.h/2)*C.CELL;
     const isLast=ri===Map3D.rooms.length-1;
-    const depth=ri; // 0 = closest to start, higher = further in
+    const depth=ri;
+    const depthRatio=depth/totalRooms;
 
-    // Zone 1: max 2 enemies per room early, 3 at the end
-    // Zone 5+: max 4 early, 6 at end. Scales gently.
-    const depthRatio=depth/totalRooms; // 0.0 to 1.0
-    const zScale=1+(z-1)*.2; // zone 1=1.0, zone 5=1.8, zone 10=2.8
+    // Hard caps per world tier — early zones are approachable
+    // WT1 zones 1-3: max 2 per room, max 3 last room
+    // WT1 zones 4-10: max 3 per room, max 5 last room
+    // WT2+: scales with world tier
+    const hardCapRoom = z<=3 ? 2 : z<=6 ? 3 : Math.min(5+wtBonus, 4+~~(wtBonus*.8));
+    const hardCapLast = z<=3 ? 3 : z<=6 ? 5 : Math.min(8+wtBonus, 6+~~(wtBonus));
+
+    const wtBonus=Math.min(6,(wt-1)*1.0);
+    const zScale=Math.min(2.5, 1+(z-1)*.12);
+    const hordeBonus=isHorde?1.4:1;
     const baseCount=isLast
-      ? Math.min(6, Math.ceil(2*zScale + depthRatio*2))    // last room: 2-6
-      : Math.min(4, Math.ceil(1 + depthRatio*1.5*zScale)); // other rooms: 1-4
-    const groupSize=Math.max(1,baseCount);
+      ? Math.min(hardCapLast, Math.ceil((2+wtBonus*.5)*zScale*hordeBonus + depthRatio*2))
+      : Math.min(hardCapRoom, Math.ceil((1+wtBonus*.3)*zScale*hordeBonus + depthRatio*1.5));
+    const groupSize=Math.max(1,~~baseCount);
 
-    // Only add harder enemies deeper into zone and higher zone numbers
+    // Enemy variety unlocks progressively, faster in higher world tiers
+    const wtz=z+(wt-1)*3; // effective zone for variety (WT2 acts like 3 zones ahead)
     const canSpawn=['SOLDIER'];
-    if(z>=2&&depth>=2)canSpawn.push('RUSHER');
-    if(z>=3&&depth>=4)canSpawn.push('DRONE');
-    if(z>=4&&depth>=5&&!isLast)canSpawn.push('HEAVY');
-    if(z>=5&&depth>=6)canSpawn.push('SNIPER');
+    if(wtz>=2&&depth>=1)canSpawn.push('RUSHER');
+    if(wtz>=3&&depth>=2)canSpawn.push('DRONE');
+    if(wtz>=4&&depth>=3&&!isLast)canSpawn.push('HEAVY');
+    if(wtz>=5&&depth>=4)canSpawn.push('SNIPER');
+    // Higher world tiers mix in elites more liberally
+    const eliteChance=isEliteWave?1:Math.min(.4,(wt-1)*.1+(z-5)*.02);
 
     for(let i=0;i<groupSize;i++){
       const angle=((Math.PI*2)/groupSize)*i+Math.random()*.4;
       const radius=1.2+Math.random()*2;
       const ex=cx+Math.cos(angle)*radius;
       const ez=cz+Math.sin(angle)*radius;
-      const key=isLast&&z>=3?'ELITE':canSpawn[~~(Math.random()*canSpawn.length)];
+      let key;
+      if(isEliteWave||(isLast&&z>=3&&Math.random()<.7)||(Math.random()<eliteChance))key='ELITE';
+      else key=canSpawn[~~(Math.random()*canSpawn.length)];
       const e=Enemies.spawn(new THREE.Vector3(ex,0,ez),key);
       if(e)e.state='dormant';
     }
   });
   Zone.killsToNext=Enemies.list.length;
   Zone._hud();
+
+  // Apply modifier effects that need enemies already spawned
+  if(Zone._modifier?.apply){
+    try{Zone._modifier.apply();}catch(e){}
+  }
+
+  // World tier milestone announcement
+  const _wt=Zone.worldTier();
+  if(Zone.zone>1&&(Zone.zone-1)%10===0){
+    setTimeout(()=>showBanner('◈ WORLD TIER '+_wt+' — REWARDS ×'+Zone.rewardMult().toFixed(1)+' — POWER LEVEL INCREASED',4000),1000);
+  }
+
   // Quests only fire after tutorial is complete, with a longer delay
   setTimeout(()=>{
     try{
@@ -5891,7 +6113,7 @@ const Audio={
   _playTrack(idx){
     if(!this.ctx||!this.musicPlaying)return;
     this._r();
-    const names=['GOLDENEYE','THUNDERBALL','SILHOUETTE','SHADOW OP','ZERO HOUR','COLD FRONT','LAST ASSET','CIPHER','DOUBLE BLIND','EXTRACTION'];
+    const names=['GOLDENEYE','THUNDERBALL','SILHOUETTE','SHADOW OP','ZERO HOUR','COLD FRONT','LAST ASSET','CIPHER','DOUBLE BLIND','EXTRACTION','BLACKSITE','VENDETTA','NIGHT DRIVE','REACTOR','SECTOR ZERO'];
     const tracks=[
       ()=>this._track_goldeneye(),
       ()=>this._track_thunderball(),
@@ -5903,14 +6125,19 @@ const Audio={
       ()=>this._track_cipher(),
       ()=>this._track_double_blind(),
       ()=>this._track_extraction(),
+      ()=>this._track_blacksite(),
+      ()=>this._track_vendetta(),
+      ()=>this._track_night_drive(),
+      ()=>this._track_reactor(),
+      ()=>this._track_sector_zero(),
     ];
     // Flash track name
     const sn=document.getElementById('skill-notify');
-    if(sn){sn.textContent='♪ '+names[idx];sn.style.opacity='1';setTimeout(()=>sn.style.opacity='0',2500);}
-    const dur=tracks[idx]();
+    if(sn){sn.textContent='♪ '+names[idx%names.length];sn.style.opacity='1';setTimeout(()=>sn.style.opacity='0',2500);}
+    const dur=tracks[idx%tracks.length]();
     this._schedTimer=setTimeout(()=>{
       if(!this.musicPlaying)return;
-      this._trackIndex=(this._trackIndex+1)%10;
+      this._trackIndex=(this._trackIndex+1)%tracks.length;
       this._playTrack(this._trackIndex);
     },(dur-0.2)*1000);
   },
@@ -6255,6 +6482,154 @@ const Audio={
       this._strings([440,554,659,784],t,B*4,.048,D);
       this._strings([220,277,330,392],t+B*2,B*2,.04,D);
       this._pad007([110,138,165,196,220],t,B*4,.028,D);
+    }
+    return dur;
+  },
+
+  // BLACKSITE — dark industrial, 140 BPM, heavy percussion + drone bass
+  _track_blacksite(){
+    const B=this._beat(140),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s%4===0)this._kik(st,D);
+        if(s===4||s===12)this._snr(st,D,.9);
+        if(s===8)this._snr(st,D,.7);
+        if(s%2===0)this._hat(st,D,.2);
+        if(s%4===2)this._hat(st,D,.1);
+        if(s%8===7)this._rimshot(st,D);
+      }
+      // Industrial drone bass — low and grinding
+      const bsl=[41,41,36,38,41,44,43,41];
+      this._bass007(bsl[bar%8],t,B*3.5,.85,D);
+      this._bass007(bsl[bar%8]*1.5,t+B*1.5,B*1.2,.3,D);
+      // Dark pad stabs
+      if(bar%2===0){const pch=[110,138,165];pch.forEach(f=>this._pad007([f,f*1.5],t,B*2,.04,D));}
+      // Harsh string hits
+      if(bar%4===0)this._strings([220,277,330],t,B,.06,D);
+      if(bar%4===2)this._strings([196,247,294],t,B,.06,D);
+    }
+    return dur;
+  },
+
+  // VENDETTA — aggressive rock-influenced, 138 BPM, driving snare + power chords
+  _track_vendetta(){
+    const B=this._beat(138),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    const chord=[[110,138,165,196],[98,123,147,185],[123,155,185,220],[104,131,156,196]];
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s%4===0||s%4===2)this._kik(st,D);
+        if(s%8===4||s%8===6)this._snr(st,D,1.0);
+        if(s%4===2)this._snr(st,D,.5);
+        if(s%2===1)this._hat(st,D,.18);
+        if(s===15)this._rimshot(st,D);
+      }
+      // Power chord bass driving forward
+      const vbl=[82,82,73,77];
+      this._bass007(vbl[bar%4],t,B*1.8,.9,D);
+      this._bass007(vbl[bar%4],t+B*2,B*1.8,.9,D);
+      // Thick pad power chords
+      chord[bar%4].forEach(f=>this._pad007([f,f*2],t,B*4,.032,D));
+      // Brass punch on beat 1 and 3
+      if(bar%2===0)[330,415,523].forEach(f=>this._brass(f,t,B*.4,.06,D));
+      if(bar%2===1)[294,370,466].forEach(f=>this._brass(f,t+B*2,B*.4,.06,D));
+    }
+    return dur;
+  },
+
+  // NIGHT DRIVE — retro synth wave, 115 BPM, arpeggiated synth + smooth bass
+  _track_night_drive(){
+    const B=this._beat(115),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    const arp=[[440,554,659,880],[392,494,587,784],[349,440,523,698],[415,523,622,830]];
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s%4===0)this._kik(st,D);
+        if(s===4||s===12)this._snr(st,D,.65);
+        if(s%2===0)this._hat(st,D,.12);
+        if(s%4===1||s%4===3)this._hat(st,D,.07);
+      }
+      // Smooth synth bass
+      const ndbl=[55,55,49,52];
+      this._bass007(ndbl[bar%4],t,B*3.8,.65,D);
+      // Arpeggiated synth
+      const ap=arp[bar%4];
+      for(let i=0;i<8;i++){
+        const o=this.ctx.createOscillator(),g=this.ctx.createGain();
+        o.type='sawtooth';o.frequency.value=ap[i%ap.length];
+        g.gain.setValueAtTime(0,t+i*B*.5);g.gain.linearRampToValueAtTime(.025,t+i*B*.5+.02);g.gain.exponentialRampToValueAtTime(.001,t+i*B*.5+B*.45);
+        o.connect(g);g.connect(D);o.start(t+i*B*.5);o.stop(t+i*B*.5+B*.5);
+      }
+      // Smooth pad underneath
+      this._pad007([110,138,165,196],t,B*4,.025,D);
+      if(bar%4===0||bar%4===2)this._strings([440,554,659],t+B*2,B*2,.02,D);
+    }
+    return dur;
+  },
+
+  // REACTOR — tense electronic thriller, 132 BPM, asymmetric percussion + tension pads
+  _track_reactor(){
+    const B=this._beat(132),bars=16,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s%4===0)this._kik(st,D);
+        if(s===5||s===11||s===13)this._kik(st,D,.5);
+        if(s===4||s===12)this._snr(st,D,.8);
+        if(s%3===2)this._hat(st,D,.15);
+      }
+      // Staccato bass hits — tense and irregular
+      const rbl=[55,55,49,55,52,55,46,55];
+      this._bass007(rbl[bar%8],t,B*.9,.8,D);
+      this._bass007(rbl[bar%8],t+B*2.5,B*.7,.65,D);
+      // Rising tension pads
+      const tension=bar/bars;
+      const padVol=.018+tension*.025;
+      this._pad007([73,92,110,138],t,B*4,padVol,D);
+      if(bar>=8)this._pad007([82,103,123,155],t+B,B*3,padVol*.6,D);
+      // Alarm-like strings in second half
+      if(bar>=12)this._strings([880,1108],t,B*.5,.03,D);
+    }
+    return dur;
+  },
+
+  // SECTOR ZERO — epic orchestral finale theme, 108 BPM, full orchestra feel
+  _track_sector_zero(){
+    const B=this._beat(108),bars=20,dur=B*bars*4;
+    const now=this.ctx.currentTime,D=this.musicGain;
+    const prog=[[110,138,165,220],[98,123,147,196],[123,155,185,247],[82,103,123,164]];
+    for(let bar=0;bar<bars;bar++){
+      const t=now+bar*B*4;
+      // Drums build in — sparse first, full later
+      const phase=bar/bars;
+      for(let s=0;s<16;s++){
+        const st=t+s*B;
+        if(s%4===0)this._kik(st,D,phase>.5?.9:.5);
+        if((s===4||s===12)&&phase>.3)this._snr(st,D,.8);
+        if(s%2===1&&phase>.6)this._hat(st,D,.16);
+        if(s===8&&phase>.4)this._rimshot(st,D);
+      }
+      // Heroic bass — enters from bar 2
+      if(bar>=2){
+        const szbl=[55,55,49,52,55,62,58,55];
+        this._bass007(szbl[bar%8],t,B*3.5,.7,D);
+      }
+      // Full orchestra layers build with progression
+      const ch=prog[bar%4];
+      if(bar>=4)ch.forEach(f=>this._pad007([f,f*1.5,f*2],t,B*4,.022+phase*.015,D));
+      if(bar>=8)ch.forEach(f=>this._strings([f*2,f*3],t,B*4,.018+phase*.012,D));
+      if(bar>=12)ch.forEach(f=>this._brass(f*2,t,B*.6,.04+phase*.025,D));
+      // Climax flourish
+      if(bar>=16)[440,554,659,784,880].forEach((f,i)=>this._strings([f],t+i*B*.5,B*2,.04,D));
     }
     return dur;
   },
