@@ -9037,7 +9037,15 @@ const Casino={
       const list=document.getElementById('horse-list');if(!list)return;
       list.innerHTML='';
       const track=document.getElementById('horse-track');if(track)track.style.display='none';
-      const btn=document.getElementById('horse-race-btn');if(btn){btn.disabled=true;btn.textContent='PLACE BET & RACE';}
+      const btn=document.getElementById('horse-race-btn');
+      if(btn){
+        btn.disabled=true;
+        btn.textContent='PLACE BET & RACE';
+        btn.onclick=btn.ontouchend=function(e){
+          if(e&&e.type==='touchend')e.preventDefault();
+          Casino.horses.race();
+        };
+      }
       const pd=document.getElementById('horse-pick-display');if(pd)pd.textContent='—';
       Casino._msg('horse-msg','Pick a horse to bet on');
       race.horses.forEach((h,i)=>{
@@ -9258,13 +9266,21 @@ const Casino={
       }
     },
     _finish(winner,horses){
+      this._racing=false; // allow new race
       const won=winner===this._pick;
       const h=horses[winner];
       const earn=won?~~(this._bet*h.odds):0;
       if(won)Casino._cr(earn);
       Casino._msg('horse-msg',won?h.name+' WINS! +'+earn+' CR':h.name+' WINS — YOU LOST',won?'#2ecc71':'#e74c3c');
       const btn=document.getElementById('horse-race-btn');
-      if(btn){btn.textContent='NEW RACE';btn.disabled=false;btn.onclick=()=>{btn.textContent='PLACE BET & RACE';btn.onclick=()=>Casino.horses.race();Casino.horses.setup();};}
+      if(btn){
+        btn.textContent='NEW RACE';
+        btn.disabled=false;
+        btn.onclick=btn.ontouchend=function(e){
+          if(e&&e.type==='touchend')e.preventDefault();
+          Casino.horses.setup();
+        };
+      }
       Save.save();
     },
   },
