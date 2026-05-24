@@ -1549,6 +1549,7 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
   <div class="pause-btns">
     <button class="pbtn primary" onclick="togglePause()">▶ &nbsp;RESUME</button>
     <button class="pbtn" onclick="pauseSave()">💾 &nbsp;SAVE GAME</button>
+    <button class="pbtn" id="pbtn-companion-sell" style="display:none;color:#3498db;border-color:rgba(52,152,219,.3)" onclick="pauseCompanionSell()">🐾 &nbsp;SEND COMPANION TO SELL</button>
     <button class="pbtn" id="pbtn-daily" onclick="togglePauseDaily()" style="color:#ffd700;border-color:rgba(255,215,0,.3)">⭐ &nbsp;DAILY CHALLENGE</button>
     <button class="pbtn" id="settings-toggle" onclick="togglePauseSettings()">⚙ &nbsp;SETTINGS</button>
     <button class="pbtn danger" onclick="pauseToMenu()">✕ &nbsp;RETURN TO MENU</button>
@@ -2746,9 +2747,14 @@ const Enemies = {
         try{Audio.uiClick();}catch(e){}
       }catch(ex){}
     }
+    // Gypsy Crusader — 20% bonus credit proc + confusion
+    if(Player._gypsyActive){
+      if(Math.random()<.20){const bonus=~~(eT.cr*(1+Zone.zone*.2));Player.credits+=bonus;if(Math.random()<.3&&Mercs.active?.quips)showBanner('🃏 '+Mercs.active.quips[~~(Math.random()*Mercs.active.quips.length)]+' +'+bonus+' CR',1500);}
+      if(Player._gypsyBonusCR)Player.credits+=~~(eT.cr*(Player._gypsyBonusCR-1));
+      if(Player._gypsyConfuse&&Math.random()<.12)try{Enemies.list.forEach(e=>{if(e.alive&&e.mesh.position.distanceTo(bp)<8)Enemies.stun(e,1.5);});}catch(ex){}
+    }
     // Give pet XP on kill
     try{if(Mercs.active)Mercs.gainXP(elite?12:5);}catch(ex){}
-    try{if(Math.random()<.55)Loot.spawnDrop(lx,lz);}catch(ex){}
     try{if(eKey==='HEAVY'&&Math.random()<.8)Loot.spawnDrop(lx,lz,'RARE',true);}catch(ex){}
     try{if(eKey==='ELITE')Loot.spawnDrop(lx,lz,'EPIC');}catch(ex){}
 
@@ -3646,8 +3652,23 @@ const Player={
            !Map3D.isFloor(this.mesh.position.x,this.mesh.position.z-nz*PAD)||
            Map3D.hitFurniture(this.mesh.position.x,this.mesh.position.z)))
           this.mesh.position.z=prevZ;
-        // Clamp to hub bounds
-        if(inHub){this.mesh.position.x=Math.max(-24,Math.min(24,this.mesh.position.x));this.mesh.position.z=Math.max(-24,Math.min(24,this.mesh.position.z));}
+        // Hub collision — fountain, stall counters, tycoon walls
+        if(inHub){
+          // Fountain collision (2.8 unit radius octagon)
+          const fx=this.mesh.position.x,fz=this.mesh.position.z;
+          if(fx*fx+fz*fz<9){this.mesh.position.x=prevX;this.mesh.position.z=prevZ;}
+          // Stall counter collision (player can't walk behind counters)
+          if(HubWorld._stallBBs){
+            for(const bb of HubWorld._stallBBs){
+              const px2=this.mesh.position.x,pz2=this.mesh.position.z;
+              if(px2>bb.minX&&px2<bb.maxX&&pz2>bb.minZ&&pz2<bb.maxZ){
+                this.mesh.position.x=prevX;this.mesh.position.z=prevZ;break;
+              }
+            }
+          }
+          this.mesh.position.x=Math.max(-24,Math.min(24,this.mesh.position.x));
+          this.mesh.position.z=Math.max(-30,Math.min(30,this.mesh.position.z));
+        }
         // ── Walking Animation ──
         this._walkT+=dt*(sprint?2.2:1.5);
         const swing=Math.sin(this._walkT*5.5)*(sprint?.42:.28);
@@ -4625,6 +4646,24 @@ function _spawnEnemies(){
   if(Zone._modifier?.apply){
     try{Zone._modifier.apply();}catch(e){}
   }
+  // Gypsy Crusader — Joker's Gambit: random buff or debuff each zone
+  if(Player._gypsyActive&&Mercs.active?.bonus==='gypsy'&&!Mercs.active._gambitRolled){
+    Mercs.active._gambitRolled=true;
+    const gambits=[
+      {name:'WILD CARD — +50% DAMAGE',    good:true,  apply:()=>{Player.bonusDmg=(Player.bonusDmg||1)+.5;}},
+      {name:'BAD HAND — -20% DAMAGE',     good:false, apply:()=>{Player.bonusDmg=Math.max(.5,(Player.bonusDmg||1)-.2);}},
+      {name:'JOKER LUCK — DOUBLE CREDITS', good:true,  apply:()=>{Player._gypsyBonusCR=2;}},
+      {name:'CLUMSY — -15% FIRE RATE',    good:false, apply:()=>{if(Player.weapon)Player.weapon.fireRate*=1.15;}},
+      {name:'PAINTED TARGET — ENEMIES CONFUSED', good:true, apply:()=>{Player._gypsyConfuse=true;}},
+      {name:'HARLEQUIN — INFINITE AMMO 30s', good:true, apply:()=>{Player._gypsyInfAmmo=true;setTimeout(()=>{Player._gypsyInfAmmo=false;},30000);}},
+      {name:'JINXED — TAKE 10% MORE DAMAGE', good:false, apply:()=>{Player._gypsyDmgPenalty=1.1;}},
+      {name:'SPOTLIGHT — ALL ENEMIES AGGRO', good:false, apply:()=>{Enemies.list.forEach(e=>{if(e.alive)e.state='chase';});}},
+    ];
+    const g=gambits[~~(Math.random()*gambits.length)];
+    try{g.apply();}catch(e){}
+    const col=g.good?'#cc2244':'#6622aa';
+    setTimeout(()=>showBanner(`🃏 JOKER'S GAMBIT: ${g.name}`,3500),600);
+  }
 
   // World tier milestone announcement
   const _wt=Zone.worldTier();
@@ -4827,7 +4866,8 @@ function hubContinueRun(){
   // Refresh HUD
   try{Zone._hud();}catch(e){}
   try{UI.updateBars();}catch(e){}
-  // Spawn protection
+  // Spawn companion mesh
+  if(Mercs.active){try{Mercs.spawnMesh();}catch(e){console.warn('Merc spawn:',e);}}
   Player._spawnShield=true;
   const sv=document.getElementById('shield-vfx');if(sv)sv.classList.add('on');
   setTimeout(()=>{Player._spawnShield=false;if(sv)sv.classList.remove('on');},3000);
@@ -4967,6 +5007,13 @@ function _drawFullMap(){
   ctx.strokeRect(.5,.5,W-1,H-1);
 }
 let _paused = false;
+function pauseCompanionSell(){
+  const bagItems=[...((Player.weaponBag||[])),...(Object.values(Armor.bag||{}).filter(Boolean))].filter(Boolean);
+  if(!Mercs.active){showBanner('NO COMPANION — HIRE ONE AT THE HUB');return;}
+  if(Mercs._atHub){showBanner(Mercs.active.name+' IS ALREADY AT THE HUB');return;}
+  Mercs.sendToHub(bagItems);
+  togglePause();
+}
 function togglePause(){
   if(gameState!==GS.MISSION && !_paused)return;
   Audio.uiClick();
@@ -4984,6 +5031,13 @@ function togglePause(){
     document.getElementById('settings-toggle').textContent='⚙  SETTINGS';
     document.getElementById('pause-daily').style.display='none';
     document.getElementById('pbtn-daily').textContent='⭐  DAILY CHALLENGE';
+    // Show companion sell button if active and not already at hub
+    const cbtn=document.getElementById('pbtn-companion-sell');
+    if(cbtn){
+      const show=Mercs.active&&!Mercs._atHub;
+      cbtn.style.display=show?'':'none';
+      if(show)cbtn.textContent='🐾 SEND '+Mercs.active.name+' TO SELL BAG';
+    }
   } else {
     // Resume game music from where it was
     if(Audio.ctx&&Audio.gameGain&&Audio.musicPlaying){
@@ -5131,9 +5185,16 @@ const Mercs={
     },
     {
       name:'SHERIFF BUFORD',role:'Texas Law',bonus:'buford',val:1,
-      desc:'"You sumabitch!" — Buford T. Justice, Texas.\nPassive: PURSUIT MANDATE — enemies drop 40% more credits. Civilians (innocents) get real mad. Speed +10%. Every kill has a 15% chance to trigger a loud authority warning that stuns nearby enemies 2s.',
+      desc:'"You sumabitch!" — Buford T. Justice, Texas.\nPassive: PURSUIT MANDATE — enemies drop 40% more credits. Speed +10%. Every kill 15% chance to trigger authority warning stunning nearby enemies 2s.',
       cost:550,zones:1,col:'#c89020',
       _pursuitTimer:0,
+    },
+    {
+      name:'GYPSY CRUSADER',role:'Chaos Jester',bonus:'gypsy',val:1,
+      desc:'"WHY SO SERIOUS?" — Unknown origin. Street performer turned operator.\nPassive: JOKER\'S GAMBIT — each zone rolls a random buff OR debuff (you don\'t know which). Kills have 20% chance to drop bonus credits. Enemies occasionally freeze in confusion staring at him.',
+      cost:650,zones:1,col:'#cc2244',
+      quips:['"hehehehe"','"WHY SO SERIOUS"','"wanna see a magic trick?"','"chaos is fair"','"put a smile on that face"'],
+      _gambitRolled:false,
     },
   ],
   // ── PET SYSTEM — Torchlight-style permanent companions ────────────
@@ -5262,6 +5323,10 @@ const Mercs={
       Player.maxArmor+=20;Player.armor+=20;
       Player._mercRegen=true;
       Player._georgeActive=true;
+    }
+    if(m.bonus==='gypsy'){
+      Player._gypsyActive=true;
+      m._gambitRolled=false;
     }
     Player.recalc();
   },
@@ -5550,6 +5615,58 @@ const Mercs={
       // Uniform collar
       f(~~(W*.3),~~(H*.7),~~(W*.12),~~(H*.1),'#d8b060');
       f(~~(W*.58),~~(H*.7),~~(W*.12),~~(H*.1),'#d8b060');
+    } else if(name==='GYPSY CRUSADER'){
+      // Joker cosplay — dark background, red suit, white face paint, blue star eyes
+      f(0,0,W,H,'#0a0008');
+      // Red jacket body
+      f(~~(W*.06),~~(H*.68),~~(W*.88),~~(H*.32),'#cc1a1a');
+      // Blue shirt collar visible
+      f(~~(W*.34),~~(H*.68),~~(W*.32),~~(H*.16),'#3366cc');
+      // Yellow/gold tie
+      f(~~(W*.42),~~(H*.7),~~(W*.16),~~(H*.26),'#ccaa22');
+      // Neck
+      f(~~(W*.36),~~(H*.63),~~(W*.28),~~(H*.1),'#ddd8c8');
+      // White face paint — full face
+      f(~~(W*.16),~~(H*.22),~~(W*.68),~~(H*.48),'#eeeee8');
+      f(~~(W*.1),~~(H*.28),~~(W*.8),~~(H*.36),'#eeeee8');
+      // Dark hair — flowing on sides
+      f(0,~~(H*.1),~~(W*.22),~~(H*.52),'#1a1408');
+      f(~~(W*.78),~~(H*.1),~~(W*.22),~~(H*.52),'#1a1408');
+      f(~~(W*.12),~~(H*.1),~~(W*.76),~~(H*.22),'#1a1408'); // top hair
+      // Blue STAR shape around left eye
+      // Star center + points
+      const lx2=~~(W*.28),ly2=~~(H*.36),ss=~~(W*.12);
+      f(lx2-ss/2,ly2-ss,ss,ss*2,'#2244cc'); // vertical
+      f(lx2-ss,ly2-ss/2,ss*2,ss,'#2244cc'); // horizontal
+      f(lx2-ss*.7,ly2-ss*.7,ss*.6,ss*.6,'#2244cc'); // diag TL
+      f(lx2+ss*.1,ly2-ss*.7,ss*.6,ss*.6,'#2244cc'); // diag TR
+      f(lx2-ss*.7,ly2+ss*.1,ss*.6,ss*.6,'#2244cc'); // diag BL
+      f(lx2+ss*.1,ly2+ss*.1,ss*.6,ss*.6,'#2244cc'); // diag BR
+      // Blue STAR shape around right eye
+      const rx2=~~(W*.64),ry2=~~(H*.36);
+      f(rx2-ss/2,ry2-ss,ss,ss*2,'#2244cc');
+      f(rx2-ss,ry2-ss/2,ss*2,ss,'#2244cc');
+      f(rx2-ss*.7,ry2-ss*.7,ss*.6,ss*.6,'#2244cc');
+      f(rx2+ss*.1,ry2-ss*.7,ss*.6,ss*.6,'#2244cc');
+      f(rx2-ss*.7,ry2+ss*.1,ss*.6,ss*.6,'#2244cc');
+      f(rx2+ss*.1,ry2+ss*.1,ss*.6,ss*.6,'#2244cc');
+      // Eyes — dark irises over stars
+      f(~~(W*.28),~~(H*.36),~~(W*.14),~~(H*.1),'#111111');
+      f(~~(W*.64),~~(H*.36),~~(W*.14),~~(H*.1),'#111111');
+      // Red eyebrow slashes (Joker style)
+      f(~~(W*.2),~~(H*.28),~~(W*.2),~~(H*.04),'#aa1100');
+      f(~~(W*.6),~~(H*.28),~~(W*.2),~~(H*.04),'#aa1100');
+      // Red nose — circular clown dot
+      f(~~(W*.4),~~(H*.48),~~(W*.2),~~(H*.1),'#cc1100');
+      // Big red smile — curved Joker grin
+      f(~~(W*.16),~~(H*.58),~~(W*.68),~~(H*.07),'#cc1100');
+      f(~~(W*.16),~~(H*.56),~~(W*.1),~~(H*.09),'#cc1100'); // left upturn
+      f(~~(W*.74),~~(H*.56),~~(W*.1),~~(H*.09),'#cc1100'); // right upturn
+      // Dark inside of mouth
+      f(~~(W*.22),~~(H*.59),~~(W*.56),~~(H*.06),'#1a0000');
+      // Red tear lines under eyes (Joker signature)
+      f(~~(W*.28),~~(H*.46),~~(W*.06),~~(H*.12),'#cc0011');
+      f(~~(W*.66),~~(H*.46),~~(W*.06),~~(H*.12),'#cc0011');
     }
     // George Droid — wide orange body, tiny arms, goofy proportions
     const g=new THREE.Group();
@@ -5588,19 +5705,83 @@ const Mercs={
     const n=name;
 
     if(bonus==='george'||n==='GEORGE DROID'){
-      // Wide orange body, tiny arms, big round head, antenna
-      const torso=b(1.4,1.2,1.0,0xff6600);torso.position.set(0,.8,0);g.add(torso);
-      const ll=b(.35,.6,.35,0xff4400);ll.position.set(-.35,.2,0);g.add(ll);
-      const rl=b(.35,.6,.35,0xff4400);rl.position.set(.35,.2,0);g.add(rl);
-      const la=b(.2,.35,.2,0xff6600);la.position.set(-.85,.85,0);g.add(la);
-      const ra=b(.2,.35,.2,0xff6600);ra.position.set(.85,.85,0);g.add(ra);
-      const head=b(1.1,1.0,1.0,0xff7700);head.position.set(0,1.75,0);g.add(head);
-      const le=b(.15,.15,.05,0x111111);le.position.set(-.22,1.85,.51);g.add(le);
-      const re=b(.15,.15,.05,0x111111);re.position.set(.22,1.85,.51);g.add(re);
-      const mouth=b(.6,.1,.05,0x222222);mouth.position.set(0,1.55,.51);g.add(mouth);
-      const badge=b(.4,.35,.05,0xffdd00);badge.position.set(0,.9,.52);g.add(badge);
-      const ant=b(.06,.4,.06,0xaaaaaa);ant.position.set(.2,2.3,0);g.add(ant);
-      const ball=b(.15,.15,.15,0xff0000);ball.position.set(.2,2.52,0);g.add(ball);
+      // GEORGE DROID — Half human, half machine cyborg
+      // Chrome/silver armored body
+      const torso=b(.85,1.1,.55,0xcccccc);torso.position.y=.9;g.add(torso);
+      // Left side chest (human/dark suit)
+      const lchest=b(.44,1.1,.57,0x1a1a2a);lchest.position.set(-.22,.9,0);g.add(lchest);
+      // Right side chrome plating with panels
+      const rchestPlate=b(.44,.5,.57,0xddddee);rchestPlate.position.set(.22,.95,0);g.add(rchestPlate);
+      const rchestPanel=b(.38,.35,.58,0xbbbbcc);rchestPanel.position.set(.22,.72,0);g.add(rchestPanel);
+      // Chest panel detail lines
+      const line1=b(.46,.04,.57,0x888899);line1.position.set(.22,1.15,0);g.add(line1);
+      const line2=b(.46,.04,.57,0x888899);line2.position.set(.22,.85,0);g.add(line2);
+      // Center chest piece — red power core
+      const core=b(.18,.18,.06,0xff2200);core.material.emissive=new THREE.Color(0xcc0000);core.material.emissiveIntensity=1.2;core.position.set(.05,1.0,.29);g.add(core);
+      const coreRing=b(.26,.26,.05,0x888888);coreRing.position.set(.05,1.0,.28);g.add(coreRing);
+
+      // Shoulders — large chrome
+      const lshoulder=b(.42,.38,.52,0x1a1a2a);lshoulder.position.set(-.64,1.45,0);g.add(lshoulder);
+      const rshoulder=b(.42,.38,.52,0xccccdd);rshoulder.position.set(.64,1.45,0);g.add(rshoulder);
+      // Shoulder spikes / detail
+      const rsp1=b(.1,.2,.12,0xaaaacc);rsp1.position.set(.64,1.7,.1);g.add(rsp1);
+      const rsp2=rsp1.clone();rsp2.position.set(.64,1.7,-.1);g.add(rsp2);
+
+      // Arms — left: dark human suit, right: chrome mech
+      const la=b(.3,.75,.32,0x111122);la.position.set(-.58,.9,0);g.add(la);
+      const ra=b(.3,.75,.32,0xccccdd);ra.position.set(.58,.9,0);g.add(ra);
+      // Right arm chrome panels
+      const raPanel=b(.32,.3,.34,0xbbbbcc);raPanel.position.set(.58,.72,0);g.add(raPanel);
+      // Left hand dark, right hand chrome claw-like
+      const lhand=b(.24,.2,.24,0x2a1a1a);lhand.position.set(-.58,.48,0);g.add(lhand);
+      const rhand=b(.28,.2,.28,0xaaaacc);rhand.position.set(.58,.48,0);g.add(rhand);
+
+      // Legs
+      const ll=b(.32,.7,.34,0x111122);ll.position.set(-.22,.22,0);g.add(ll);
+      const rl=b(.32,.7,.34,0xccccdd);rl.position.set(.22,.22,0);g.add(rl);
+      // Boots
+      const lb2=b(.34,.22,.36,0x0a0a18);lb2.position.set(-.22,-.12,0);g.add(lb2);
+      const rb2=b(.34,.22,.36,0x888899);rb2.position.set(.22,-.12,0);g.add(rb2);
+
+      // ── HEAD — half dark skin, half chrome metal ──
+      const headBase=b(.58,.52,.5,0xb07848); // base skin tone (dark warm)
+      headBase.position.y=1.66;g.add(headBase);
+      // Left half of face = chrome metal plate overlay
+      const metalFace=b(.3,.52,.52,0xccccdd);metalFace.position.set(.15,1.66,0);g.add(metalFace);
+      // Metal face panel lines
+      const mline1=b(.31,.06,.53,0x888899);mline1.position.set(.15,1.8,0);g.add(mline1);
+      const mline2=b(.31,.06,.53,0x888899);mline2.position.set(.15,1.58,0);g.add(mline2);
+      // Metal chin piece
+      const chin=b(.56,.16,.5,0xbbbbcc);chin.position.y=1.44;g.add(chin);
+
+      // RIGHT EYE — human eye (dark skin side = left in portrait, right in scene)
+      const humanEye=b(.12,.1,.06,0x1a0a0a);humanEye.position.set(-.14,1.7,.26);g.add(humanEye);
+      const humanIris=b(.07,.07,.04,0x3a2010);humanIris.position.set(-.14,1.7,.28);g.add(humanIris);
+      const humanGlint=b(.03,.03,.03,0xffffff);humanGlint.position.set(-.12,1.72,.29);g.add(humanGlint);
+
+      // LEFT EYE — red glowing cybernetic eye (chrome side)
+      const cyberEye=b(.16,.12,.08,0xff0000);cyberEye.material.emissive=new THREE.Color(0xff0000);cyberEye.material.emissiveIntensity=2;cyberEye.position.set(.14,1.7,.26);g.add(cyberEye);
+      // Eye socket ring — dark metal frame
+      const eyeRing=b(.22,.18,.06,0x444455);eyeRing.position.set(.14,1.7,.24);g.add(eyeRing);
+      // Scan line glow from cyber eye
+      const scanBeam=b(.06,.04,.04,0xff2200);scanBeam.material.emissive=new THREE.Color(0xff1100);scanBeam.material.emissiveIntensity=1;scanBeam.position.set(.25,1.7,.26);g.add(scanBeam);
+
+      // Nose — skin side
+      const nose=b(.08,.12,.07,0x9a6838);nose.position.set(-.04,1.6,.26);g.add(nose);
+      // Jaw / mouth on skin side
+      const mouth=b(.26,.07,.06,0x1a0808);mouth.position.set(-.06,1.48,.26);g.add(mouth);
+
+      // Head — metal skull top / crown piece
+      const skull=b(.62,.22,.54,0xccccdd);skull.position.y=1.93;g.add(skull);
+      // Ear piece left (human side) — small
+      const lear=b(.06,.14,.14,0xb07848);lear.position.set(-.31,1.66,-.02);g.add(lear);
+      // Ear piece right (cyber side) — large receiver
+      const rear=b(.1,.22,.2,0x888899);rear.position.set(.31,1.66,-.02);g.add(rear);
+      const rearLight=b(.06,.06,.04,0xff2200);rearLight.material.emissive=new THREE.Color(0xaa0000);rearLight.material.emissiveIntensity=.8;rearLight.position.set(.38,1.7,.02);g.add(rearLight);
+
+      // Red glow from cyber eye lights surroundings
+      const eyeGlow=new THREE.PointLight(0xff0000,.5,4);eyeGlow.userData.noFlicker=true;eyeGlow.position.set(.14,1.7,.4);g.add(eyeGlow);
+
       g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
 
     }else if(bonus==='shout'||n==='DRAGONBORN'){
@@ -5661,7 +5842,10 @@ const Mercs={
       const torso=b(.6,1.0,.44,0xcc1a1a);torso.position.y=.9;g.add(torso);
       const plate=b(.38,.5,.46,0xaa1010);plate.position.set(0,.95,0);g.add(plate);
       const head=b(.46,.44,.42,0xc8a882);head.position.y=1.65;g.add(head);
-      const visor=b(.48,.18,.05,0xff3322);visor.material.emissive=new THREE.Color(0x880000);visor.material.emissiveIntensity=.4;visor.position.set(0,1.68,.22);g.add(visor);
+      // Full red visor — one glowing bar across face
+      const visor=b(.48,.18,.06,0xff2211);visor.material.emissive=new THREE.Color(0xcc0000);visor.material.emissiveIntensity=.8;visor.position.set(0,1.68,.22);g.add(visor);
+      // Under-visor stubble hint
+      const jaw=b(.3,.08,.06,0x8a5a30);jaw.position.set(0,1.55,.22);g.add(jaw);
       const helm=b(.52,.28,.46,0xcc1a1a);helm.position.y=1.9;g.add(helm);
       const la=b(.24,.7,.28,0xcc1a1a);la.position.set(-.46,.9,0);g.add(la);
       const ra=la.clone();ra.position.set(.46,.9,0);g.add(ra);
@@ -5674,8 +5858,11 @@ const Mercs={
       const torso=b(.55,.95,.42,0x1a0a2a);torso.position.y=.9;g.add(torso);
       const cloak=b(.62,.8,.44,0x220a33);cloak.position.set(0,1.05,0);g.add(cloak);
       const head=b(.44,.42,.4,0x0a0a15);head.position.y=1.65;g.add(head);
-      const le2=b(.14,.1,.04,0xaa44ff);le2.material.emissive=new THREE.Color(0x8800ff);le2.material.emissiveIntensity=1;le2.position.set(-.12,1.67,.21);g.add(le2);
-      const re2=le2.clone();re2.position.set(.12,1.67,.21);g.add(re2);
+      // Glowing purple eyes — bright and clearly visible
+      const le2=b(.16,.12,.06,0xcc55ff);le2.material.emissive=new THREE.Color(0xaa00ff);le2.material.emissiveIntensity=1.5;le2.position.set(-.11,1.67,.21);g.add(le2);
+      const re2=b(.16,.12,.06,0xcc55ff);re2.material.emissive=new THREE.Color(0xaa00ff);re2.material.emissiveIntensity=1.5;re2.position.set(.11,1.67,.21);g.add(re2);
+      // Nose shadow
+      const nose=b(.06,.1,.06,0x080810);nose.position.set(0,1.6,.21);g.add(nose);
       const hood=b(.5,.32,.44,0x1a0a2a);hood.position.y=1.92;g.add(hood);
       const la=b(.22,.65,.26,0x220a33);la.position.set(-.42,.88,0);g.add(la);
       const ra=la.clone();ra.position.set(.42,.88,0);g.add(ra);
@@ -5688,6 +5875,14 @@ const Mercs={
       const crossV=b(.1,.4,.46,0x22aa44);crossV.position.set(0,.95,0);g.add(crossV);
       const crossH=b(.4,.1,.46,0x22aa44);crossH.position.set(0,.95,0);g.add(crossH);
       const head=b(.46,.44,.42,0xc8a882);head.position.y=1.65;g.add(head);
+      // Kind face — rounded eyes, warm smile
+      const le3=b(.1,.1,.06,0x3a2010);le3.position.set(-.12,1.7,.22);g.add(le3);
+      const re3=le3.clone();re3.position.set(.12,1.7,.22);g.add(re3);
+      const nose3=b(.06,.08,.05,0xb07848);nose3.position.set(0,1.62,.22);g.add(nose3);
+      const smile=b(.22,.06,.05,0x7a3820);smile.position.set(0,1.55,.22);g.add(smile);
+      // Slight eyebrows
+      const lbrow=b(.12,.05,.05,0x6a4020);lbrow.position.set(-.12,1.76,.22);g.add(lbrow);
+      const rbrow=lbrow.clone();rbrow.position.set(.12,1.76,.22);g.add(rbrow);
       const helm=b(.52,.28,.46,0xffffff);helm.position.y=1.9;g.add(helm);
       const stripe=b(.52,.08,.47,0xdd1111);stripe.position.y=1.88;g.add(stripe);
       const la=b(.24,.7,.28,0xeeeee8);la.position.set(-.46,.9,0);g.add(la);
@@ -5701,8 +5896,15 @@ const Mercs={
       const torso=b(.9,1.05,.6,0x1a2a4a);torso.position.y=.95;g.add(torso);
       const chest=b(.75,.55,.62,0x2a3a5a);chest.position.set(0,1.0,0);g.add(chest);
       const head=b(.52,.48,.46,0xc8a882);head.position.y=1.7;g.add(head);
+      // Stern square face — thick brow, squint
+      const lbrow4=b(.18,.07,.06,0x3a2810);lbrow4.position.set(-.14,1.82,.24);lbrow4.rotation.z=.15;g.add(lbrow4);
+      const rbrow4=b(.18,.07,.06,0x3a2810);rbrow4.position.set(.14,1.82,.24);rbrow4.rotation.z=-.15;g.add(rbrow4);
+      const le4=b(.13,.1,.06,0x2a1808);le4.position.set(-.14,1.72,.24);g.add(le4);
+      const re4=le4.clone();re4.position.set(.14,1.72,.24);g.add(re4);
+      const nose4=b(.07,.1,.06,0xb07848);nose4.position.set(0,1.64,.24);g.add(nose4);
+      const mouth4=b(.24,.07,.06,0x7a3820);mouth4.position.set(0,1.56,.24);g.add(mouth4);
       const helm=b(.6,.34,.52,0x2a3a5a);helm.position.y=1.96;g.add(helm);
-      const visorT=b(.42,.12,.04,0x4488ff);visorT.material.emissive=new THREE.Color(0x224488);visorT.material.emissiveIntensity=.3;visorT.position.set(0,1.7,.26);g.add(visorT);
+      const visorT=b(.42,.12,.05,0x4488ff);visorT.material.emissive=new THREE.Color(0x224488);visorT.material.emissiveIntensity=.4;visorT.position.set(0,1.7,.26);g.add(visorT);
       const lsp=b(.38,.3,.46,0x334466);lsp.position.set(-.65,1.42,0);g.add(lsp);
       const rsp=lsp.clone();rsp.position.set(.65,1.42,0);g.add(rsp);
       const la=b(.3,.75,.34,0x2a3a5a);la.position.set(-.58,.9,0);g.add(la);
@@ -5715,9 +5917,16 @@ const Mercs={
       const torso=b(.58,.92,.42,0xc8a030);torso.position.y=.88;g.add(torso);
       const vest=b(.44,.5,.44,0xaa8820);vest.position.set(0,.92,0);g.add(vest);
       const head=b(.44,.42,.4,0xc8a882);head.position.y=1.64;g.add(head);
-      const gog=b(.44,.16,.06,0xffaa00);gog.position.set(0,1.66,.22);g.add(gog);
-      const gl=b(.15,.12,.04,0x223322);gl.position.set(-.12,1.66,.24);g.add(gl);
-      const gr=gl.clone();gr.position.set(.12,1.66,.24);g.add(gr);
+      // Sharp alert face under goggles — smirk
+      const nose5=b(.06,.09,.05,0xb07848);nose5.position.set(0,1.6,.21);g.add(nose5);
+      const smirk=b(.18,.06,.05,0x7a3820);smirk.position.set(.04,1.52,.21);g.add(smirk);
+      // Goggles — wide band with two lenses
+      const gog=b(.44,.18,.07,0xffaa00);gog.position.set(0,1.66,.22);g.add(gog);
+      const gl=b(.16,.13,.06,0x0a1a0a);gl.position.set(-.12,1.66,.25);g.add(gl);
+      const gr=b(.16,.13,.06,0x0a1a0a);gr.position.set(.12,1.66,.25);g.add(gr);
+      // Goggle lens glint
+      const lg=b(.06,.04,.04,0x88ffaa);lg.position.set(-.1,1.7,.28);g.add(lg);
+      const rg=lg.clone();rg.position.set(.14,1.7,.28);g.add(rg);
       const helm=b(.5,.24,.44,0xb89020);helm.position.y=1.88;g.add(helm);
       const la=b(.22,.66,.26,0xc8a030);la.position.set(-.44,.88,0);g.add(la);
       const ra=la.clone();ra.position.set(.44,.88,0);g.add(ra);
@@ -5725,10 +5934,71 @@ const Mercs={
       const rl=ll.clone();rl.position.set(.15,.18,0);g.add(rl);
       g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
 
+    }else if(n==='GYPSY CRUSADER'){
+      // Red suit jacket
+      const torso=b(.68,1.05,.48,0xcc1a1a);torso.position.y=.9;g.add(torso);
+      // Blue shirt lapel/collar
+      const lapelL=b(.18,.5,.5,0x2255cc);lapelL.position.set(-.16,.9,0);g.add(lapelL);
+      const lapelR=b(.18,.5,.5,0x2255cc);lapelR.position.set(.16,.9,0);g.add(lapelR);
+      // Gold tie
+      const tie=b(.14,.55,.5,0xccaa22);tie.position.set(0,.88,0);g.add(tie);
+      // Red jacket collar detail
+      const collar=b(.72,.15,.5,0xbb1818);collar.position.y=1.42;g.add(collar);
+      // Arms — red suit sleeves
+      const la=b(.26,.72,.3,0xcc1a1a);la.position.set(-.5,.9,0);g.add(la);
+      const ra=la.clone();ra.position.set(.5,.9,0);g.add(ra);
+      // Pale white hands
+      const lh=b(.22,.18,.22,0xddd8c8);lh.position.set(-.5,.5,0);g.add(lh);
+      const rh=lh.clone();rh.position.set(.5,.5,0);g.add(rh);
+      // Legs — dark trousers
+      const ll=b(.28,.7,.32,0x221122);ll.position.set(-.18,.2,0);g.add(ll);
+      const rl=ll.clone();rl.position.set(.18,.2,0);g.add(rl);
+      // Shoes
+      const ls=b(.3,.2,.34,0x111111);ls.position.set(-.18,-.12,0);g.add(ls);
+      const rs=ls.clone();rs.position.set(.18,-.12,0);g.add(rs);
+
+      // HEAD — white face paint
+      const head=b(.52,.5,.48,0xe8e8e2);head.position.y=1.66;g.add(head);
+      // Dark hair — flowing sides
+      const hairL=b(.12,.52,.5,0x1a1408);hairL.position.set(-.32,1.66,0);g.add(hairL);
+      const hairR=b(.12,.52,.5,0x1a1408);hairR.position.set(.32,1.66,0);g.add(hairR);
+      const hairTop=b(.54,.18,.5,0x1a1408);hairTop.position.y=1.9;g.add(hairTop);
+      // Hair flow back
+      const hairBack=b(.5,.45,.12,0x1a1408);hairBack.position.set(0,1.7,-.28);g.add(hairBack);
+
+      // BLUE STAR around left eye
+      const slV=b(.08,.28,.06,0x2244ee);slV.position.set(-.16,1.68,.25);g.add(slV);
+      const slH=b(.28,.08,.06,0x2244ee);slH.position.set(-.16,1.68,.25);g.add(slH);
+      // BLUE STAR around right eye
+      const srV=b(.08,.28,.06,0x2244ee);srV.position.set(.16,1.68,.25);g.add(srV);
+      const srH=b(.28,.08,.06,0x2244ee);srH.position.set(.16,1.68,.25);g.add(srH);
+
+      // Eyes — dark irises
+      const le=b(.12,.1,.05,0x111111);le.position.set(-.16,1.68,.26);g.add(le);
+      const re=le.clone();re.position.set(.16,1.68,.26);g.add(re);
+
+      // Red eyebrow slashes
+      const lbrow=b(.22,.06,.06,0xaa1100);lbrow.rotation.z=.3;lbrow.position.set(-.16,1.82,.25);g.add(lbrow);
+      const rbrow=b(.22,.06,.06,0xaa1100);rbrow.rotation.z=-.3;rbrow.position.set(.16,1.82,.25);g.add(rbrow);
+
+      // Red clown nose — round dot
+      const nose=b(.14,.12,.07,0xcc1100);nose.position.set(0,1.57,.26);g.add(nose);
+
+      // Big red Joker grin
+      const smileL=b(.18,.08,.06,0xcc1100);smileL.rotation.z=.5;smileL.position.set(-.18,1.47,.25);g.add(smileL);
+      const smileC=b(.2,.07,.06,0xcc1100);smileC.position.set(0,1.44,.25);g.add(smileC);
+      const smileR=b(.18,.08,.06,0xcc1100);smileR.rotation.z=-.5;smileR.position.set(.18,1.47,.25);g.add(smileR);
+      // Dark mouth interior
+      const mouth=b(.3,.1,.05,0x1a0000);mouth.position.set(0,1.44,.26);g.add(mouth);
+
+      // Red tear lines under eyes
+      const tearL=b(.05,.14,.05,0xcc0011);tearL.position.set(-.16,1.56,.26);g.add(tearL);
+      const tearR=tearL.clone();tearR.position.set(.16,1.56,.26);g.add(tearR);
+
+      g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
+
     }else{
       // Generic fallback
-      const torso=b(.6,.95,.44,col);torso.position.y=.9;g.add(torso);
-      const head=b(.46,.44,.42,0xc8a882);head.position.y=1.65;g.add(head);
       const helm=b(.52,.28,.46,col);helm.position.y=1.9;g.add(helm);
       const la=b(.24,.7,.28,col);la.position.set(-.46,.9,0);g.add(la);
       const ra=la.clone();ra.position.set(.46,.9,0);g.add(ra);
@@ -9542,6 +9812,7 @@ const HubWorld={
     // Animated water particles stored for update
     this._fountainT=0;
 
+    this._stallBBs=[];
     // NPC stalls arranged in a circle around the fountain
     const radius=11;
     this._npcs=[];
@@ -9602,6 +9873,10 @@ const HubWorld={
       const gpborder=new THREE.Mesh(new THREE.BoxGeometry(4.2,.04,3.7),new THREE.MeshBasicMaterial({color:def.col,transparent:true,opacity:.3}));
       gpborder.position.set(nx,0.005,nz);G3.add(gpborder);
       G3.add(stG);
+      // Register collision bounding box for this stall's counter area
+      const hw=2.2,hd=2.0;
+      const s=Math.sin(inA),c2=Math.cos(inA);
+      this._stallBBs.push({minX:nx-hw,maxX:nx+hw,minZ:nz-hd,maxZ:nz+hd});
       this._npcs.push({x:nx,z:nz,label:def.label,panel:def.panel});
     });
 
@@ -9649,6 +9924,8 @@ const HubWorld={
     if(Player._hubMedStation){try{Player.hp=Player.maxHp;Player.armor=Player.maxArmor;UI.updateBars();}catch(e){}}
     // Build hub geometry on first visit
     try{this.build();}catch(e){console.warn('HubWorld.build:',e.message);}
+    // Rebuild tycoon base with current upgrades
+    try{HubTycoon._buildInScene();}catch(e){}
     // Re-add hub ambient light every time (removed on leave)
     const oldAmb=scene.getObjectByName('hub_ambient');if(oldAmb)scene.remove(oldAmb);
     const hubAmb=new THREE.AmbientLight(0x1a1a44,.7);hubAmb.name='hub_ambient';scene.add(hubAmb);
@@ -9984,8 +10261,107 @@ const HubTycoon={
     Save.save();
   },
   _buildInScene(){
-    // Tycoon visual pads handled by HubWorld build — skip standalone build
-    return;
+    // Remove old tycoon mesh
+    if(this._mesh){try{scene.remove(this._mesh);}catch(e){}this._mesh=null;}
+    if(!HubWorld._group)return;
+    const g=new THREE.Group();
+    const b=(w,h,d,col)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:col}));
+    const owns=id=>this.data.upgrades[id];
+    const BASE_X=0,BASE_Z=28;
+
+    // Always: tycoon ground pad
+    const pad=b(24,.06,16,0x0a1208);pad.position.set(BASE_X,.03,BASE_Z);g.add(pad);
+    // Plot border lines
+    [[0,20,24,.08],[0,36,24,.08],[12,28,.08,16],[-12,28,.08,16]].forEach(([x,z,w,d])=>{
+      const edge=b(w,.06,d,0x00aa44);edge.material.transparent=true;edge.material.opacity=.5;edge.position.set(x,.07,z);g.add(edge);
+    });
+
+    if(owns('land')){
+      // Cleared dirt plot
+      const dirt=b(22,.04,14,0x0d1a0a);dirt.position.set(BASE_X,.02,BASE_Z);g.add(dirt);
+      // Corner markers
+      [[-10,21],[10,21],[-10,35],[10,35]].forEach(([x,z])=>{
+        const mk=b(.2,1.5,.2,0x00aa44);mk.position.set(x,.75,z);g.add(mk);
+      });
+    }
+    if(owns('foundation')){
+      // Concrete slab foundation
+      const slab=b(18,.35,12,0x3a3a3a);slab.position.set(BASE_X,.18,BASE_Z);g.add(slab);
+      // Foundation edge trim
+      const trim=b(18.4,.1,12.4,0x4a4a4a);trim.position.set(BASE_X,.38,BASE_Z);g.add(trim);
+    }
+    if(owns('walls')){
+      // Four walls forming a building shell
+      const wallMat=new THREE.MeshLambertMaterial({color:0x2a2a38});
+      [[0,21,18,.4,3.5],[0,35,18,.4,3.5],[9,28,.4,12,3.5],[-9,28,.4,12,3.5]].forEach(([x,z,w,d,h])=>{
+        const wall=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),wallMat);wall.position.set(x,h/2+.35,z);g.add(wall);
+      });
+    }
+    if(owns('roof')){
+      const roof=b(18.2,.4,12.2,0x3a2a18);roof.position.set(BASE_X,3.75,BASE_Z);g.add(roof);
+      // Roof detail — antenna/vent
+      const roofVent=b(.6,.5,.6,0x222222);roofVent.position.set(2,4.1,BASE_Z);g.add(roofVent);
+    }
+    if(owns('door')){
+      // Blast door opening on south face
+      const door=b(2,2.5,.5,0x334455);door.position.set(0,1.6,35.2);g.add(door);
+      const doorFrame=b(2.4,.15,.5,0x4a5a6a);doorFrame.position.set(0,2.9,35.2);g.add(doorFrame);
+      const keypad=b(.2,.35,.1,0x22ff44);keypad.position.set(1.4,1.8,35.4);keypad.material.emissive=new THREE.Color(0x00aa22);keypad.material.emissiveIntensity=.4;g.add(keypad);
+    }
+    if(owns('floor_tiles')){
+      // Interior floor tiles
+      for(let tx=-7;tx<=7;tx+=3)for(let tz=22;tz<=34;tz+=3){
+        const tile=b(2.8,.06,2.8,tx%2===0?0x1a1a2a:0x151520);tile.position.set(tx,.42,tz);g.add(tile);
+      }
+    }
+    if(owns('generator')){
+      // Generator unit — grey box with power light
+      const gen=b(1.5,1.2,1.0,0x222222);gen.position.set(-6,1.0,22.5);g.add(gen);
+      const genLight=b(.2,.2,.1,0x00ff44);genLight.material.emissive=new THREE.Color(0x00aa22);genLight.material.emissiveIntensity=.8;genLight.position.set(-6,.7,23.1);g.add(genLight);
+      const genL=new THREE.PointLight(0x00ff44,.4,6);genL.userData.noFlicker=true;genL.position.set(-6,1.5,22.5);g.add(genL);
+    }
+    if(owns('lighting')){
+      // Interior LED strips
+      const led1=new THREE.PointLight(0xeef0cc,.7,8);led1.userData.noFlicker=true;led1.position.set(0,3.5,28);g.add(led1);
+      const led2=new THREE.PointLight(0xeef0cc,.5,6);led2.userData.noFlicker=true;led2.position.set(-5,3.5,24);g.add(led2);
+    }
+    if(owns('workbench')){
+      // Weapon workbench — long table with tools
+      const table=b(4,.5,1.2,0x3a2a10);table.position.set(3,1.0,23.5);g.add(table);
+      const vise=b(.4,.4,.4,0x888888);vise.position.set(4,.85,23.5);g.add(vise);
+      const toolRack=b(.1,1.0,1.2,0x555555);toolRack.position.set(1,.6,23.4);g.add(toolRack);
+    }
+    if(owns('medstation')){
+      // Med bay — white cabinet with cross
+      const med=b(1.5,2.0,.6,0xeeeee8);med.position.set(-4,1.35,23.5);g.add(med);
+      const crossV2=b(.25,1.0,.65,0x22aa44);crossV2.position.set(-4,1.35,23.5);g.add(crossV2);
+      const crossH2=b(1.0,.25,.65,0x22aa44);crossH2.position.set(-4,1.35,23.5);g.add(crossH2);
+    }
+    if(owns('merc_bunk')){
+      // Bunk beds
+      const bunkFrame=b(2,.1,1,0x4a3010);bunkFrame.position.set(6,1.0,33);g.add(bunkFrame);
+      const bunkFrame2=bunkFrame.clone();bunkFrame2.position.set(6,2.0,33);g.add(bunkFrame2);
+      const bunkPost=b(.12,2.5,.12,0x3a2010);bunkPost.position.set(5,1.25,33);g.add(bunkPost);
+      const bunkPost2=bunkPost.clone();bunkPost2.position.set(7,1.25,33);g.add(bunkPost2);
+    }
+    if(owns('cantina')){
+      // Cantina table + chairs
+      const ctable=b(2.5,.1,1.5,0x3a2a18);ctable.position.set(-5,1.05,32);g.add(ctable);
+      const cup=b(.2,.3,.2,0x884422);cup.position.set(-4.5,1.2,32);g.add(cup);
+      const cup2=cup.clone();cup2.position.set(-5.5,1.2,31.5);g.add(cup2);
+    }
+    if(owns('command_center')){
+      // Command console — glowing screens
+      const console_=b(3,.8,1,0x111122);console_.position.set(0,1.0,33.5);g.add(console_);
+      const screen1=b(1.2,.7,.05,0x0033aa);screen1.material.emissive=new THREE.Color(0x001166);screen1.material.emissiveIntensity=.8;screen1.position.set(-.8,1.4,34.0);g.add(screen1);
+      const screen2=b(1.2,.7,.05,0x001122);screen2.material.emissive=new THREE.Color(0x002244);screen2.material.emissiveIntensity=.6;screen2.position.set(.8,1.4,34.0);g.add(screen2);
+      const cmdL=new THREE.PointLight(0x2244ff,.6,8);cmdL.userData.noFlicker=true;cmdL.position.set(0,2,33.5);g.add(cmdL);
+    }
+
+    scene.add(g);this._mesh=g;
+    // Add mesh to hub group so it shows/hides with hub
+    if(HubWorld._group)HubWorld._group.add(g);
+    if(scene.children.includes(g))scene.remove(g); // only in hub group
   },
 };
 
@@ -10006,7 +10382,7 @@ HubWorld._initWanderers=function(){
     const angle=(i/Mercs.ROSTER.length)*Math.PI*2;
     const r=8+Math.random()*6;
     mesh.position.set(Math.sin(angle)*r,0,Math.cos(angle)*r);
-    mesh.scale.setScalar(.85); // slightly smaller than player
+    mesh.scale.setScalar(1.0);
     this._group.add(mesh);
     this._wanderers.push({
       mesh,name:m.name,
