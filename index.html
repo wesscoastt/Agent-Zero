@@ -9926,6 +9926,10 @@ const HubWorld={
     try{this.build();}catch(e){console.warn('HubWorld.build:',e.message);}
     // Rebuild tycoon base with current upgrades
     try{HubTycoon._buildInScene();}catch(e){}
+    // Rebuild wanderers (reflects current companion state)
+    setTimeout(()=>{try{HubWorld._rebuildWanderers();}catch(e){}},100);
+    // Spawn companion in hub too
+    if(Mercs.active){try{Mercs.spawnMesh();if(Mercs.mesh){scene.add(Mercs.mesh);Mercs.mesh.position.set(Player.mesh?Player.mesh.position.x+2:2,0,Player.mesh?Player.mesh.position.z:0);}}catch(e){}}
     // Re-add hub ambient light every time (removed on leave)
     const oldAmb=scene.getObjectByName('hub_ambient');if(oldAmb)scene.remove(oldAmb);
     const hubAmb=new THREE.AmbientLight(0x1a1a44,.7);hubAmb.name='hub_ambient';scene.add(hubAmb);
@@ -10371,59 +10375,88 @@ const HubTycoon={
 //  WANDERING HUB MERCS — NPCs patrol when no companion active
 // ═══════════════════════════════════════════════════════════════════
 HubWorld._wanderers=[];
-HubWorld._initWanderers=function(){
-  if(this._wanderers.length)return;
+HubWorld._rebuildWanderers=function(){
+  // Clear old wanderers
+  this._wanderers.forEach(w=>{try{this._group&&this._group.remove(w.mesh);}catch(e){}});
+  this._wanderers=[];
   if(!this._group)return;
-  // Build each roster merc as a wandering NPC with their actual appearance
   Mercs.ROSTER.forEach((m,i)=>{
     if(Mercs.active&&Mercs.active.name===m.name)return; // skip active companion
     const mesh=Mercs._buildMercMeshByName(m.name,m.col,m.bonus);
     if(!mesh)return;
     const angle=(i/Mercs.ROSTER.length)*Math.PI*2;
-    const r=8+Math.random()*6;
+    const r=9+Math.random()*5;
     mesh.position.set(Math.sin(angle)*r,0,Math.cos(angle)*r);
-    mesh.scale.setScalar(1.0);
     this._group.add(mesh);
     this._wanderers.push({
       mesh,name:m.name,
       targetX:mesh.position.x,targetZ:mesh.position.z,
-      timer:2+Math.random()*4,walkT:0,
+      timer:1+Math.random()*3,walkT:0,
     });
   });
 };
+HubWorld._initWanderers=function(){this._rebuildWanderers();};
 const _origHubUpdate=HubWorld.update.bind(HubWorld);
 HubWorld.update=function(){
   _origHubUpdate();
-  if(gameState!==GS.HUB||!this._group)return;
-  // Init wanderers on first hub visit
-  if(this._wanderers.length===0&&this._built)this._initWanderers();
-  // Show wanderers only when no active companion
-  const hasPet=!!Mercs.active;
+  if(gameState!==GS.HUB||!this._group||!Player.mesh)return;
   const dt=0.016;
+  const pp=Player.mesh.position;
+
+  // ── Active companion follows player in hub ────────────────────────
+  if(Mercs.active&&Mercs.mesh){
+    const target={x:pp.x-Math.sin(Player.mesh.rotation.y)*2.2-Math.cos(Player.mesh.rotation.y)*1.2,
+                  z:pp.z-Math.cos(Player.mesh.rotation.y)*2.2+Math.sin(Player.mesh.rotation.y)*1.2};
+    const cdx=target.x-Mercs.mesh.position.x;
+    const cdz=target.z-Mercs.mesh.position.z;
+    const cd=Math.sqrt(cdx*cdx+cdz*cdz);
+    if(cd>0.5){
+      const cspd=Math.min(1,cd)*6;
+      Mercs.mesh.position.x+=cdx/cd*cspd*dt;
+      Mercs.mesh.position.z+=cdz/cd*cspd*dt;
+      Mercs.mesh.rotation.y=Math.atan2(cdx,cdz);
+      Mercs._hubWalkT=(Mercs._hubWalkT||0)+dt*5;
+      const csw=Math.sin(Mercs._hubWalkT)*.3;
+      const cud=Mercs.mesh.userData;
+      if(cud.ll)cud.ll.rotation.x=csw;
+      if(cud.rl)cud.rl.rotation.x=-csw;
+      if(cud.la)cud.la.rotation.x=-csw*.5;
+      if(cud.ra)cud.ra.rotation.x=csw*.5;
+    } else {
+      // Idle — face player
+      Mercs.mesh.rotation.y=Math.atan2(pp.x-Mercs.mesh.position.x,pp.z-Mercs.mesh.position.z);
+    }
+  }
+
+  // ── Wandering NPCs ─────────────────────────────────────────────────
   this._wanderers.forEach(w=>{
-    w.mesh.visible=!hasPet;
-    if(hasPet)return;
     w.timer-=dt;
     if(w.timer<=0){
-      // Pick new wander target within plaza
       const angle=Math.random()*Math.PI*2;
       const r=3+Math.random()*12;
       w.targetX=Math.max(-22,Math.min(22,Math.sin(angle)*r));
       w.targetZ=Math.max(-22,Math.min(22,Math.cos(angle)*r));
-      w.timer=3+Math.random()*5;
+      w.timer=3+Math.random()*6;
     }
     const dx=w.targetX-w.mesh.position.x,dz=w.targetZ-w.mesh.position.z;
     const d=Math.sqrt(dx*dx+dz*dz);
-    if(d>0.3){
-      const spd=1.5;
+    if(d>0.4){
+      const spd=1.4;
       w.mesh.position.x+=dx/d*spd*dt;
       w.mesh.position.z+=dz/d*spd*dt;
       w.mesh.rotation.y=Math.atan2(dx,dz);
       w.walkT+=dt*5;
-      const sw=Math.sin(w.walkT)*.3;
+      const sw=Math.sin(w.walkT)*.28;
       const ud=w.mesh.userData;
-      if(ud.ll)ud.ll.rotation.x=sw;if(ud.rl)ud.rl.rotation.x=-sw;
-      if(ud.la)ud.la.rotation.x=-sw*.5;if(ud.ra)ud.ra.rotation.x=sw*.5;
+      if(ud.ll)ud.ll.rotation.x=sw;
+      if(ud.rl)ud.rl.rotation.x=-sw;
+      if(ud.la)ud.la.rotation.x=-sw*.5;
+      if(ud.ra)ud.ra.rotation.x=sw*.5;
+    } else {
+      // Idle — face nearest other wanderer or player
+      const ud=w.mesh.userData;
+      if(ud.ll){ud.ll.rotation.x*=.85;ud.rl.rotation.x*=.85;}
+      if(ud.la){ud.la.rotation.x*=.85;ud.ra.rotation.x*=.85;}
     }
   });
 };
