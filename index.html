@@ -2436,7 +2436,10 @@ const Loot = {
 const Armor = {
   equipped:{helmet:null,chest:null,gloves:null,kneepads:null,backpack:null}, bag:[],MAX_BAG:8,
   offer(a){const cur=this.equipped[a.slot];if(!cur||a.armor>cur.armor)this.equip(a);else this._bag(a);},
-  equip(a){const old=this.equipped[a.slot];if(old)this._bag(old);this.equipped[a.slot]=a;Player.recalc();InvUI.refresh();},
+  equip(a){
+    if(a&&a.unidentified){showBanner('IDENTIFY FIRST — TAKE TO WEAPON DEALER IN HUB',2000);try{Audio.uiClick();}catch(e){}return;}
+    const old=this.equipped[a.slot];if(old)this._bag(old);this.equipped[a.slot]=a;Player.recalc();InvUI.refresh();
+  },
   _bag(item){if(this.bag.length>=this.MAX_BAG)this.bag.shift();this.bag.push(item);InvUI.refresh();},
   getStats(){let arm=0,hp=0,spd=0,cdr=0;for(const k in this.equipped){const p=this.equipped[k];if(!p)continue;arm+=p.armor;hp+=p.healthBonus;spd+=p.speedBonus;cdr+=p.cdrBonus;}return{armor:arm,hp,spd,cdr};},
   save(){return{equipped:this.equipped,bag:this.bag};},
@@ -3527,8 +3530,12 @@ const Player={
   gainXP(amt){this.xp+=amt;while(this.xp>=this.xpNext){this.xp-=this.xpNext;this.level++;this.xpNext=~~(this.xpNext*1.45);this.maxHp+=12;this.hp=this.maxHp;this.maxArmor+=5;SkillTree.points++;Audio.levelUp();UI.levelUp(this.level);}UI.updateBars();},
 
   pickupWeapon(w){
-    if(!this.weapon){this.weapon=w;UI.updateWeaponHUD();this._updateWeaponMesh();return;}
-    if(w.damage>this.weapon.damage){this.weaponBag.unshift(this.weapon);if(this.weaponBag.length>4)this.weaponBag.pop();this.weapon=w;UI.updateWeaponHUD();this._updateWeaponMesh();}
+    if(!this.weapon){
+      // Don't auto-equip unidentified weapons as active
+      if(w.unidentified){this.weaponBag.unshift(w);if(this.weaponBag.length>4)this.weaponBag.pop();InvUI.refresh();return;}
+      this.weapon=w;UI.updateWeaponHUD();this._updateWeaponMesh();return;
+    }
+    if(!w.unidentified&&w.damage>this.weapon.damage){this.weaponBag.unshift(this.weapon);if(this.weaponBag.length>4)this.weaponBag.pop();this.weapon=w;UI.updateWeaponHUD();this._updateWeaponMesh();}
     else{this.weaponBag.unshift(w);if(this.weaponBag.length>4)this.weaponBag.pop();}
     InvUI.refresh();
   },
@@ -4008,6 +4015,63 @@ const HubSystem={
 
   renderMarket(){
     const cr=Player.credits;const grid=document.getElementById('market-grid');if(!grid)return;grid.innerHTML='';
+
+    // ── IDENTIFY SECTION ───────────────────────────────────────────────
+    const unidItems=[...Player.weaponBag,...Armor.bag,(Player.weapon?[Player.weapon]:[])].flat().filter(i=>i&&i.unidentified);
+    if(unidItems.length>0){
+      const sec=document.createElement('div');
+      sec.style.cssText='margin-bottom:14px;border:1px solid rgba(255,200,0,.25);padding:10px;background:rgba(20,15,0,.5)';
+      sec.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;color:#ffd700;margin-bottom:8px">🔍 IDENTIFY (${unidItems.length} ITEMS)</div>`;
+      const identifyCost=50;
+      unidItems.forEach(item=>{
+        const r=RARITY[item.rarity]||RARITY.RARE;
+        const row=document.createElement('div');
+        row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)';
+        row.innerHTML=`<div style="flex:1;font-family:'Courier New',monospace"><div style="font-size:9px;color:${r.col}">${item.name}</div><div style="font-size:8px;color:#556">${r.name} ${item.kind==='weapon'?item.type:item.slot||'ARMOR'}</div></div>`;
+        const btn=document.createElement('button');
+        const canAfford=Player.credits>=identifyCost;
+        btn.style.cssText=`padding:7px 12px;border:1px solid ${canAfford?'#ffd700':'#443'};background:transparent;color:${canAfford?'#ffd700':'#443'};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
+        btn.textContent=`🔍 ${identifyCost} CR`;
+        btn.onclick=btn.ontouchend=(e)=>{
+          if(e.type==='touchend')e.preventDefault();
+          if(Player.credits<identifyCost){showBanner('NOT ENOUGH CREDITS TO IDENTIFY',1500);return;}
+          Player.credits-=identifyCost;
+          try{UI.credit(Player.credits);}catch(ex){}
+          identifyItem(item);
+          try{Audio.uiClick();}catch(ex){}
+          this.renderMarket();
+          try{InvUI.refresh();}catch(ex){}
+        };
+        row.appendChild(btn);
+        sec.appendChild(row);
+      });
+      // Identify all button
+      if(unidItems.length>1){
+        const totalCost=identifyCost*unidItems.length;
+        const allBtn=document.createElement('button');
+        const canAll=Player.credits>=totalCost;
+        allBtn.style.cssText=`width:100%;margin-top:8px;padding:8px;border:1px solid ${canAll?'#ffd700':'#443'};background:${canAll?'rgba(255,215,0,.08)':'transparent'};color:${canAll?'#ffd700':'#443'};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation`;
+        allBtn.textContent=`🔍 IDENTIFY ALL — ${totalCost} CR`;
+        allBtn.onclick=allBtn.ontouchend=(e)=>{
+          if(e.type==='touchend')e.preventDefault();
+          if(Player.credits<totalCost){showBanner('NOT ENOUGH CREDITS',1500);return;}
+          Player.credits-=totalCost;
+          try{UI.credit(Player.credits);}catch(ex){}
+          unidItems.forEach(i=>identifyItem(i));
+          showBanner('ALL ITEMS IDENTIFIED',2000);
+          this.renderMarket();
+          try{InvUI.refresh();}catch(ex){}
+        };
+        sec.appendChild(allBtn);
+      }
+      grid.appendChild(sec);
+    }
+
+    // ── BUY WEAPONS ─────────────────────────────────────────────────────
+    const buyHdr=document.createElement('div');
+    buyHdr.style.cssText='font-family:"Courier New",monospace;font-size:9px;letter-spacing:3px;color:#e74c3c;margin-bottom:8px';
+    buyHdr.textContent='⚔ WEAPONS FOR SALE';
+    grid.appendChild(buyHdr);
     this.shopInv.forEach(item=>{
       const r=RARITY[item.rarity];const price=item.sellValue*3;
       const el=document.createElement('div');el.className='shop-item';
@@ -4020,7 +4084,7 @@ const HubSystem={
     [...Player.weaponBag,...Armor.bag].forEach(item=>{
       const r=RARITY[item.rarity];const price=item.sellValue;
       const el=document.createElement('div');el.className='shop-item';
-      el.innerHTML=`<div class="shop-item-name" style="color:${r.col};font-size:7px">${item.name.split(' ').slice(0,3).join(' ')}</div><div class="shop-item-price can-afford">SELL: 💰 ${price} CR</div>`;
+      el.innerHTML=`<div class="shop-item-name" style="color:${r.col};font-size:7px">${item.name.split(' ').slice(0,3).join(' ')}${item.unidentified?' 🔍':''}</div><div class="shop-item-price can-afford">SELL: 💰 ${price} CR</div>`;
       el.addEventListener('click',()=>{Player.credits+=price;UI.credit(Player.credits);const wi=Player.weaponBag.indexOf(item);if(wi!==-1)Player.weaponBag.splice(wi,1);const ai=Armor.bag.indexOf(item);if(ai!==-1)Armor.bag.splice(ai,1);this.renderMarket();});
       sg.appendChild(el);
     });
@@ -4028,6 +4092,50 @@ const HubSystem={
 
   renderArmory(){
     const cr=Player.credits;const grid=document.getElementById('armory-grid');if(!grid)return;grid.innerHTML='';
+
+    // ── IDENTIFY SECTION ───────────────────────────────────────────────
+    const unidArmor=[...Armor.bag].filter(i=>i&&i.unidentified);
+    if(unidArmor.length>0){
+      const sec=document.createElement('div');
+      sec.style.cssText='margin-bottom:14px;border:1px solid rgba(255,200,0,.25);padding:10px;background:rgba(20,15,0,.5)';
+      sec.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;color:#ffd700;margin-bottom:8px">🔍 IDENTIFY ARMOR (${unidArmor.length} ITEMS)</div>`;
+      const identifyCost=50;
+      unidArmor.forEach(item=>{
+        const r=RARITY[item.rarity]||RARITY.RARE;
+        const row=document.createElement('div');
+        row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)';
+        row.innerHTML=`<div style="flex:1;font-family:'Courier New',monospace"><div style="font-size:9px;color:${r.col}">${item.name}</div><div style="font-size:8px;color:#556">${r.name} · ${item.slot||'ARMOR'}</div></div>`;
+        const btn=document.createElement('button');
+        const canAfford=Player.credits>=identifyCost;
+        btn.style.cssText=`padding:7px 12px;border:1px solid ${canAfford?'#ffd700':'#443'};background:transparent;color:${canAfford?'#ffd700':'#443'};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
+        btn.textContent=`🔍 ${identifyCost} CR`;
+        btn.onclick=btn.ontouchend=(e)=>{
+          if(e.type==='touchend')e.preventDefault();
+          if(Player.credits<identifyCost){showBanner('NOT ENOUGH CREDITS',1500);return;}
+          Player.credits-=identifyCost;try{UI.credit(Player.credits);}catch(ex){}
+          identifyItem(item);try{Audio.uiClick();}catch(ex){}
+          this.renderArmory();try{InvUI.refresh();}catch(ex){}
+        };
+        row.appendChild(btn);sec.appendChild(row);
+      });
+      if(unidArmor.length>1){
+        const totalCost=identifyCost*unidArmor.length;
+        const allBtn=document.createElement('button');
+        const canAll=Player.credits>=totalCost;
+        allBtn.style.cssText=`width:100%;margin-top:8px;padding:8px;border:1px solid ${canAll?'#ffd700':'#443'};background:${canAll?'rgba(255,215,0,.08)':'transparent'};color:${canAll?'#ffd700':'#443'};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation`;
+        allBtn.textContent=`🔍 IDENTIFY ALL — ${totalCost} CR`;
+        allBtn.onclick=allBtn.ontouchend=(e)=>{
+          if(e.type==='touchend')e.preventDefault();
+          if(Player.credits<totalCost){showBanner('NOT ENOUGH CREDITS',1500);return;}
+          Player.credits-=totalCost;try{UI.credit(Player.credits);}catch(ex){}
+          unidArmor.forEach(i=>identifyItem(i));
+          showBanner('ALL ARMOR IDENTIFIED',2000);
+          this.renderArmory();try{InvUI.refresh();}catch(ex){}
+        };
+        sec.appendChild(allBtn);
+      }
+      grid.appendChild(sec);
+    }
 
     // ── ATTACHMENT SOCKETING (Torchlight gem-style) ──────────────────
     const bag=Player._attachmentBag||[];
@@ -4042,47 +4150,40 @@ const HubSystem={
         // Show each attachment with socket button
         bag.forEach((att,ai)=>{
           const row=document.createElement('div');
-          row.style.cssText=`display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)`;
-          row.innerHTML=`<span style="font-size:16px">${att.icon||'🔧'}</span><div style="flex:1;min-width:0"><div style="font-family:'Courier New',monospace;font-size:10px;color:${att.col||'#fff'}">${att.name}</div><div style="font-family:'Courier New',monospace;font-size:8px;color:#556">${att.slot} · ${att.desc}</div></div>`;
-
-          // Socket buttons for each equipped weapon
+          row.style.cssText='padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)';
+          // Header line
+          const hdr=document.createElement('div');
+          hdr.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:5px';
+          hdr.innerHTML=`<span style="font-size:15px">${att.icon||'🔧'}</span><div style="flex:1"><div style="font-family:'Courier New',monospace;font-size:10px;color:${att.col||'#fff'}">${att.name}</div><div style="font-family:'Courier New',monospace;font-size:8px;color:#556">${att.slot} · ${att.desc}</div></div>`;
+          row.appendChild(hdr);
+          // Socket buttons in a wrapping row
+          const btnRow=document.createElement('div');
+          btnRow.style.cssText='display:flex;flex-wrap:wrap;gap:5px';
+          // Weapon sockets
           const weapons=[Player.weapon,...(Player.weaponBag||[])].filter(Boolean);
           weapons.forEach((w,wi)=>{
             if(!w.sockets||w.sockets.length===0)return;
-            const openSlot=w.sockets.findIndex(s=>!s);
-            if(openSlot===-1)return; // weapon full
-            const existing=w.attachments&&w.attachments[att.slot];
-            if(existing)return; // slot type already filled
+            if(w.sockets.findIndex(s=>!s)===-1)return;
+            if(w.attachments&&w.attachments[att.slot])return;
             const sbtn=document.createElement('button');
-            sbtn.style.cssText=`padding:5px 7px;border:1px solid ${att.col||'#888'};background:transparent;color:${att.col||'#fff'};font-family:'Courier New',monospace;font-size:7px;cursor:pointer;touch-action:manipulation;white-space:nowrap`;
-            sbtn.textContent='SLOT→'+(wi===0?'EQUIPPED':w.name.split(' ')[0]);
-            sbtn.onclick=sbtn.ontouchend=(e)=>{
-              if(e.type==='touchend')e.preventDefault();
-              attachToWeapon(w,att);
-              Player._attachmentBag.splice(ai,1);
-              this.renderArmory();
-            };
-            row.appendChild(sbtn);
+            sbtn.style.cssText=`padding:5px 9px;border:1px solid ${att.col||'#888'};background:rgba(0,0,0,.3);color:${att.col||'#fff'};font-family:'Courier New',monospace;font-size:8px;cursor:pointer;touch-action:manipulation`;
+            sbtn.textContent=(wi===0?'⚔ EQUIPPED':w.name.split(' ')[0].slice(0,8));
+            sbtn.onclick=sbtn.ontouchend=(e)=>{if(e.type==='touchend')e.preventDefault();attachToWeapon(w,att);Player._attachmentBag.splice(ai,1);this.renderArmory();};
+            btnRow.appendChild(sbtn);
           });
-
-          // Socket into equipped armor
-          const armorPieces=Object.values(Armor.equipped||{}).filter(Boolean);
-          armorPieces.forEach((a)=>{
+          // Armor sockets
+          Object.values(Armor.equipped||{}).filter(Boolean).forEach((a)=>{
             if(!a.sockets||a.sockets.length===0)return;
-            const openSlot=a.sockets.findIndex(s=>!s);
-            if(openSlot===-1)return;
+            if(a.sockets.findIndex(s=>!s)===-1)return;
             if(a.attachments&&a.attachments[att.slot])return;
             const abtn=document.createElement('button');
-            abtn.style.cssText=`padding:5px 7px;border:1px solid ${att.col||'#888'};background:transparent;color:${att.col||'#fff'};font-family:'Courier New',monospace;font-size:7px;cursor:pointer;touch-action:manipulation;white-space:nowrap`;
-            abtn.textContent='SLOT→'+a.slot.toUpperCase();
-            abtn.onclick=abtn.ontouchend=(e)=>{
-              if(e.type==='touchend')e.preventDefault();
-              attachToWeapon(a,att);
-              Player._attachmentBag.splice(ai,1);
-              this.renderArmory();
-            };
-            row.appendChild(abtn);
+            abtn.style.cssText=`padding:5px 9px;border:1px solid ${att.col||'#888'};background:rgba(0,0,0,.3);color:${att.col||'#fff'};font-family:'Courier New',monospace;font-size:8px;cursor:pointer;touch-action:manipulation`;
+            abtn.textContent='🛡 '+a.slot.slice(0,5).toUpperCase();
+            abtn.onclick=abtn.ontouchend=(e)=>{if(e.type==='touchend')e.preventDefault();attachToWeapon(a,att);Player._attachmentBag.splice(ai,1);this.renderArmory();};
+            btnRow.appendChild(abtn);
           });
+          if(btnRow.children.length>0){row.appendChild(btnRow);}
+          else{const noSlot=document.createElement('div');noSlot.style.cssText='font-family:"Courier New",monospace;font-size:8px;color:#334';noSlot.textContent='NO COMPATIBLE WEAPON/ARMOR WITH OPEN SOCKET SLOT';row.appendChild(noSlot);}
           sec.appendChild(row);
         });
       }
@@ -5253,21 +5354,32 @@ const Mercs={
   sendToHub(itemsToSell){
     if(!this.active||this._atHub)return;
     this._atHub=true;
-    this._sellQueue=itemsToSell||[];
-    // Sell all items after a delay, return when entering hub
-    const totalValue=this._sellQueue.reduce((s,i)=>{
-      const r=RARITY[i.rarity];return s+(r?r.cr*3:10);
-    },0);
-    showBanner(this.active.name+' HEADING TO HUB — WILL SELL '+this._sellQueue.length+' ITEMS',3000);
-    // Items are sold when player reaches hub
+    this._sellQueue=(itemsToSell||[]).filter(Boolean);
+    if(this._sellQueue.length===0){showBanner(this.active.name+': NOTHING TO SELL',1500);this._atHub=false;return;}
+    // Actually remove items from player bags NOW
+    this._sellQueue.forEach(item=>{
+      try{const wi=Player.weaponBag.indexOf(item);if(wi!==-1)Player.weaponBag.splice(wi,1);}catch(e){}
+      try{if(Armor.bag){const ai=Armor.bag.indexOf(item);if(ai!==-1)Armor.bag.splice(ai,1);}}catch(e){}
+    });
+    // Hide companion mesh — they left
+    if(this.mesh){try{scene.remove(this.mesh);}catch(e){}this.mesh=null;}
+    const totalValue=this._sellQueue.reduce((s,i)=>{const r=RARITY[i.rarity];return s+(r?r.cr*3:15);},0);
+    showBanner('🐾 '+this.active.name+' HEADING TO HUB — SELLING '+this._sellQueue.length+' ITEMS ('+totalValue+' CR)',3000);
+    try{InvUI.refresh();}catch(e){}
     this._save();
   },
 
   returnFromHub(){
     if(!this._atHub)return;
-    const cr=this._sellQueue.reduce((s,i)=>{const r=RARITY[i.rarity];return s+(r?r.cr*3:10);},0);
-    if(cr>0){Player.credits+=cr;try{UI.credit(Player.credits);}catch(e){}showBanner(this.active.name+' RETURNED — SOLD FOR '+cr+' CR',2500);}
+    const cr=this._sellQueue.reduce((s,i)=>{const r=RARITY[i.rarity];return s+(r?r.cr*3:15);},0);
+    if(cr>0){
+      Player.credits+=cr;
+      try{UI.credit(Player.credits);}catch(e){}
+      showBanner('🐾 '+this.active.name+' RETURNED — SOLD FOR '+cr+' CR',2500);
+    }
     this._atHub=false;this._sellQueue=[];
+    // Respawn companion mesh
+    try{this.spawnMesh();}catch(e){}
     this._save();
   },
 
@@ -6934,7 +7046,8 @@ const Audio={
         const st=t+s*B;
         if(s%4===0)this._kik(st,D);
         if(s===4||s===12)this._snr(st,D,.5);
-        if(s%1===0)this._hat(st,D,.06);
+        if(s%2===0)this._hat(st,D,.06);
+        if(s%4===2)this._hat(st,D,.03);
       }
       // Cold synth bass
       const cf=[55,55,41,46,55,62,55,49];
