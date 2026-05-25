@@ -1706,6 +1706,15 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 'use strict';
+// Show actual errors on screen for debugging
+window.addEventListener('error',function(e){
+  try{
+    const d=document.createElement('div');
+    d.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#c00;color:#fff;padding:8px;font-size:11px;z-index:99999;word-break:break-all;font-family:monospace';
+    d.textContent='ERR: '+(e.message||e.type||'unknown')+' line:'+(e.lineno||0);
+    document.body.appendChild(d);
+  }catch(x){}
+});
 // Guard: THREE.js must be loaded before this script runs
 if(typeof THREE==='undefined'){
   document.body.innerHTML='<div style="position:fixed;inset:0;background:#000;color:#e67e22;font-family:Courier New;display:flex;align-items:center;justify-content:center;font-size:14px;text-align:center;padding:20px;letter-spacing:2px">AGENT ZERO<br><br>FAILED TO LOAD ENGINE<br><br>Check your internet connection and reload.</div>';
@@ -2099,7 +2108,7 @@ const Map3D = {
             const glassColor=z<=5?0x004466:z<=15?0x003355:0x002244;
             const glass=new THREE.Mesh(
               new THREE.BoxGeometry(winW,winH,winD),
-              new THREE.MeshLambertMaterial({color:glassColor,emissive:new THREE.Color(glassColor),emissiveIntensity:.15,transparent:true,opacity:.7})
+              new THREE.MeshLambertMaterial({color:glassColor,emissive:new THREE.Color(glassColor),transparent:true,opacity:.7})
             );
             glass.position.set(wpx,C.WALL_H*.52,wpz);this.group.add(glass);
             // Window light spill
@@ -2147,8 +2156,7 @@ const Map3D = {
         new THREE.BoxGeometry(fixW-.2,.04,fixD-.2),
         new THREE.MeshLambertMaterial({
           color:r.type==='boss_room'?0x330000:0x8899aa,
-          emissive:new THREE.Color(r.type==='boss_room'?0x220000:0x445566),
-          emissiveIntensity:.6
+          emissive:new THREE.Color(r.type==='boss_room'?0x220000:0x445566)
         })
       );
       panel.position.set(cx,C.WALL_H-.12,cz);this.group.add(panel);
@@ -2182,20 +2190,58 @@ const Map3D = {
 
       // Cover objects — crates, pillars
       const numCover=Math.max(1,~~((r.w*r.h)/20));
+      const PAD2=1.5;
+      const mnX=off+r.x*C.CELL+PAD2,mxX=off+(r.x+r.w)*C.CELL-PAD2;
+      const mnZ=off+r.z*C.CELL+PAD2,mxZ=off+(r.z+r.h)*C.CELL-PAD2;
+      const sp2=()=>{let att=0,x,z;do{x=mnX+Math.random()*(mxX-mnX);z=mnZ+Math.random()*(mxZ-mnZ);att++;}while(!this.isFloor(x,z)&&att<8);return{x,z};};
       for(let ci=0;ci<numCover;ci++){
-        const angle=(ci/numCover)*Math.PI*2+Math.random()*.5;
-        const dist=(Math.min(rw,rh)/2*.6);
-        const ox=Math.cos(angle)*dist,oz=Math.sin(angle)*dist;
-        const covH=.8+Math.random()*.8;
-        const cov=new THREE.Mesh(
-          new THREE.BoxGeometry(.9,covH,.9),
-          new THREE.MeshLambertMaterial({color:r.type==='warehouse'?0x3a2a10:0x1a1a28})
-        );
-        cov.position.set(cx+ox,.4+covH/2,cz+oz);this.group.add(cov);
-        cov.userData.solidBB={min:{x:cx+ox-.55,y:0,z:cz+oz-.55},max:{x:cx+ox+.55,y:2,z:cz+oz+.55}};
-        this.furniture.push(cov);
-        // Cover point nearby
-        this.coverPts.push(new THREE.Vector3(cx+ox+Math.cos(angle+.5),0,cz+oz+Math.sin(angle+.5)));
+        // Use safe positions that check isFloor
+        const{x:fx,z:fz}=sp2();
+        // Pick a furniture type based on room type and zone
+        const pick=Math.random();
+        if(pick<.3){
+          // Wooden crate stack
+          const h=.7+Math.random()*.5;
+          const cov2=new THREE.Group();cov2.position.set(fx,0,fz);
+          const base=new THREE.Mesh(new THREE.BoxGeometry(.85,h,.85),new THREE.MeshLambertMaterial({color:0x4a2e08}));
+          base.position.y=h/2;cov2.add(base);
+          // Wood plank lines
+          for(let pi=0;pi<3;pi++){const pl=new THREE.Mesh(new THREE.BoxGeometry(.87,.04,.87),new THREE.MeshLambertMaterial({color:0x2a1804}));pl.position.y=h*.2+pi*(h*.28);cov2.add(pl);}
+          // Metal corner bands
+          [[-.4,-.4],[-.4,.4],[.4,-.4],[.4,.4]].forEach(([bx,bz])=>{const br=new THREE.Mesh(new THREE.BoxGeometry(.06,h,.06),new THREE.MeshLambertMaterial({color:0x666644}));br.position.set(bx,h/2,bz);cov2.add(br);});
+          this.group.add(cov2);
+          cov2.userData.solidBB={min:{x:fx-.55,y:0,z:fz-.55},max:{x:fx+.55,y:h+.2,z:fz+.55}};
+          this.furniture.push(cov2);
+        } else if(pick<.55){
+          // Metal barrel
+          const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.28,.3,.9,10),new THREE.MeshLambertMaterial({color:0x1a3a1a}));
+          barrel.position.set(fx,.45,fz);this.group.add(barrel);
+          // Barrel rings
+          [.1,.3,.5].forEach(y=>{const ring=new THREE.Mesh(new THREE.CylinderGeometry(.31,.31,.05,10),new THREE.MeshLambertMaterial({color:0x2a5a2a}));ring.position.set(fx,y,fz);this.group.add(ring);});
+          barrel.userData.solidBB={min:{x:fx-.35,y:0,z:fz-.35},max:{x:fx+.35,y:1,z:fz+.35}};
+          this.furniture.push(barrel);
+        } else if(pick<.75){
+          // Concrete barrier / sandbag wall
+          const bw=1.2+Math.random()*.8,bh=.7;
+          const barrier=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,.5),new THREE.MeshLambertMaterial({color:0x333340}));
+          const ry=~~(Math.random()*4)*Math.PI/2;
+          barrier.position.set(fx,bh/2,fz);barrier.rotation.y=ry;this.group.add(barrier);
+          // Barrier detail lines
+          const stripe=new THREE.Mesh(new THREE.BoxGeometry(bw+.02,.06,.52),new THREE.MeshLambertMaterial({color:0x22222e}));
+          stripe.position.set(fx,bh*.4,fz);this.group.add(stripe);
+          barrier.userData.solidBB={min:{x:fx-.75,y:0,z:fz-.75},max:{x:fx+.75,y:bh+.1,z:fz+.75}};
+          this.furniture.push(barrier);
+        } else {
+          // Server rack / pillar
+          const h2=1.6+Math.random()*.8;
+          const rack=new THREE.Mesh(new THREE.BoxGeometry(.6,h2,.55),new THREE.MeshLambertMaterial({color:0x111122}));
+          rack.position.set(fx,h2/2,fz);this.group.add(rack);
+          // LED status lights
+          [.3,.6,.9].forEach(y=>{const led=new THREE.Mesh(new THREE.BoxGeometry(.04,.04,.56),new THREE.MeshLambertMaterial({color:y<.5?0x00ff44:0xff2200,emissive:new THREE.Color(y<.5?0x006600:0x660000)}));led.position.set(-.25,y,fz-.01);this.group.add(led);});
+          rack.userData.solidBB={min:{x:fx-.38,y:0,z:fz-.35},max:{x:fx+.38,y:h2+.1,z:fz+.35}};
+          this.furniture.push(rack);
+        }
+        this.coverPts.push(new THREE.Vector3(fx,0,fz));
       }
 
       // Candidate spawn points
@@ -2238,22 +2284,26 @@ const Map3D = {
   },
 
   _furniture(room,off){
-    // Start room is always clear — safe spawn area
     if(room.type==='start')return;
     const rx=off+room.x*C.CELL,rz=off+room.z*C.CELL,rw=room.w*C.CELL,rh=room.h*C.CELL;
     const cx=rx+rw/2,cz=rz+rh/2;
+    // Safe placement bounds — keep 1.5 units from walls so nothing clips
+    const PAD=1.5;
+    const minX=rx+PAD,maxX=rx+rw-PAD,minZ=rz+PAD,maxZ=rz+rh-PAD;
+    const safeX=()=>minX+Math.random()*(maxX-minX);
+    const safeZ=()=>minZ+Math.random()*(maxZ-minZ);
+    const safePos=()=>{let attempts=0,x,z;do{x=safeX();z=safeZ();attempts++;}while(!this.isFloor(x,z)&&attempts<8);return{x,z};};
     const add=(geo,col,x,y,z,ry=0)=>{
       const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));
       m.position.set(x,y,z);m.rotation.y=ry;this.group.add(m);return m;
     };
-    // solid() — registers a piece as a collidable cover object
     const solid=(geo,col,x,y,z,ry=0)=>{
       const m=add(geo,col,x,y,z,ry);
       try{
         m.updateMatrixWorld(true);
         m.geometry.computeBoundingBox();
         const bb=m.geometry.boundingBox.clone().applyMatrix4(m.matrixWorld);
-        bb.expandByScalar(0.15);
+        bb.expandByScalar(0.12);
         m.userData.solidBB=bb;
         this.furniture.push(m);
       }catch(ex){}
@@ -2270,12 +2320,12 @@ const Map3D = {
         solid(new THREE.BoxGeometry(2.2,.78,.95),0x3a2800,fx,.39,fz,ry);
         // Monitor — small, not solid
         add(new THREE.BoxGeometry(.05,.55,.42),0x080812,fx+Math.cos(ry+Math.PI/2)*.2,1.1,fz+Math.sin(ry+Math.PI/2)*.2,ry);
-        cov(fx,fz);
+        this.coverPts.push(new THREE.Vector3(fx,0,fz));
       }
       for(let i=0;i<1+~~(Math.random()*3);i++){
         const fx=rx+.5+Math.random()*(rw-1),fz=rz+.5+Math.random()*(rh-1);
         solid(new THREE.BoxGeometry(.55,1.35,.5),0x2a2a2a,fx,.675,fz);
-        cov(fx,fz);
+        this.coverPts.push(new THREE.Vector3(fx,0,fz));
       }
     }
     else if(room.type==='warehouse'){
@@ -2283,7 +2333,7 @@ const Map3D = {
         const s=.8+Math.random()*.6;
         const fx=rx+.8+Math.random()*(rw-1.6),fz=rz+.8+Math.random()*(rh-1.6);
         solid(new THREE.BoxGeometry(s,s,s),0x5a3a1a,fx,s/2,fz,Math.random()*Math.PI);
-        cov(fx,fz);
+        this.coverPts.push(new THREE.Vector3(fx,0,fz));
       }
       for(let i=0;i<2+~~(Math.random()*3);i++){
         const fx=rx+.5+Math.random()*(rw-1),fz=rz+.5+Math.random()*(rh-1);
@@ -2384,7 +2434,7 @@ const Map3D = {
       add(new THREE.CylinderGeometry(.2,.2,C.WALL_H,8),0x1a1a1a,cx,C.WALL_H/2,cz+.5);
       for(let i=0;i<2+~~(Math.random()*3);i++){
         const fx=rx+1+Math.random()*(rw-2),fz=rz+1+Math.random()*(rh-2);
-        solid(new THREE.BoxGeometry(.8,.8,.8),0x333,fx,.4,fz);
+        solid(new THREE.BoxGeometry(.8,.8,.8),0x333333,fx,.4,fz);
       }
       // Toxic waste sump — fishing spot
       if(Math.random()<.65)this._fishHole(cx+(Math.random()-.5)*2,cz+(Math.random()-.5)*2,0xff6600,'TOXIC');
@@ -2429,11 +2479,38 @@ const Map3D = {
   },
 
   _chest(x,z){
-    const m=new THREE.Mesh(new THREE.BoxGeometry(.9,.7,.7),new THREE.MeshLambertMaterial({color:0x6a4a0a,emissive:0x2a1800}));
-    m.position.set(x,.35,z);this.group.add(m);
-    const gl=new THREE.PointLight(0xff8800,2.2,5);gl.position.set(x,.7,z);scene.add(gl);this.lights.push(gl);
-    m.userData={isChest:true,open:false,glow:gl};
-    Loot.chests.push(m);
+    // Clamp to valid floor
+    if(!this.isFloor(x,z))return;
+    const g=new THREE.Group();g.position.set(x,0,z);this.group.add(g);
+    const M=c=>new THREE.MeshLambertMaterial({color:c});
+    const b=(w,h,d,col)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(col));
+
+    // Main crate body — dark wood/metal with weathering
+    const body=b(.9,.6,.68,0x3a2808);body.position.y=.3;g.add(body);
+    // Metal corner brackets
+    const corners=[[-1,-1],[-1,1],[1,-1],[1,1]];
+    corners.forEach(([sx,sz])=>{
+      const br=b(.08,.64,.08,0x555533);br.position.set(sx*.41,.3,sz*.32);g.add(br);
+      // Horizontal brace
+      const hb=b(.94,.06,.06,0x555533);hb.position.set(0,.08,sz*.32);g.add(hb);
+    });
+    // Lid — slightly lighter, raised at slight angle
+    const lid=b(.92,.12,.7,0x4a3210);lid.position.set(0,.66,0);lid.rotation.x=-.08;g.add(lid);
+    // Lid latch — metal
+    const latch=b(.14,.08,.06,0x888866);latch.position.set(0,.68,.32);g.add(latch);
+    // Lock hasp
+    const hasp=b(.1,.12,.06,0xaa9944);hasp.position.set(0,.64,.35);g.add(hasp);
+    // Front panel — wood grain lines
+    [-.12,.0,.12].forEach(y=>{
+      const line=b(.88,.02,.02,0x2a1a04);line.position.set(0,.3+y,.35);g.add(line);
+    });
+    // Gold glow trim on lid edge
+    const trim=b(.93,.04,.72,0x996600);trim.material.emissive=new THREE.Color(0x442200);trim.position.y=.62;g.add(trim);
+    // Glowing point light — orange loot beacon
+    const gl=new THREE.PointLight(0xff8800,2.5,6);gl.position.set(0,1.2,0);scene.add(gl);this.lights.push(gl);
+    // Pulsing done in update via userData
+    g.userData={isChest:true,open:false,glow:gl,glowBase:2.5,t:Math.random()*Math.PI*2};
+    Loot.chests.push(g);
   },
 
   hitWall(p){for(const w of this.collidables){if(!w.userData.bb){w.geometry.computeBoundingBox();w.userData.bb=w.geometry.boundingBox.clone().applyMatrix4(w.matrixWorld);}if(w.userData.bb.containsPoint(p))return true;}return false;},
@@ -2752,7 +2829,7 @@ const Enemies = {
   _makeMesh(key,T){
     const G=new THREE.Group();const bodyMats=[];
     const M=col=>{const m=new THREE.MeshLambertMaterial({color:col});bodyMats.push(m);return m;};
-    const ME=(col,i)=>{const m=new THREE.MeshLambertMaterial({color:col,emissive:new THREE.Color(col),emissiveIntensity:i||.5});return m;};
+    const ME=(col,i)=>{const m=new THREE.MeshLambertMaterial({color:col,emissive:new THREE.Color(col)});return m;};
     const box=(w,h,d,col,em)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),em?ME(col,em):M(col));return mesh;};
 
     if(key==='SOLDIER'){
@@ -3831,16 +3908,22 @@ const Player={
     // ── Weapon model — attached to ROOT at forward-right position ──
     // Arms are rotated to visually "hold" the weapon position
     this._weaponGroup=new THREE.Group();
-    // Centered forward, chest height. Local -Z = world forward (away from camera).
-    this._weaponGroup.position.set(.18, 0.94, -.48);
+    this._weaponGroup.position.set(.44, 1.35, 0); // raised above arms so visible top-down
     this._weaponGroup.rotation.x = 0.05;
     root.add(this._weaponGroup);
 
-    // Arms reach FORWARD (local -Z). R_x(+θ) on arm (0,-1,0) → z' = -sinθ < 0 ✓
-    this._armR.rotation.x = 1.15;  // right arm grips weapon
-    this._armR.rotation.z = 0.14;  // cant inward to center
-    this._armL.rotation.x = 0.9;   // left arm braces below
-    this._armL.rotation.z = -0.14; // cant inward to center
+    this._armR.rotation.x = 0.9;
+    this._armR.rotation.z = -0.1;
+    this._armL.rotation.x = 0.75;
+    this._armL.rotation.z = 0.18;
+
+    this._updateWeaponMesh();
+
+    // Arms extend forward-and-down toward weapon position
+    this._armR.rotation.x = 0.9;   // right arm forward (barrel side)
+    this._armR.rotation.z = -0.1;  // slight outward
+    this._armL.rotation.x = 0.75;  // left arm less forward (supporting)
+    this._armL.rotation.z = 0.18;  // cant inward to center under weapon
 
     this._updateWeaponMesh();
 
@@ -3858,7 +3941,7 @@ const Player={
   // Returns a THREE.Group facing -Z (forward). attachments = weapon.attachments obj
   _buildWeaponModel(type,rarCol,attachments){
     const M=c=>new THREE.MeshLambertMaterial({color:c});
-    const ME=(c,i)=>{const m=new THREE.MeshLambertMaterial({color:c});m.emissive=new THREE.Color(c);m.emissiveIntensity=i||.5;return m;};
+    const ME=(c,i)=>{const m=new THREE.MeshLambertMaterial({color:c});m.emissive=new THREE.Color(c);return m;};
     const box=(w,h,d,col,em)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),em?ME(col,em):M(col));
     const g=new THREE.Group();
     const t=type||'Assault Rifle';
@@ -4114,6 +4197,9 @@ const Player={
     const w=this.weapon;
     const rarCol=parseInt((RARITY[w.rarity]?.col||'#888888').replace('#',''),16);
     const model=this._buildWeaponModel(w.type,rarCol,w.attachments||{});
+    // Scale up weapons — bigger = more visible in both views
+    const isPistol=w.type==='Pistol'||w.type==='Revolver';
+    model.scale.setScalar(isPistol?1.8:1.4);
     this._weaponGroup.add(model);
   },
 
@@ -5276,7 +5362,10 @@ function _startNewGame(){
   Player.bonusDmg=1;Player.bonusCrit=0;Player.bonusSpd=0;Player._classRegen=false;
   SkillTree.points=0;Object.values(SkillTree.nodes).forEach(n=>{n.lvl=0;});
   CharCreator.classBonus={speedBonus:0,cdBonus:0,regen:false};
-  Map3D.generate();
+  try{Map3D.generate();}catch(mapErr){
+    console.error('Map3D.generate failed:',mapErr.message,mapErr.stack?.split('\n').slice(0,3).join(' '));
+    try{const d=document.createElement('div');d.style.cssText='position:fixed;bottom:40px;left:0;right:0;background:#800;color:#fff;padding:8px;font-size:10px;z-index:99999;word-break:break-all;font-family:monospace';d.textContent='MAP ERR: '+mapErr.message.slice(0,100);document.body.appendChild(d);}catch(x){}
+  }
   try{Player.init();}catch(e){console.warn('Player.init:',e);}
   const _sp=Map3D.startPos();
   if(Player.mesh){
@@ -5526,7 +5615,7 @@ function _die(){
     const cross=new THREE.Mesh(new THREE.BoxGeometry(.7,.15,.15),new THREE.MeshLambertMaterial({color:0x334455}));
     cross.position.y=1.4;gGroup.add(cross);
     // Loot pile on ground
-    const pile=new THREE.Mesh(new THREE.BoxGeometry(.6,.2,.6),new THREE.MeshLambertMaterial({color:0x886622,emissive:0x443311}));
+    const pile=new THREE.Mesh(new THREE.BoxGeometry(.6,.2,.6),new THREE.MeshLambertMaterial({color:0x886622,emissive:new THREE.Color(0x443311)}));
     pile.position.y=.1;gGroup.add(pile);
     // Purple glow
     const gl=new THREE.PointLight(0x8844ff,2,6);gl.position.y=1.5;gGroup.add(gl);
@@ -6511,7 +6600,7 @@ const Mercs={
       const line1=b(.46,.04,.57,0x888899);line1.position.set(.22,1.15,0);g.add(line1);
       const line2=b(.46,.04,.57,0x888899);line2.position.set(.22,.85,0);g.add(line2);
       // Center chest piece — red power core
-      const core=b(.18,.18,.06,0xff2200);core.material.emissive=new THREE.Color(0xcc0000);core.material.emissiveIntensity=1.2;core.position.set(.05,1.0,.29);g.add(core);
+      const core=b(.18,.18,.06,0xff2200);core.material.emissive=new THREE.Color(0xcc0000);corecore.position.set(.05,1.0,.29);g.add(core);
       const coreRing=b(.26,.26,.05,0x888888);coreRing.position.set(.05,1.0,.28);g.add(coreRing);
 
       // Shoulders — large chrome
@@ -6554,11 +6643,11 @@ const Mercs={
       const humanGlint=b(.03,.03,.03,0xffffff);humanGlint.position.set(-.12,1.72,.29);g.add(humanGlint);
 
       // LEFT EYE — red glowing cybernetic eye (chrome side)
-      const cyberEye=b(.16,.12,.08,0xff0000);cyberEye.material.emissive=new THREE.Color(0xff0000);cyberEye.material.emissiveIntensity=2;cyberEye.position.set(.14,1.7,.26);g.add(cyberEye);
+      const cyberEye=b(.16,.12,.08,0xff0000);cyberEye.material.emissive=new THREE.Color(0xff0000);cyberEyecyberEye.position.set(.14,1.7,.26);g.add(cyberEye);
       // Eye socket ring — dark metal frame
       const eyeRing=b(.22,.18,.06,0x444455);eyeRing.position.set(.14,1.7,.24);g.add(eyeRing);
       // Scan line glow from cyber eye
-      const scanBeam=b(.06,.04,.04,0xff2200);scanBeam.material.emissive=new THREE.Color(0xff1100);scanBeam.material.emissiveIntensity=1;scanBeam.position.set(.25,1.7,.26);g.add(scanBeam);
+      const scanBeam=b(.06,.04,.04,0xff2200);scanBeam.material.emissive=new THREE.Color(0xff1100);scanBeamscanBeam.position.set(.25,1.7,.26);g.add(scanBeam);
 
       // Nose — skin side
       const nose=b(.08,.12,.07,0x9a6838);nose.position.set(-.04,1.6,.26);g.add(nose);
@@ -6571,7 +6660,7 @@ const Mercs={
       const lear=b(.06,.14,.14,0xb07848);lear.position.set(-.31,1.66,-.02);g.add(lear);
       // Ear piece right (cyber side) — large receiver
       const rear=b(.1,.22,.2,0x888899);rear.position.set(.31,1.66,-.02);g.add(rear);
-      const rearLight=b(.06,.06,.04,0xff2200);rearLight.material.emissive=new THREE.Color(0xaa0000);rearLight.material.emissiveIntensity=.8;rearLight.position.set(.38,1.7,.02);g.add(rearLight);
+      const rearLight=b(.06,.06,.04,0xff2200);rearLight.material.emissive=new THREE.Color(0xaa0000);rearLightrearLight.position.set(.38,1.7,.02);g.add(rearLight);
 
       // Red glow from cyber eye lights surroundings
       const eyeGlow=new THREE.PointLight(0xff0000,.5,4);eyeGlow.userData.noFlicker=true;eyeGlow.position.set(.14,1.7,.4);g.add(eyeGlow);
@@ -6608,7 +6697,7 @@ const Mercs={
       const collar=b(.6,.16,.54,0x111122);collar.position.y=1.42;g.add(collar);
       const la=b(.26,.7,.3,0x111122);la.position.set(-.52,.9,0);g.add(la);
       const ra=b(.26,.7,.3,0x111122);ra.position.set(.52,.9,0);g.add(ra);
-      const omni=b(.28,.2,.06,0xff6600);omni.material.emissive=new THREE.Color(0xff4400);omni.material.emissiveIntensity=.6;omni.position.set(.52,.7,.18);g.add(omni);
+      const omni=b(.28,.2,.06,0xff6600);omni.material.emissive=new THREE.Color(0xff4400);omniomni.position.set(.52,.7,.18);g.add(omni);
       const ll=b(.28,.7,.3,0x0d0d1a);ll.position.set(-.2,.2,0);g.add(ll);
       const rl=ll.clone();rl.position.set(.2,.2,0);g.add(rl);
       g.userData.ll=ll;g.userData.rl=rl;g.userData.la=la;g.userData.ra=ra;
@@ -6637,7 +6726,7 @@ const Mercs={
       const plate=b(.38,.5,.46,0xaa1010);plate.position.set(0,.95,0);g.add(plate);
       const head=b(.46,.44,.42,0xc8a882);head.position.y=1.65;g.add(head);
       // Full red visor — one glowing bar across face
-      const visor=b(.48,.18,.06,0xff2211);visor.material.emissive=new THREE.Color(0xcc0000);visor.material.emissiveIntensity=.8;visor.position.set(0,1.68,.22);g.add(visor);
+      const visor=b(.48,.18,.06,0xff2211);visor.material.emissive=new THREE.Color(0xcc0000);visorvisor.position.set(0,1.68,.22);g.add(visor);
       // Under-visor stubble hint
       const jaw=b(.3,.08,.06,0x8a5a30);jaw.position.set(0,1.55,.22);g.add(jaw);
       const helm=b(.52,.28,.46,0xcc1a1a);helm.position.y=1.9;g.add(helm);
@@ -6653,8 +6742,8 @@ const Mercs={
       const cloak=b(.62,.8,.44,0x220a33);cloak.position.set(0,1.05,0);g.add(cloak);
       const head=b(.44,.42,.4,0x0a0a15);head.position.y=1.65;g.add(head);
       // Glowing purple eyes — bright and clearly visible
-      const le2=b(.16,.12,.06,0xcc55ff);le2.material.emissive=new THREE.Color(0xaa00ff);le2.material.emissiveIntensity=1.5;le2.position.set(-.11,1.67,.21);g.add(le2);
-      const re2=b(.16,.12,.06,0xcc55ff);re2.material.emissive=new THREE.Color(0xaa00ff);re2.material.emissiveIntensity=1.5;re2.position.set(.11,1.67,.21);g.add(re2);
+      const le2=b(.16,.12,.06,0xcc55ff);le2.material.emissive=new THREE.Color(0xaa00ff);le2le2.position.set(-.11,1.67,.21);g.add(le2);
+      const re2=b(.16,.12,.06,0xcc55ff);re2.material.emissive=new THREE.Color(0xaa00ff);re2re2.position.set(.11,1.67,.21);g.add(re2);
       // Nose shadow
       const nose=b(.06,.1,.06,0x080810);nose.position.set(0,1.6,.21);g.add(nose);
       const hood=b(.5,.32,.44,0x1a0a2a);hood.position.y=1.92;g.add(hood);
@@ -6698,7 +6787,7 @@ const Mercs={
       const nose4=b(.07,.1,.06,0xb07848);nose4.position.set(0,1.64,.24);g.add(nose4);
       const mouth4=b(.24,.07,.06,0x7a3820);mouth4.position.set(0,1.56,.24);g.add(mouth4);
       const helm=b(.6,.34,.52,0x2a3a5a);helm.position.y=1.96;g.add(helm);
-      const visorT=b(.42,.12,.05,0x4488ff);visorT.material.emissive=new THREE.Color(0x224488);visorT.material.emissiveIntensity=.4;visorT.position.set(0,1.7,.26);g.add(visorT);
+      const visorT=b(.42,.12,.05,0x4488ff);visorT.material.emissive=new THREE.Color(0x224488);visorTvisorT.position.set(0,1.7,.26);g.add(visorT);
       const lsp=b(.38,.3,.46,0x334466);lsp.position.set(-.65,1.42,0);g.add(lsp);
       const rsp=lsp.clone();rsp.position.set(.65,1.42,0);g.add(rsp);
       const la=b(.3,.75,.34,0x2a3a5a);la.position.set(-.58,.9,0);g.add(la);
@@ -7244,9 +7333,10 @@ function loop(){
         }catch(e){}
 
       } else {
-        // ── Top-down camera (default) ──────────────────────────────
-        if(_ceilingMesh)_ceilingMesh.visible=false;
-        if(_skyDome)_skyDome.visible=false;
+        // ── Top-down / hub — hide all 3rd person overlays ──────────
+        _ceilingMesh.visible=false;
+        _ceilBeams.visible=false;
+        _stars.visible=false;
         renderer.setClearColor(0x080810);
         const tgt = Player.mesh.position.clone().add(CAM_OFF);
         camera.position.lerp(tgt, 7*dt);
@@ -10861,6 +10951,8 @@ const HubWorld={
   _savedMissionMap:null, // snapshot of Map3D before hub overwrites it
 
   enter(){
+    // Always hide 3rd person overlays in hub
+    try{_ceilingMesh.visible=false;_ceilBeams.visible=false;_stars.visible=false;renderer.setClearColor(0x080810);}catch(e){}
     // Med station — full HP restore on hub enter
     if(Player._hubMedStation){try{Player.hp=Player.maxHp;Player.armor=Player.maxArmor;UI.updateBars();}catch(e){}}
     // Build hub geometry on first visit
@@ -11251,7 +11343,7 @@ const HubTycoon={
       // Blast door opening on south face
       const door=b(2,2.5,.5,0x334455);door.position.set(0,1.6,35.2);g.add(door);
       const doorFrame=b(2.4,.15,.5,0x4a5a6a);doorFrame.position.set(0,2.9,35.2);g.add(doorFrame);
-      const keypad=b(.2,.35,.1,0x22ff44);keypad.position.set(1.4,1.8,35.4);keypad.material.emissive=new THREE.Color(0x00aa22);keypad.material.emissiveIntensity=.4;g.add(keypad);
+      const keypad=b(.2,.35,.1,0x22ff44);keypad.position.set(1.4,1.8,35.4);keypad.material.emissive=new THREE.Color(0x00aa22);keypadg.add(keypad);
     }
     if(owns('floor_tiles')){
       // Interior floor tiles
@@ -11262,7 +11354,7 @@ const HubTycoon={
     if(owns('generator')){
       // Generator unit — grey box with power light
       const gen=b(1.5,1.2,1.0,0x222222);gen.position.set(-6,1.0,22.5);g.add(gen);
-      const genLight=b(.2,.2,.1,0x00ff44);genLight.material.emissive=new THREE.Color(0x00aa22);genLight.material.emissiveIntensity=.8;genLight.position.set(-6,.7,23.1);g.add(genLight);
+      const genLight=b(.2,.2,.1,0x00ff44);genLight.material.emissive=new THREE.Color(0x00aa22);genLightgenLight.position.set(-6,.7,23.1);g.add(genLight);
       const genL=new THREE.PointLight(0x00ff44,.4,6);genL.userData.noFlicker=true;genL.position.set(-6,1.5,22.5);g.add(genL);
     }
     if(owns('lighting')){
@@ -11298,8 +11390,8 @@ const HubTycoon={
     if(owns('command_center')){
       // Command console — glowing screens
       const console_=b(3,.8,1,0x111122);console_.position.set(0,1.0,33.5);g.add(console_);
-      const screen1=b(1.2,.7,.05,0x0033aa);screen1.material.emissive=new THREE.Color(0x001166);screen1.material.emissiveIntensity=.8;screen1.position.set(-.8,1.4,34.0);g.add(screen1);
-      const screen2=b(1.2,.7,.05,0x001122);screen2.material.emissive=new THREE.Color(0x002244);screen2.material.emissiveIntensity=.6;screen2.position.set(.8,1.4,34.0);g.add(screen2);
+      const screen1=b(1.2,.7,.05,0x0033aa);screen1.material.emissive=new THREE.Color(0x001166);screen1screen1.position.set(-.8,1.4,34.0);g.add(screen1);
+      const screen2=b(1.2,.7,.05,0x001122);screen2.material.emissive=new THREE.Color(0x002244);screen2screen2.position.set(.8,1.4,34.0);g.add(screen2);
       const cmdL=new THREE.PointLight(0x2244ff,.6,8);cmdL.userData.noFlicker=true;cmdL.position.set(0,2,33.5);g.add(cmdL);
     }
 
