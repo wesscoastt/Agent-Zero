@@ -2544,83 +2544,176 @@ const Enemies = {
   _makeMesh(key,T){
     const G=new THREE.Group();const bodyMats=[];
     const M=col=>{const m=new THREE.MeshLambertMaterial({color:col});bodyMats.push(m);return m;};
-    const box=(w,h,d,col)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(col));return mesh;};
-    if(key==='SOLDIER'||key==='ELITE'){
-      const baseCol=key==='ELITE'?0x442200:0x2d4a2d;
+    const ME=(col,i)=>{const m=new THREE.MeshLambertMaterial({color:col,emissive:new THREE.Color(col),emissiveIntensity:i||.5});return m;};
+    const box=(w,h,d,col,em)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),em?ME(col,em):M(col));return mesh;};
+
+    if(key==='SOLDIER'){
+      // Urban militia — dark green tactical fatigues, plate carrier vest, tactical helmet
+      const SUIT=0x2d3a28,PLATE=0x1e2a1a,BOOT=0x111111,SKIN=0xc8a882;
       // Boots
-      const lb=box(.28,.2,.38,0x111111);lb.position.set(-.19,.1,.02);G.add(lb);
-      const rb=box(.28,.2,.38,0x111111);rb.position.set(.19,.1,.02);G.add(rb);
-      // Legs
-      const ll=box(.28,.72,.3,baseCol);ll.position.set(-.19,.56,0);G.add(ll);
-      const rl=box(.28,.72,.3,baseCol);rl.position.set(.19,.56,0);G.add(rl);
+      const lb=box(.28,.22,.38,BOOT);lb.position.set(-.19,.11,.02);G.add(lb);
+      const rb=lb.clone();rb.position.set(.19,.11,.02);G.add(rb);
+      // Legs with knee pads
+      const ll=box(.28,.72,.3,SUIT);ll.position.set(-.19,.56,0);G.add(ll);
+      const rl=ll.clone();rl.position.set(.19,.56,0);G.add(rl);
+      const lkp=box(.3,.18,.16,0x111111);lkp.position.set(-.19,.44,.16);G.add(lkp);
+      const rkp=lkp.clone();rkp.position.set(.19,.44,.16);G.add(rkp);
       // Torso
-      const torso=box(.68,.8,.5,baseCol);torso.position.set(0,1.1,0);G.add(torso);
-      // Vest
-      const vest=box(.64,.68,.14,key==='ELITE'?0x331100:0x1a2a1a);vest.position.set(0,1.12,.28);G.add(vest);
+      const torso=box(.68,.82,.48,SUIT);torso.position.set(0,1.1,0);G.add(torso);
+      // Plate carrier with MOLLE straps
+      const plate=box(.62,.7,.14,PLATE);plate.position.set(0,1.12,.26);G.add(plate);
+      const molle1=box(.58,.06,.15,0x151f12);molle1.position.set(0,1.3,.26);G.add(molle1);
+      const molle2=molle1.clone();molle2.position.set(0,1.15,.26);G.add(molle2);
+      const molle3=molle1.clone();molle3.position.set(0,1.0,.26);G.add(molle3);
+      // Shoulder pouches
+      const lp=box(.12,.18,.12,PLATE);lp.position.set(-.38,1.22,.2);G.add(lp);
+      const rp=lp.clone();rp.position.set(.38,1.22,.2);G.add(rp);
       // Arms
-      const la=box(.22,.6,.22,baseCol);la.position.set(-.46,.9,0);G.add(la);
-      const ra=box(.22,.6,.22,baseCol);ra.position.set(.46,.9,0);G.add(ra);
-      // Head
-      const hd=box(.42,.4,.4,0xb89070);hd.position.set(0,1.83,0);G.add(hd);
-      // Helmet
-      const hl=box(.5,.24,.48,key==='ELITE'?0x330000:0x1a2a1a);hl.position.set(0,2.02,0);G.add(hl);
-      if(key==='ELITE'){
-        const vs=new THREE.Mesh(new THREE.BoxGeometry(.42,.08,.06),new THREE.MeshBasicMaterial({color:0xff2200}));vs.position.set(0,2.02,-.26);G.add(vs);
-        const gl=new THREE.PointLight(0xff2200,1.5,3);gl.position.set(0,2.02,-.2);G.add(gl);
-      }
-      // Gun
-      const gn=box(.1,.1,.7,0x0a0a0a);gn.position.set(.48,1.0,-.3);G.add(gn);
+      const la=box(.24,.62,.24,SUIT);la.position.set(-.48,.9,0);G.add(la);
+      const ra=la.clone();ra.position.set(.48,.9,0);G.add(ra);
+      // Gloves
+      const lg=box(.22,.18,.22,0x181818);lg.position.set(-.48,.56,0);G.add(lg);
+      const rg=lg.clone();rg.position.set(.48,.56,0);G.add(rg);
+      // Head with balaclava
+      const hd=box(.42,.38,.4,0x1a1f18);hd.position.set(0,1.82,0);G.add(hd);
+      // Eyes visible through balaclava
+      const le=box(.1,.08,.04,SKIN);le.position.set(-.12,1.85,.21);G.add(le);
+      const re=le.clone();re.position.set(.12,1.85,.21);G.add(re);
+      // Tactical helmet with NVG mount
+      const hl=box(.5,.24,.48,PLATE);hl.position.set(0,2.02,0);G.add(hl);
+      const nvgMnt=box(.12,.12,.06,0x222222);nvgMnt.position.set(0,2.12,-.26);G.add(nvgMnt);
+      // Radio on shoulder
+      const radio=box(.1,.2,.06,0x111111);radio.position.set(-.52,1.42,.12);G.add(radio);
+      // Weapon (right hand, barrel forward = -Z in world but character faces -Z so rotate Y PI)
+      const wg=new THREE.Group();wg.rotation.y=Math.PI;
+      const wm=Player._buildWeaponModel('Assault Rifle',0x1a1a1a,{});
+      wg.add(wm);wg.position.set(.48,1.0,.2);G.add(wg);
     }
+
+    else if(key==='ELITE'){
+      // Heavy special forces — all black exo-suit, red glowing visor, advanced kit
+      const EX=0x0d0d0d,ACCENT=0x1a0000,GLOW=0xff2200;
+      const lb=box(.3,.24,.4,EX);lb.position.set(-.2,.12,.02);G.add(lb);
+      const rb=lb.clone();rb.position.set(.2,.12,.02);G.add(rb);
+      const ll=box(.3,.74,.32,EX);ll.position.set(-.2,.57,0);G.add(ll);
+      const rl=ll.clone();rl.position.set(.2,.57,0);G.add(rl);
+      // Exo-leg plates
+      const llp=box(.32,.3,.18,ACCENT);llp.position.set(-.2,.56,.16);G.add(llp);
+      const rlp=llp.clone();rlp.position.set(.2,.56,.16);G.add(rlp);
+      const torso=box(.72,.86,.52,EX);torso.position.set(0,1.12,0);G.add(torso);
+      // Exo chest panel
+      const chest=box(.68,.76,.16,ACCENT);chest.position.set(0,1.12,.28);G.add(chest);
+      const power=box(.2,.2,.06,GLOW,.8);power.position.set(0,1.2,.32);G.add(power);
+      const gl2=new THREE.PointLight(GLOW,.6,3);gl2.position.set(0,1.2,.4);G.add(gl2);
+      // Shoulder armor
+      const ls=box(.3,.4,.52,ACCENT);ls.position.set(-.58,1.36,0);G.add(ls);
+      const rs=ls.clone();rs.position.set(.58,1.36,0);G.add(rs);
+      const la=box(.26,.64,.26,EX);la.position.set(-.62,.92,0);G.add(la);
+      const ra=la.clone();ra.position.set(.62,.92,0);G.add(ra);
+      // Full enclosed helmet
+      const hl=box(.56,.52,.54,EX);hl.position.set(0,1.92,0);G.add(hl);
+      // Red visor strip
+      const vs=box(.5,.1,.06,GLOW,.9);vs.position.set(0,1.96,.28);G.add(vs);
+      const vgl=new THREE.PointLight(GLOW,1.8,3);vgl.position.set(0,1.96,.22);G.add(vgl);
+      const wg=new THREE.Group();wg.rotation.y=Math.PI;
+      const wm=Player._buildWeaponModel('Assault Rifle',0x550000,{});wg.add(wm);wg.position.set(.62,.98,.2);G.add(wg);
+    }
+
     else if(key==='HEAVY'){
-      const lb=box(.38,.26,.48,0x111111);lb.position.set(-.24,.13,.02);G.add(lb);
-      const rb=box(.38,.26,.48,0x111111);rb.position.set(.24,.13,.02);G.add(rb);
-      const ll=box(.38,.78,.38,T.col);ll.position.set(-.24,.62,0);G.add(ll);
-      const rl=box(.38,.78,.38,T.col);rl.position.set(.24,.62,0);G.add(rl);
-      const torso=box(.96,.92,.68,T.col);torso.position.set(0,1.22,0);G.add(torso);
-      const ca=box(.88,.78,.2,0x111111);ca.position.set(0,1.24,.38);G.add(ca);
-      const ls=box(.26,.38,.5,0x111111);ls.position.set(-.64,1.34,0);G.add(ls);
-      const rs=box(.26,.38,.5,0x111111);rs.position.set(.64,1.34,0);G.add(rs);
-      const la=box(.32,.68,.32,T.col);la.position.set(-.66,.96,0);G.add(la);
-      const ra=box(.32,.68,.32,T.col);ra.position.set(.66,.96,0);G.add(ra);
-      const hl=box(.58,.54,.56,0x111111);hl.position.set(0,2.06,0);G.add(hl);
-      const vs=new THREE.Mesh(new THREE.BoxGeometry(.42,.08,.06),new THREE.MeshBasicMaterial({color:0xcc0000}));vs.position.set(0,2.06,-.3);G.add(vs);
-      const gn=box(.14,.14,.9,0x111111);gn.position.set(.6,1.1,-.4);G.add(gn);
+      // Armored juggernaut — heavy black exo-armor, massive shoulder plates, LMG
+      const HV=0x1a1a1a,ARM=0x111111,VIS=0xcc0000;
+      const lb=box(.4,.28,.5,ARM);lb.position.set(-.26,.14,.02);G.add(lb);
+      const rb=lb.clone();rb.position.set(.26,.14,.02);G.add(rb);
+      const ll=box(.4,.8,.4,HV);ll.position.set(-.26,.64,0);G.add(ll);
+      const rl=ll.clone();rl.position.set(.26,.64,0);G.add(rl);
+      // Thigh armor
+      const lta=box(.42,.32,.22,ARM);lta.position.set(-.26,.7,.15);G.add(lta);
+      const rta=lta.clone();rta.position.set(.26,.7,.15);G.add(rta);
+      const torso=box(1.0,.96,.72,HV);torso.position.set(0,1.24,0);G.add(torso);
+      // Heavy chest armor panels
+      const cp=box(.96,.82,.2,ARM);cp.position.set(0,1.24,.38);G.add(cp);
+      const cpV=box(.08,.7,.22,0x222222);cpV.position.set(0,1.24,.4);G.add(cpV);
+      // Massive shoulder pads
+      const ls=box(.42,.44,.58,ARM);ls.position.set(-.72,1.42,0);G.add(ls);
+      const rs=ls.clone();rs.position.set(.72,1.42,0);G.add(rs);
+      const la=box(.34,.72,.34,HV);la.position.set(-.74,.98,0);G.add(la);
+      const ra=la.clone();ra.position.set(.74,.98,0);G.add(ra);
+      // Heavy helmet — wide with visor
+      const hl=box(.64,.56,.62,ARM);hl.position.set(0,2.12,0);G.add(hl);
+      const vs2=box(.5,.1,.06,VIS,.8);vs2.position.set(0,2.14,.32);G.add(vs2);
+      const vgl2=new THREE.PointLight(VIS,1.2,3);vgl2.position.set(0,2.1,.24);G.add(vgl2);
+      // Ammo belt across chest
+      const belt=box(.98,.12,.12,0x886622);belt.position.set(0,1.05,.38);G.add(belt);
+      const wg=new THREE.Group();wg.rotation.y=Math.PI;
+      const wm=Player._buildWeaponModel('LMG',0x222222,{});wg.add(wm);wg.position.set(.74,1.1,.22);G.add(wg);
     }
+
     else if(key==='RUSHER'){
-      const lb=box(.24,.16,.36,0xcc2200);lb.position.set(-.16,.08,.02);G.add(lb);
-      const rb=box(.24,.16,.36,0xcc2200);rb.position.set(.16,.08,.02);G.add(rb);
-      const ll=box(.24,.66,.26,0x1a1a2a);ll.position.set(-.16,.49,0);G.add(ll);
-      const rl=box(.24,.66,.26,0x1a1a2a);rl.position.set(.16,.49,0);G.add(rl);
-      const torso=box(.58,.72,.44,T.col);torso.position.set(0,1.0,0);G.add(torso);
-      const la=box(.19,.58,.19,T.col);la.position.set(-.4,.82,0);G.add(la);
-      const ra=box(.19,.58,.19,T.col);ra.position.set(.4,.82,0);G.add(ra);
-      const hd=box(.38,.36,.38,0xb89070);hd.position.set(0,1.68,0);G.add(hd);
-      const bn=box(.4,.14,.16,0xaa0000);bn.position.set(0,1.58,-.18);G.add(bn);
-      const hr=box(.36,.1,.36,0x111111);hr.position.set(0,1.88,0);G.add(hr);
+      // Street gang runner — red jacket, dark jeans, bandana face cover, knife + SMG
+      const JK=0x8a1515,DN=0x1a1a2a,SKIN=0xc09060;
+      const lb=box(.26,.18,.36,0x222222);lb.position.set(-.17,.09,.02);G.add(lb);
+      const rb=lb.clone();rb.position.set(.17,.09,.02);G.add(rb);
+      const ll=box(.26,.68,.28,DN);ll.position.set(-.17,.5,0);G.add(ll);
+      const rl=ll.clone();rl.position.set(.17,.5,0);G.add(rl);
+      const torso=box(.6,.76,.44,JK);torso.position.set(0,1.02,0);G.add(torso);
+      // Hoodie under jacket
+      const hood=box(.56,.4,.12,0x441111);hood.position.set(0,1.16,.26);G.add(hood);
+      const la=box(.2,.6,.2,JK);la.position.set(-.42,.84,0);G.add(la);
+      const ra=la.clone();ra.position.set(.42,.84,0);G.add(ra);
+      // Head + bandana
+      const hd=box(.4,.36,.38,SKIN);hd.position.set(0,1.7,0);G.add(hd);
+      const bnd=box(.42,.2,.14,0xaa1111);bnd.position.set(0,1.62,.2);G.add(bnd);
+      // Eyes above bandana — angry brows
+      const le=box(.1,.08,.04,0x111111);le.position.set(-.12,1.78,.2);G.add(le);
+      const re=le.clone();re.position.set(.12,1.78,.2);G.add(re);
+      const lbw=box(.14,.06,.04,0x111111);lbw.rotation.z=.3;lbw.position.set(-.12,1.84,.2);G.add(lbw);
+      const rbw=box(.14,.06,.04,0x111111);rbw.rotation.z=-.3;rbw.position.set(.12,1.84,.2);G.add(rbw);
+      // Cap backwards
+      const cap=box(.46,.1,.44,0x111111);cap.position.y=1.9;G.add(cap);
+      const brim=box(.46,.06,.18,0x111111);brim.position.set(0,1.88,.28);G.add(brim);
+      const wg=new THREE.Group();wg.rotation.y=Math.PI;
+      const wm=Player._buildWeaponModel('SMG',0x440000,{});wg.add(wm);wg.position.set(.42,.86,.2);G.add(wg);
     }
+
     else if(key==='SNIPER'){
-      const lb=box(.24,.22,.42,0x1a1a1a);lb.position.set(-.17,.11,.02);G.add(lb);
-      const rb=box(.24,.22,.42,0x1a1a1a);rb.position.set(.17,.11,.02);G.add(rb);
-      const ll=box(.26,.8,.28,T.col);ll.position.set(-.17,.6,0);G.add(ll);
-      const rl=box(.26,.8,.28,T.col);rl.position.set(.17,.6,0);G.add(rl);
-      const torso=box(.62,.82,.46,T.col);torso.position.set(0,1.11,0);G.add(torso);
-      const la=box(.2,.62,.2,T.col);la.position.set(-.42,.88,0);G.add(la);
-      const ra=box(.2,.62,.2,T.col);ra.position.set(.42,.88,0);G.add(ra);
-      const hd=box(.4,.38,.4,0xb09070);hd.position.set(0,1.83,0);G.add(hd);
-      const cp=box(.46,.16,.44,T.col);cp.position.set(0,2.0,0);G.add(cp);
-      const gn=box(.08,.08,1.1,0x0a0a0a);gn.position.set(.44,1.02,-.44);G.add(gn);
+      // Ghillie-adjacent marksman — dark urban camo, face wrap, long rifle
+      const CM=0x1a2a1a,DK=0x0d1008,SKIN=0xb09070;
+      const lb=box(.26,.22,.42,DK);lb.position.set(-.18,.11,.02);G.add(lb);
+      const rb=lb.clone();rb.position.set(.18,.11,.02);G.add(rb);
+      const ll=box(.28,.82,.3,CM);ll.position.set(-.18,.61,0);G.add(ll);
+      const rl=ll.clone();rl.position.set(.18,.61,0);G.add(rl);
+      const torso=box(.64,.84,.48,CM);torso.position.set(0,1.12,0);G.add(torso);
+      // Ghillie strips (cloth strips hanging off)
+      for(let i=0;i<5;i++){
+        const strip=box(.06,.22,.04,i%2===0?CM:DK);strip.position.set(-.2+i*.1,1.0,.26);strip.rotation.z=(Math.random()-.5)*.4;G.add(strip);
+      }
+      const la=box(.22,.64,.22,CM);la.position.set(-.44,.9,0);G.add(la);
+      const ra=la.clone();ra.position.set(.44,.9,0);G.add(ra);
+      // Face wrap
+      const fw=box(.44,.3,.14,0x0d180d);fw.position.set(0,1.76,.2);G.add(fw);
+      const hd=box(.42,.24,.4,SKIN);hd.position.set(0,1.88,0);G.add(hd);
+      // Boonie hat
+      const hat=box(.56,.1,.54,CM);hat.position.y=2.04;G.add(hat);
+      const hatbrim=box(.68,.06,.66,DK);hatbrim.position.y=1.99;G.add(hatbrim);
+      const wg=new THREE.Group();wg.rotation.y=Math.PI;
+      const wm=Player._buildWeaponModel('Sniper Rifle',0x1a2a1a,{});wg.add(wm);wg.position.set(.44,1.0,.18);G.add(wg);
     }
+
     else if(key==='DRONE'){
       const body=box(.9,.22,.9,T.col);G.add(body);
       const ring=new THREE.Mesh(new THREE.TorusGeometry(.6,.05,6,12),M(0x333366));ring.rotation.x=Math.PI/2;G.add(ring);
       for(let i=0;i<4;i++){const ang=i*Math.PI/2;const arm=box(.55,.05,.1,0x1a1a2a);arm.position.set(Math.cos(ang)*.45,.04,Math.sin(ang)*.45);arm.rotation.y=ang;G.add(arm);const rot=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,.04,8),M(0x333366));rot.position.set(Math.cos(ang)*.72,.06,Math.sin(ang)*.72);G.add(rot);}
       const eye=new THREE.Mesh(new THREE.SphereGeometry(.1,8,8),new THREE.MeshBasicMaterial({color:0xff0000}));eye.position.set(0,-.1,.46);G.add(eye);
       const gl=new THREE.PointLight(0x4444ff,2.5,6);G.add(gl);
+      // Drone has gun pods instead of held weapon
+      const lgun=box(.08,.08,.5,0x111111);lgun.position.set(-.5,-.04,-.18);G.add(lgun);
+      const rgun=lgun.clone();rgun.position.set(.5,-.04,-.18);G.add(rgun);
     }
+
     // HP bar
     const hpBar=new THREE.Mesh(new THREE.PlaneGeometry(1.0,.11),new THREE.MeshBasicMaterial({color:0x22ee55,side:THREE.DoubleSide}));
     const hpBg=new THREE.Mesh(new THREE.PlaneGeometry(1.1,.13),new THREE.MeshBasicMaterial({color:0x330000,side:THREE.DoubleSide}));
-    const hpY=key==='DRONE'?.8:key==='HEAVY'?2.7:2.3;
+    const hpY=key==='DRONE'?.8:key==='HEAVY'?2.9:2.4;
     hpBg.position.y=hpY;G.add(hpBg);hpBar.position.y=hpY+.001;G.add(hpBar);
     return{G,bodyMats,hpBar};
   },
@@ -3464,65 +3557,267 @@ const Player={
   },
 
   // Updates the visible weapon mesh to match this.weapon type
+  // ── Shared weapon model builder — used by player, mercs, enemies ──
+  // Returns a THREE.Group facing -Z (forward). attachments = weapon.attachments obj
+  _buildWeaponModel(type,rarCol,attachments){
+    const M=c=>new THREE.MeshLambertMaterial({color:c});
+    const ME=(c,i)=>{const m=new THREE.MeshLambertMaterial({color:c});m.emissive=new THREE.Color(c);m.emissiveIntensity=i||.5;return m;};
+    const box=(w,h,d,col,em)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),em?ME(col,em):M(col));
+    const g=new THREE.Group();
+    const t=type||'Assault Rifle';
+    const rc=rarCol||0x888888;
+    const DK=0x141414,MK=0x282828,LK=0x3a3a3a;
+
+    if(t==='Pistol'||t==='Revolver'){
+      // Slide
+      const slide=box(.08,.1,.32,DK);slide.position.set(0,.01,-.16);g.add(slide);
+      // Frame
+      const frame=box(.08,.08,.26,MK);frame.position.set(0,-.01,-.13);g.add(frame);
+      // Grip
+      const grip=box(.07,.18,.08,t==='Revolver'?0x3a1a00:MK);grip.position.set(0,-.12,.0);g.add(grip);
+      // Trigger guard
+      const tg=box(.07,.04,.14,DK);tg.position.set(0,-.06,-.1);g.add(tg);
+      if(t==='Revolver'){
+        // Cylinder
+        const cyl=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,.08,8),M(rc));
+        cyl.rotation.x=Math.PI/2;cyl.position.set(.07,0,-.12);g.add(cyl);
+        // Long barrel
+        const brl=box(.05,.05,.34,DK);brl.position.set(0,.03,-.17);g.add(brl);
+      }
+      // Mag well
+      const mag=box(.06,.08,.05,rc);mag.position.set(0,-.08,-.1);g.add(mag);
+      // Rarity stripe on slide
+      const str=box(.01,.01,.28,rc,.6);str.position.set(.04,.06,-.14);g.add(str);
+
+    }else if(t==='SMG'){
+      // Receiver
+      const recv=box(.11,.1,.46,DK);recv.position.set(0,0,-.23);g.add(recv);
+      // Folded stock nub
+      const stock=box(.08,.06,.14,MK);stock.position.set(0,.01,.07);g.add(stock);
+      // Barrel extension
+      const brl=box(.06,.06,.18,DK);brl.position.set(0,0,-.46);g.add(brl);
+      // Pistol grip
+      const grip=box(.08,.18,.07,MK);grip.position.set(0,-.12,-.18);g.add(grip);
+      // Magazine — angled
+      const mag=box(.065,.18,.065,rc);mag.rotation.x=-.15;mag.position.set(0,-.1,-.26);g.add(mag);
+      // Charging handle
+      const ch=box(.04,.04,.04,LK);ch.position.set(.06,.04,-.08);g.add(ch);
+      // Rarity accent
+      const str=box(.01,.08,.42,rc,.4);str.position.set(-.055,0,-.21);g.add(str);
+
+    }else if(t==='Assault Rifle'){
+      // Upper receiver
+      const upper=box(.1,.1,.58,DK);upper.position.set(0,.02,-.29);g.add(upper);
+      // Lower receiver
+      const lower=box(.1,.08,.42,MK);lower.position.set(0,-.04,-.21);g.add(lower);
+      // Handguard
+      const hg=box(.1,.08,.24,LK);hg.position.set(0,.02,-.5);g.add(hg);
+      // Barrel
+      const brl=box(.05,.05,.22,DK);brl.position.set(0,.02,-.73);g.add(brl);
+      // Stock
+      const stock=box(.09,.09,.22,MK);stock.position.set(0,.01,.1);g.add(stock);
+      // Pistol grip
+      const grip=box(.08,.2,.07,MK);grip.position.set(0,-.12,-.18);g.add(grip);
+      // Magazine — curved
+      const mag=box(.07,.22,.07,rc);mag.rotation.x=-.12;mag.position.set(0,-.13,-.3);g.add(mag);
+      // Charging handle
+      const ch=box(.04,.04,.04,LK);ch.position.set(.055,.04,-.14);g.add(ch);
+      // Carry handle / rear sight
+      const ch2=box(.06,.04,.12,DK);ch2.position.set(0,.1,-.12);g.add(ch2);
+      const str=box(.01,.08,.52,rc,.4);str.position.set(-.055,.02,-.26);g.add(str);
+
+    }else if(t==='Shotgun'){
+      // Receiver
+      const recv=box(.12,.1,.52,DK);recv.position.set(0,0,-.26);g.add(recv);
+      // Double barrel
+      const b1=box(.05,.05,.58,MK);b1.position.set(-.04,.04,-.46);g.add(b1);
+      const b2=box(.05,.05,.58,MK);b2.position.set(.04,.04,-.46);g.add(b2);
+      // Wood stock
+      const stock=box(.1,.12,.32,0x5a2e00);stock.position.set(0,.01,.14);g.add(stock);
+      // Fore-end pump
+      const pump=box(.12,.1,.18,0x4a2400);pump.position.set(0,0,-.44);g.add(pump);
+      // Guard
+      const guard=box(.1,.04,.18,DK);guard.position.set(0,-.06,-.12);g.add(guard);
+      const str=box(.01,.08,.46,rc,.4);str.position.set(-.065,0,-.23);g.add(str);
+
+    }else if(t==='Sniper Rifle'){
+      // Long receiver
+      const recv=box(.08,.09,.82,DK);recv.position.set(0,.01,-.41);g.add(recv);
+      // Heavy barrel
+      const brl=box(.05,.05,.38,MK);brl.position.set(0,.01,-.82);g.add(brl);
+      // Bipod legs
+      const bl=box(.02,.14,.02,LK);bl.position.set(-.08,-.08,-.72);g.add(bl);
+      const br=bl.clone();br.position.set(.08,-.08,-.72);g.add(br);
+      // Bolt handle
+      const bolt=box(.04,.04,.04,LK);bolt.position.set(.07,.04,-.26);g.add(bolt);
+      // Stock with cheekpiece
+      const stock=box(.08,.12,.28,MK);stock.position.set(0,.03,.12);g.add(stock);
+      const cheek=box(.08,.06,.14,DK);cheek.position.set(0,.1,.1);g.add(cheek);
+      // Pistol grip
+      const grip=box(.07,.18,.07,MK);grip.position.set(0,-.12,-.24);g.add(grip);
+      // Scope rail (scope added as attachment below)
+      const rail=box(.06,.02,.28,LK);rail.position.set(0,.08,-.3);g.add(rail);
+      const mag=box(.06,.12,.05,rc);mag.position.set(0,-.1,-.3);g.add(mag);
+      const str=box(.01,.07,.74,rc,.4);str.position.set(-.045,.01,-.37);g.add(str);
+
+    }else if(t==='LMG'){
+      // Heavy receiver
+      const recv=box(.14,.14,.72,DK);recv.position.set(0,.01,-.36);g.add(recv);
+      // Heavy barrel with bipod
+      const brl=box(.07,.07,.32,MK);brl.position.set(0,.04,-.7);g.add(brl);
+      const bl2=box(.02,.18,.02,LK);bl2.position.set(-.07,-.1,-.76);g.add(bl2);
+      const br2=bl2.clone();br2.position.set(.07,-.1,-.76);g.add(br2);
+      // Big drum mag
+      const drum=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,.12,10),M(rc));
+      drum.rotation.x=Math.PI/2;drum.position.set(0,-.1,-.32);g.add(drum);
+      // Stock
+      const stock=box(.11,.1,.18,MK);stock.position.set(0,.01,.08);g.add(stock);
+      // Carry handle
+      const handle=box(.04,.14,.28,LK);handle.position.set(0,.14,-.24);g.add(handle);
+      const str=box(.01,.1,.64,rc,.4);str.position.set(-.075,.01,-.32);g.add(str);
+
+    }else if(t==='Rocket Launcher'){
+      // Main tube
+      const tube=new THREE.Mesh(new THREE.CylinderGeometry(.085,.085,.82,10),M(DK));
+      tube.rotation.x=Math.PI/2;tube.position.set(0,0,-.41);g.add(tube);
+      // Secondary tube
+      const tube2=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.82,8),M(MK));
+      tube2.rotation.x=Math.PI/2;tube2.position.set(0,.12,-.41);g.add(tube2);
+      // Grip handles
+      const fg=box(.07,.18,.07,MK);fg.position.set(0,-.12,-.44);g.add(fg);
+      const rg=box(.07,.18,.07,MK);rg.position.set(0,-.12,-.16);g.add(rg);
+      // Sight
+      const sight=box(.05,.07,.1,rc);sight.position.set(0,.12,-.24);g.add(sight);
+      // Rarity tip
+      const tip=new THREE.Mesh(new THREE.CylinderGeometry(.09,.06,.06,10),M(rc));
+      tip.rotation.x=Math.PI/2;tip.position.set(0,0,-.84);g.add(tip);
+
+    }else if(t==='Grenade Launcher'){
+      const body=box(.13,.13,.52,DK);body.position.set(0,0,-.26);g.add(body);
+      const tube=new THREE.Mesh(new THREE.CylinderGeometry(.075,.075,.52,10),M(MK));
+      tube.rotation.x=Math.PI/2;tube.position.set(0,-.06,-.26);g.add(tube);
+      const stock=box(.09,.1,.2,MK);stock.position.set(0,.01,.08);g.add(stock);
+      const grip=box(.08,.18,.07,MK);grip.position.set(0,-.12,-.16);g.add(grip);
+      const drum2=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,.1,10),M(rc));
+      drum2.rotation.x=Math.PI/2;drum2.position.set(0,-.06,-.18);g.add(drum2);
+
+    }else if(t==='Plasma Rifle'){
+      const body=box(.1,.14,.62,0x001a2a);body.position.set(0,.01,-.31);g.add(body);
+      const glow=box(.06,.06,.54,rc,.8);glow.position.set(0,.01,-.27);g.add(glow);
+      const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.045,.055,.28,8),ME(rc,.5));
+      barrel.rotation.x=Math.PI/2;barrel.position.set(0,.01,-.6);g.add(barrel);
+      const grip=box(.08,.2,.07,0x001015);grip.position.set(0,-.12,-.22);g.add(grip);
+      const stock=box(.08,.1,.2,0x001520);stock.position.set(0,.01,.09);g.add(stock);
+      const gl=new THREE.PointLight(rc,.8,2.5);gl.position.set(0,.02,-.5);g.add(gl);
+
+    }else{
+      // Default assault rifle fallback
+      const recv=box(.1,.1,.58,DK);recv.position.set(0,.02,-.29);g.add(recv);
+      const hg2=box(.1,.08,.24,LK);hg2.position.set(0,.02,-.5);g.add(hg2);
+      const brl2=box(.05,.05,.18,DK);brl2.position.set(0,.02,-.68);g.add(brl2);
+      const grip=box(.08,.2,.07,MK);grip.position.set(0,-.12,-.18);g.add(grip);
+      const mag=box(.07,.22,.07,rc);mag.rotation.x=-.12;mag.position.set(0,-.13,-.3);g.add(mag);
+      const stock=box(.09,.09,.22,MK);stock.position.set(0,.01,.1);g.add(stock);
+    }
+
+    // ── ATTACHMENTS ──────────────────────────────────────────────────
+    if(attachments){
+      // OPTIC
+      const op=attachments.OPTIC;
+      if(op){
+        if(op._key==='RED_DOT'||op.name?.includes('Red')){
+          const base=box(.06,.04,.08,DK);base.position.set(0,.14,-.28);g.add(base);
+          const tube3=box(.04,.04,.06,MK);tube3.position.set(0,.17,-.28);g.add(tube3);
+          const dot=box(.02,.02,.02,0xff2200,.9);dot.position.set(0,.18,-.26);g.add(dot);
+        }else if(op._key==='HOLOGRAPHIC'||op.name?.includes('Holographic')){
+          const hframe=box(.09,.08,.06,DK);hframe.position.set(0,.15,-.28);g.add(hframe);
+          const hglass=box(.06,.05,.01,0x00ffee,.3);hglass.position.set(0,.15,-.27);g.add(hglass);
+          const hgl=new THREE.PointLight(0x00ffee,.3,1.5);hgl.position.set(0,.2,-.28);g.add(hgl);
+        }else if(op._key==='THERMAL'||op.name?.includes('Thermal')){
+          const tframe=box(.1,.1,.14,DK);tframe.position.set(0,.16,-.28);g.add(tframe);
+          const tlens=box(.07,.07,.02,0xff6600,.4);tlens.position.set(0,.16,-.26);g.add(tlens);
+          const tgl=new THREE.PointLight(0xff4400,.4,2);tgl.position.set(0,.2,-.28);g.add(tgl);
+        }else if(op._key==='ACOG'||op.name?.includes('ACOG')){
+          const aframe=box(.07,.12,.18,MK);aframe.position.set(0,.16,-.28);g.add(aframe);
+          const alens=box(.05,.05,.02,0x884400,.3);alens.position.set(0,.16,-.26);g.add(alens);
+        }
+      }
+      // MUZZLE
+      const mu=attachments.MUZZLE;
+      if(mu){
+        if(mu._key==='SUPPRESSOR'||mu.name?.includes('Suppressor')){
+          const sup=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.28,10),M(MK));
+          sup.rotation.x=Math.PI/2;sup.position.set(0,0,-.78);g.add(sup);
+          const s2=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,.04,10),M(DK));
+          s2.rotation.x=Math.PI/2;s2.position.set(0,0,-.65);g.add(s2);
+        }else if(mu._key==='COMPENSATOR'||mu.name?.includes('Compensator')){
+          const comp=box(.08,.1,.08,LK);comp.position.set(0,0,-.78);g.add(comp);
+          const cv=box(.06,.14,.02,MK);cv.position.set(0,.04,-.78);g.add(cv);
+        }else if(mu._key==='MUZZLE_BRAKE'||mu.name?.includes('Brake')){
+          const mb=box(.1,.06,.06,LK);mb.position.set(0,0,-.76);g.add(mb);
+          const mb2=box(.02,.1,.04,MK);mb2.position.set(0,.04,-.78);g.add(mb2);
+          const mb3=mb2.clone();mb3.position.set(0,-.04,-.78);g.add(mb3);
+        }else{
+          // Flash hider
+          const fh=box(.06,.06,.08,LK);fh.position.set(0,0,-.76);g.add(fh);
+          const fh2=box(.02,.1,.06,MK);fh2.position.set(0,.04,-.76);g.add(fh2);
+        }
+      }
+      // MAGAZINE
+      const ma=attachments.MAGAZINE;
+      if(ma){
+        if(ma._key==='DRUM_MAG'||ma.name?.includes('Drum')){
+          // Replace standard mag with visible drum
+          const drum3=new THREE.Mesh(new THREE.CylinderGeometry(.1,.1,.14,10),M(rc));
+          drum3.rotation.x=Math.PI/2;drum3.position.set(0,-.14,-.3);g.add(drum3);
+        }else if(ma._key==='EXTENDED_MAG'||ma.name?.includes('Extended')){
+          const ext=box(.07,.28,.07,rc);ext.rotation.x=-.12;ext.position.set(0,-.18,-.3);g.add(ext);
+        }else if(ma._key==='INCENDIARY_MAG'||ma.name?.includes('Incendiary')){
+          const inc=box(.07,.2,.07,0xff4400);inc.rotation.x=-.12;inc.position.set(0,-.14,-.3);g.add(inc);
+          const igl=new THREE.PointLight(0xff2200,.3,1.5);igl.position.set(0,-.1,-.3);g.add(igl);
+        }
+      }
+      // GRIP
+      const gr=attachments.GRIP;
+      if(gr){
+        if(gr._key==='FOREGRIP'||gr.name?.includes('Foregrip')){
+          const fg2=box(.07,.18,.07,MK);fg2.position.set(0,-.12,-.5);g.add(fg2);
+        }else if(gr._key==='ANGLED_GRIP'||gr.name?.includes('Angled')){
+          const ag=box(.07,.14,.06,MK);ag.rotation.x=.4;ag.position.set(0,-.14,-.5);g.add(ag);
+        }else if(gr._key==='LASER_SIGHT'||gr.name?.includes('Laser')){
+          const ls=box(.04,.04,.12,DK);ls.position.set(0,-.06,-.5);g.add(ls);
+          const lsg=new THREE.PointLight(0xff0000,.5,3);lsg.position.set(0,-.06,-.7);g.add(lsg);
+          const ldot=box(.02,.02,.02,0xff0000,.9);ldot.position.set(0,-.06,-.62);g.add(ldot);
+        }
+      }
+      // UNDERBARREL
+      const ub=attachments.UNDERBARREL;
+      if(ub){
+        if(ub._key==='GRENADE_LAUNCHER'||ub.name?.includes('Grenade Launcher')){
+          const ugl=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,.38,8),M(MK));
+          ugl.rotation.x=Math.PI/2;ugl.position.set(0,-.1,-.4);g.add(ugl);
+          const ugltip=box(.08,.08,.04,rc);ugltip.position.set(0,-.1,-.6);g.add(ugltip);
+        }else if(ub._key==='SHOTGUN_RAIL'||ub.name?.includes('Shotgun Rail')){
+          const sr=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.28,8),M(LK));
+          sr.rotation.x=Math.PI/2;sr.position.set(.06,-.1,-.4);g.add(sr);
+          const sr2=sr.clone();sr2.position.set(-.06,-.1,-.4);g.add(sr2);
+        }else if(ub._key==='BIPOD'||ub.name?.includes('Bipod')){
+          const bpl=box(.02,.18,.02,LK);bpl.position.set(-.08,-.14,-.6);g.add(bpl);
+          const bpr=bpl.clone();bpr.position.set(.08,-.14,-.6);g.add(bpr);
+        }
+      }
+    }
+    return g;
+  },
+
   _updateWeaponMesh(){
     if(!this._weaponGroup)return;
     while(this._weaponGroup.children.length)this._weaponGroup.remove(this._weaponGroup.children[0]);
-    const M=col=>new THREE.MeshLambertMaterial({color:col});
-    const box=(w,h,d,col)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(col));
+    if(!this.weapon)return;
     const w=this.weapon;
-    const t=w?w.type:'Assault Rifle';
-    // Barrel color based on rarity
-    const rarCol=w?parseInt((RARITY[w.rarity]?.col||'#888888').replace('#',''),16):0x888888;
-    const darkCol=0x0a0a0a,midCol=0x1a1a1a;
-    // All weapons face forward (negative Z = forward for character)
-    if(t==='SMG'){
-      const body=box(.1,.1,.52,darkCol);body.position.set(0,0,-.26);this._weaponGroup.add(body);
-      const grip=box(.08,.18,.08,midCol);grip.position.set(0,-.1,-.12);this._weaponGroup.add(grip);
-      const mag=box(.06,.16,.06,rarCol);mag.position.set(0,-.08,-.22);this._weaponGroup.add(mag);
-    } else if(t==='Shotgun'){
-      const body=box(.1,.1,.72,darkCol);body.position.set(0,0,-.36);this._weaponGroup.add(body);
-      const barrel2=box(.04,.04,.6,midCol);barrel2.position.set(.08,0,-.3);this._weaponGroup.add(barrel2);
-      const stock=box(.08,.12,.28,midCol);stock.position.set(0,0,.1);this._weaponGroup.add(stock);
-    } else if(t==='Sniper Rifle'){
-      const body=box(.08,.08,.96,darkCol);body.position.set(0,0,-.48);this._weaponGroup.add(body);
-      const scope=box(.08,.08,.18,rarCol);scope.position.set(0,.08,-.38);this._weaponGroup.add(scope);
-      const grip=box(.06,.14,.06,midCol);grip.position.set(0,-.1,-.3);this._weaponGroup.add(grip);
-      const stock=box(.06,.08,.32,midCol);stock.position.set(0,0,.12);this._weaponGroup.add(stock);
-    } else if(t==='LMG'){
-      const body=box(.12,.14,.72,darkCol);body.position.set(0,0,-.36);this._weaponGroup.add(body);
-      const drum=box(.12,.14,.12,rarCol);drum.position.set(0,-.1,-.24);this._weaponGroup.add(drum);
-      const barrel=box(.06,.06,.3,midCol);barrel.position.set(0,.04,-.56);this._weaponGroup.add(barrel);
-    } else if(t==='Pistol'){
-      const body=box(.08,.12,.34,darkCol);body.position.set(0,0,-.17);this._weaponGroup.add(body);
-      const grip=box(.08,.16,.06,midCol);grip.position.set(0,-.1,-.04);this._weaponGroup.add(grip);
-    } else if(t==='Revolver'){
-      const body=box(.08,.1,.38,darkCol);body.position.set(0,0,-.19);this._weaponGroup.add(body);
-      const cyl=box(.1,.1,.1,rarCol);cyl.position.set(0,0,-.1);this._weaponGroup.add(cyl);
-      const grip=box(.08,.2,.06,0x3a1a00);grip.position.set(0,-.13,0);this._weaponGroup.add(grip);
-    } else if(t==='Rocket Launcher'){
-      const tube=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,.72,8),M(darkCol));
-      tube.rotation.x=Math.PI/2;tube.position.set(0,0,-.36);this._weaponGroup.add(tube);
-      const sight=box(.06,.06,.12,rarCol);sight.position.set(0,.12,-.2);this._weaponGroup.add(sight);
-    } else if(t==='Grenade Launcher'){
-      const body=box(.12,.12,.52,darkCol);body.position.set(0,0,-.26);this._weaponGroup.add(body);
-      const tube=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,.44,8),M(midCol));
-      tube.rotation.x=Math.PI/2;tube.position.set(0,-.06,-.22);this._weaponGroup.add(tube);
-    } else if(t==='Plasma Rifle'){
-      const body=box(.1,.12,.6,0x001a2a);body.position.set(0,0,-.3);this._weaponGroup.add(body);
-      const glow=box(.06,.06,.5,rarCol);glow.position.set(0,0,-.3);this._weaponGroup.add(glow);
-      // Emissive glow light
-      const gl=new THREE.PointLight(rarCol,.6,3);gl.position.set(.4,1.05,-.3);
-      if(this.mesh)this.mesh.add(gl);
-    } else {
-      // Assault Rifle (default)
-      const body=box(.1,.1,.66,darkCol);body.position.set(0,0,-.33);this._weaponGroup.add(body);
-      const mag=box(.06,.18,.06,rarCol);mag.position.set(0,-.1,-.28);this._weaponGroup.add(mag);
-      const grip=box(.08,.14,.08,midCol);grip.position.set(0,-.1,-.14);this._weaponGroup.add(grip);
-      const stock=box(.08,.08,.18,midCol);stock.position.set(0,0,.08);this._weaponGroup.add(stock);
-    }
-    // Rarity accent stripe on all weapons
-    const stripe=box(.02,.02,.44,rarCol);stripe.position.set(.06,.06,-.22);
-    this._weaponGroup.add(stripe);
+    const rarCol=parseInt((RARITY[w.rarity]?.col||'#888888').replace('#',''),16);
+    const model=this._buildWeaponModel(w.type,rarCol,w.attachments||{});
+    this._weaponGroup.add(model);
   },
 
   recalc(){const s=Armor.getStats();this.maxArmor=100+s.armor;this.maxHp=100+s.hp;this.armor=Math.min(this.armor+s.armor,this.maxArmor);UI.updateBars();InvUI.refresh();},
@@ -4016,53 +4311,50 @@ const HubSystem={
   renderMarket(){
     const cr=Player.credits;const grid=document.getElementById('market-grid');if(!grid)return;grid.innerHTML='';
 
-    // ── IDENTIFY SECTION ───────────────────────────────────────────────
-    const unidItems=[...Player.weaponBag,...Armor.bag,(Player.weapon?[Player.weapon]:[])].flat().filter(i=>i&&i.unidentified);
-    if(unidItems.length>0){
+    // ── IDENTIFY SECTION — always visible ─────────────────────────────
+    const unidItems=[...Player.weaponBag,...(Player.weapon&&Player.weapon.unidentified?[Player.weapon]:[])].filter(i=>i&&i.unidentified);
+    {
       const sec=document.createElement('div');
-      sec.style.cssText='margin-bottom:14px;border:1px solid rgba(255,200,0,.25);padding:10px;background:rgba(20,15,0,.5)';
-      sec.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;color:#ffd700;margin-bottom:8px">🔍 IDENTIFY (${unidItems.length} ITEMS)</div>`;
+      sec.style.cssText='margin-bottom:14px;border:1px solid rgba(255,200,0,.3);padding:10px;background:rgba(20,15,0,.5)';
       const identifyCost=50;
-      unidItems.forEach(item=>{
-        const r=RARITY[item.rarity]||RARITY.RARE;
-        const row=document.createElement('div');
-        row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)';
-        row.innerHTML=`<div style="flex:1;font-family:'Courier New',monospace"><div style="font-size:9px;color:${r.col}">${item.name}</div><div style="font-size:8px;color:#556">${r.name} ${item.kind==='weapon'?item.type:item.slot||'ARMOR'}</div></div>`;
-        const btn=document.createElement('button');
-        const canAfford=Player.credits>=identifyCost;
-        btn.style.cssText=`padding:7px 12px;border:1px solid ${canAfford?'#ffd700':'#443'};background:transparent;color:${canAfford?'#ffd700':'#443'};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
-        btn.textContent=`🔍 ${identifyCost} CR`;
-        btn.onclick=btn.ontouchend=(e)=>{
-          if(e.type==='touchend')e.preventDefault();
-          if(Player.credits<identifyCost){showBanner('NOT ENOUGH CREDITS TO IDENTIFY',1500);return;}
-          Player.credits-=identifyCost;
-          try{UI.credit(Player.credits);}catch(ex){}
-          identifyItem(item);
-          try{Audio.uiClick();}catch(ex){}
-          this.renderMarket();
-          try{InvUI.refresh();}catch(ex){}
-        };
-        row.appendChild(btn);
-        sec.appendChild(row);
-      });
-      // Identify all button
-      if(unidItems.length>1){
-        const totalCost=identifyCost*unidItems.length;
-        const allBtn=document.createElement('button');
-        const canAll=Player.credits>=totalCost;
-        allBtn.style.cssText=`width:100%;margin-top:8px;padding:8px;border:1px solid ${canAll?'#ffd700':'#443'};background:${canAll?'rgba(255,215,0,.08)':'transparent'};color:${canAll?'#ffd700':'#443'};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation`;
-        allBtn.textContent=`🔍 IDENTIFY ALL — ${totalCost} CR`;
-        allBtn.onclick=allBtn.ontouchend=(e)=>{
-          if(e.type==='touchend')e.preventDefault();
-          if(Player.credits<totalCost){showBanner('NOT ENOUGH CREDITS',1500);return;}
-          Player.credits-=totalCost;
-          try{UI.credit(Player.credits);}catch(ex){}
-          unidItems.forEach(i=>identifyItem(i));
-          showBanner('ALL ITEMS IDENTIFIED',2000);
-          this.renderMarket();
-          try{InvUI.refresh();}catch(ex){}
-        };
-        sec.appendChild(allBtn);
+      if(unidItems.length===0){
+        sec.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;color:#ffd700;margin-bottom:4px">🔍 IDENTIFY WEAPONS</div><div style="font-family:'Courier New',monospace;font-size:8px;color:#445">No unidentified weapons in bag</div>`;
+      } else {
+        sec.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;color:#ffd700;margin-bottom:8px">🔍 IDENTIFY WEAPONS (${unidItems.length})</div>`;
+        unidItems.forEach(item=>{
+          const r=RARITY[item.rarity]||RARITY.RARE;
+          const row=document.createElement('div');
+          row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)';
+          row.innerHTML=`<div style="flex:1;font-family:'Courier New',monospace"><div style="font-size:9px;color:${r.col}">${item.name}</div><div style="font-size:8px;color:#556">${r.name} ${item.type||'WEAPON'}</div></div>`;
+          const btn=document.createElement('button');
+          const canAfford=Player.credits>=identifyCost;
+          btn.style.cssText=`padding:7px 12px;border:1px solid ${canAfford?'#ffd700':'#443'};background:transparent;color:${canAfford?'#ffd700':'#443'};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
+          btn.textContent=`🔍 ${identifyCost} CR`;
+          btn.onclick=btn.ontouchend=(e)=>{
+            if(e.type==='touchend')e.preventDefault();
+            if(Player.credits<identifyCost){showBanner('NOT ENOUGH CREDITS',1500);return;}
+            Player.credits-=identifyCost;try{UI.credit(Player.credits);}catch(ex){}
+            identifyItem(item);try{Audio.uiClick();}catch(ex){}
+            this.renderMarket();try{InvUI.refresh();}catch(ex){}
+          };
+          row.appendChild(btn);sec.appendChild(row);
+        });
+        if(unidItems.length>1){
+          const totalCost=identifyCost*unidItems.length;
+          const allBtn=document.createElement('button');
+          const canAll=Player.credits>=totalCost;
+          allBtn.style.cssText=`width:100%;margin-top:8px;padding:8px;border:1px solid ${canAll?'#ffd700':'#443'};background:${canAll?'rgba(255,215,0,.08)':'transparent'};color:${canAll?'#ffd700':'#443'};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation`;
+          allBtn.textContent=`🔍 IDENTIFY ALL — ${totalCost} CR`;
+          allBtn.onclick=allBtn.ontouchend=(e)=>{
+            if(e.type==='touchend')e.preventDefault();
+            if(Player.credits<totalCost){showBanner('NOT ENOUGH CREDITS',1500);return;}
+            Player.credits-=totalCost;try{UI.credit(Player.credits);}catch(ex){}
+            unidItems.forEach(i=>identifyItem(i));
+            showBanner('ALL WEAPONS IDENTIFIED',2000);
+            this.renderMarket();try{InvUI.refresh();}catch(ex){}
+          };
+          sec.appendChild(allBtn);
+        }
       }
       grid.appendChild(sec);
     }
@@ -4093,46 +4385,50 @@ const HubSystem={
   renderArmory(){
     const cr=Player.credits;const grid=document.getElementById('armory-grid');if(!grid)return;grid.innerHTML='';
 
-    // ── IDENTIFY SECTION ───────────────────────────────────────────────
+    // ── IDENTIFY SECTION — always visible ─────────────────────────────
     const unidArmor=[...Armor.bag].filter(i=>i&&i.unidentified);
-    if(unidArmor.length>0){
+    {
       const sec=document.createElement('div');
-      sec.style.cssText='margin-bottom:14px;border:1px solid rgba(255,200,0,.25);padding:10px;background:rgba(20,15,0,.5)';
-      sec.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;color:#ffd700;margin-bottom:8px">🔍 IDENTIFY ARMOR (${unidArmor.length} ITEMS)</div>`;
+      sec.style.cssText='margin-bottom:14px;border:1px solid rgba(255,200,0,.3);padding:10px;background:rgba(20,15,0,.5)';
       const identifyCost=50;
-      unidArmor.forEach(item=>{
-        const r=RARITY[item.rarity]||RARITY.RARE;
-        const row=document.createElement('div');
-        row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)';
-        row.innerHTML=`<div style="flex:1;font-family:'Courier New',monospace"><div style="font-size:9px;color:${r.col}">${item.name}</div><div style="font-size:8px;color:#556">${r.name} · ${item.slot||'ARMOR'}</div></div>`;
-        const btn=document.createElement('button');
-        const canAfford=Player.credits>=identifyCost;
-        btn.style.cssText=`padding:7px 12px;border:1px solid ${canAfford?'#ffd700':'#443'};background:transparent;color:${canAfford?'#ffd700':'#443'};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
-        btn.textContent=`🔍 ${identifyCost} CR`;
-        btn.onclick=btn.ontouchend=(e)=>{
-          if(e.type==='touchend')e.preventDefault();
-          if(Player.credits<identifyCost){showBanner('NOT ENOUGH CREDITS',1500);return;}
-          Player.credits-=identifyCost;try{UI.credit(Player.credits);}catch(ex){}
-          identifyItem(item);try{Audio.uiClick();}catch(ex){}
-          this.renderArmory();try{InvUI.refresh();}catch(ex){}
-        };
-        row.appendChild(btn);sec.appendChild(row);
-      });
-      if(unidArmor.length>1){
-        const totalCost=identifyCost*unidArmor.length;
-        const allBtn=document.createElement('button');
-        const canAll=Player.credits>=totalCost;
-        allBtn.style.cssText=`width:100%;margin-top:8px;padding:8px;border:1px solid ${canAll?'#ffd700':'#443'};background:${canAll?'rgba(255,215,0,.08)':'transparent'};color:${canAll?'#ffd700':'#443'};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation`;
-        allBtn.textContent=`🔍 IDENTIFY ALL — ${totalCost} CR`;
-        allBtn.onclick=allBtn.ontouchend=(e)=>{
-          if(e.type==='touchend')e.preventDefault();
-          if(Player.credits<totalCost){showBanner('NOT ENOUGH CREDITS',1500);return;}
-          Player.credits-=totalCost;try{UI.credit(Player.credits);}catch(ex){}
-          unidArmor.forEach(i=>identifyItem(i));
-          showBanner('ALL ARMOR IDENTIFIED',2000);
-          this.renderArmory();try{InvUI.refresh();}catch(ex){}
-        };
-        sec.appendChild(allBtn);
+      if(unidArmor.length===0){
+        sec.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;color:#ffd700;margin-bottom:4px">🔍 IDENTIFY ARMOR</div><div style="font-family:'Courier New',monospace;font-size:8px;color:#445">No unidentified armor in bag</div>`;
+      } else {
+        sec.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;color:#ffd700;margin-bottom:8px">🔍 IDENTIFY ARMOR (${unidArmor.length})</div>`;
+        unidArmor.forEach(item=>{
+          const r=RARITY[item.rarity]||RARITY.RARE;
+          const row=document.createElement('div');
+          row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)';
+          row.innerHTML=`<div style="flex:1;font-family:'Courier New',monospace"><div style="font-size:9px;color:${r.col}">${item.name}</div><div style="font-size:8px;color:#556">${r.name} · ${item.slot||'ARMOR'}</div></div>`;
+          const btn=document.createElement('button');
+          const canAfford=Player.credits>=identifyCost;
+          btn.style.cssText=`padding:7px 12px;border:1px solid ${canAfford?'#ffd700':'#443'};background:transparent;color:${canAfford?'#ffd700':'#443'};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
+          btn.textContent=`🔍 ${identifyCost} CR`;
+          btn.onclick=btn.ontouchend=(e)=>{
+            if(e.type==='touchend')e.preventDefault();
+            if(Player.credits<identifyCost){showBanner('NOT ENOUGH CREDITS',1500);return;}
+            Player.credits-=identifyCost;try{UI.credit(Player.credits);}catch(ex){}
+            identifyItem(item);try{Audio.uiClick();}catch(ex){}
+            this.renderArmory();try{InvUI.refresh();}catch(ex){}
+          };
+          row.appendChild(btn);sec.appendChild(row);
+        });
+        if(unidArmor.length>1){
+          const totalCost=identifyCost*unidArmor.length;
+          const allBtn=document.createElement('button');
+          const canAll=Player.credits>=totalCost;
+          allBtn.style.cssText=`width:100%;margin-top:8px;padding:8px;border:1px solid ${canAll?'#ffd700':'#443'};background:${canAll?'rgba(255,215,0,.08)':'transparent'};color:${canAll?'#ffd700':'#443'};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation`;
+          allBtn.textContent=`🔍 IDENTIFY ALL — ${totalCost} CR`;
+          allBtn.onclick=allBtn.ontouchend=(e)=>{
+            if(e.type==='touchend')e.preventDefault();
+            if(Player.credits<totalCost){showBanner('NOT ENOUGH CREDITS',1500);return;}
+            Player.credits-=totalCost;try{UI.credit(Player.credits);}catch(ex){}
+            unidArmor.forEach(i=>identifyItem(i));
+            showBanner('ALL ARMOR IDENTIFIED',2000);
+            this.renderArmory();try{InvUI.refresh();}catch(ex){}
+          };
+          sec.appendChild(allBtn);
+        }
       }
       grid.appendChild(sec);
     }
@@ -6128,6 +6424,16 @@ const Mercs={
     if(!this.mesh)return;
     this.mesh.position.copy(Player.mesh.position).add(new THREE.Vector3(2,0,0));
     scene.add(this.mesh);
+    // Give companion a visible weapon
+    try{
+      const w=this._weapon||null;
+      const wType=w?w.type:(this.active.bonus==='shepard'?'Assault Rifle':this.active.bonus==='shout'?'Assault Rifle':this.active.bonus==='george'?'SMG':this.active.bonus==='buford'?'Revolver':this.active.bonus==='gypsy'?'Pistol':'Assault Rifle');
+      const rc=w?parseInt((RARITY[w.rarity]?.col||'#888888').replace('#',''),16):parseInt((this.active.col||'#888888').replace('#',''),16);
+      const wMesh=Player._buildWeaponModel(wType,rc,w?w.attachments||{}:{});
+      wMesh.position.set(.5,.92,0);
+      this.mesh.add(wMesh);
+      this._weaponMesh=wMesh;
+    }catch(e){}
   },
 
   dismiss(){
@@ -10885,13 +11191,17 @@ function dropAttachment(){
   const key=pool[~~(Math.random()*pool.length)];
   return{...ATTACHMENTS[key],_key:key};
 }
-function attachToWeapon(weapon,attachment){
-  if(!weapon||!attachment)return;
-  weapon.attachments=weapon.attachments||{};
-  if(weapon.attachments[attachment.slot]){showBanner(attachment.slot+' SLOT OCCUPIED — REMOVE FIRST');return;}
-  weapon.attachments[attachment.slot]=attachment;
-  try{attachment.apply(weapon);}catch(e){}
+function attachToWeapon(item,attachment){
+  if(!item||!attachment)return;
+  item.attachments=item.attachments||{};
+  if(item.attachments[attachment.slot]){showBanner(attachment.slot+' SLOT OCCUPIED — REMOVE FIRST');return;}
+  item.attachments[attachment.slot]=attachment;
+  try{attachment.apply(item);}catch(e){}
   showBanner('◈ '+attachment.name+' ATTACHED — '+attachment.desc,2500);
+  // Refresh player weapon mesh if this is the active weapon
+  if(item===Player.weapon)try{Player._updateWeaponMesh();}catch(e){}
+  // Refresh companion weapon mesh
+  if(Mercs.active&&Mercs.mesh){try{Mercs.spawnMesh();}catch(e){}}
   try{InvUI.refresh();}catch(e){}
   try{UI.updateWeaponHUD();}catch(e){}
 }
