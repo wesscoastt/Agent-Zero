@@ -1595,6 +1595,10 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
       <input type="range" id="s-perf" min="0" max="1" value="0" step="1" oninput="setPerfMode(this.value)">
       <span class="setting-val" id="s-perf-val">HIGH</span>
     </div>
+    <div class="setting-row" style="margin-top:10px;border-top:1px solid rgba(255,255,255,.1);padding-top:10px">
+      <span class="setting-lbl">CAMERA</span>
+      <button id="s-cam-btn" onclick="toggleCameraMode()" ontouchend="event.preventDefault();toggleCameraMode()" style="padding:6px 14px;border:1px solid rgba(255,140,0,.4);background:rgba(255,140,0,.1);color:#e67e22;font-family:'Courier New',monospace;font-size:9px;letter-spacing:2px;cursor:pointer;touch-action:manipulation">TOP-DOWN</button>
+    </div>
   </div>
   <div class="pause-save-msg" id="pause-save-msg">✓ GAME SAVED</div>
 </div>
@@ -1768,10 +1772,70 @@ renderer.shadowMap.enabled = false;
 renderer.setClearColor(0x080810);
 
 const scene  = new THREE.Scene();
+
+// ── 3rd person ceiling + sky — simple approach ──────────────────────
+// Ceiling: sits at WALL_H, only visible when camera is above looking down
+// We DON'T use a blocking plane — instead just tint the clear color
+// Sky dome: use a simple large box (no shader) as environment backdrop
+const _ceilingMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(120,120),
+  new THREE.MeshLambertMaterial({color:0x141418,side:THREE.FrontSide})
+);
+_ceilingMesh.rotation.x=-Math.PI/2; // face DOWN so camera above sees it
+_ceilingMesh.position.y=4.4;
+_ceilingMesh.visible=false;
+scene.add(_ceilingMesh);
+// Beam grid on ceiling
+const _ceilBeams=new THREE.Group();
+for(let i=-5;i<=5;i++){
+  const bx=new THREE.Mesh(new THREE.BoxGeometry(120,.1,.3),new THREE.MeshLambertMaterial({color:0x0d0d12}));
+  bx.position.set(0,4.42,i*11);_ceilBeams.add(bx);
+  const bz=new THREE.Mesh(new THREE.BoxGeometry(.3,.1,120),new THREE.MeshLambertMaterial({color:0x0d0d12}));
+  bz.position.set(i*11,4.42,0);_ceilBeams.add(bz);
+}
+_ceilBeams.visible=false;
+scene.add(_ceilBeams);
+// Sky — large simple hemisphere-like box backdrop (no shader needed)
+const _skyDome={visible:false}; // stub — we use renderer clear color instead
+const _stars=new THREE.Points(
+  (()=>{const g=new THREE.BufferGeometry();const v=[];
+    for(let i=0;i<400;i++){const t=Math.random()*Math.PI*2,p=Math.acos(Math.random()*.7+.15),r=110;v.push(r*Math.sin(p)*Math.cos(t),r*Math.cos(p),r*Math.sin(p)*Math.sin(t));}
+    g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));return g;})(),
+  new THREE.PointsMaterial({color:0xaaaacc,size:.6,transparent:true,opacity:.8})
+);
+_stars.visible=false;
+scene.add(_stars);
 scene.fog    = new THREE.FogExp2(0x080810, 0.012); // reduced fog so map is visible
 const camera = new THREE.PerspectiveCamera(52, window.innerWidth/window.innerHeight, 0.1, 200);
 const CAM_OFF = new THREE.Vector3(0, 24, 18);
 let _camLook = new THREE.Vector3();
+let _camMode = 'top'; // 'top' or 'third'
+
+function toggleCameraMode(){
+  _camMode = _camMode === 'top' ? 'third' : 'top';
+  const btn = document.getElementById('s-cam-btn');
+  if(btn) btn.textContent = _camMode === 'top' ? 'TOP-DOWN' : '3RD PERSON';
+  // Snap camera immediately to avoid the lerp-from-far-away black frame
+  if(Player.mesh){
+    const pp = Player.mesh.position;
+    const facing = Player.facing || new THREE.Vector3(0,0,-1);
+    if(_camMode==='third'){
+      const rightX=-facing.z,rightZ=facing.x;
+      camera.position.set(
+        pp.x - facing.x*7.0 + rightX*0.9,
+        pp.y + 3.2,
+        pp.z - facing.z*7.0 + rightZ*0.9
+      );
+      _camLook.set(pp.x+facing.x*9,pp.y+1.3,pp.z+facing.z*9);
+    } else {
+      camera.position.copy(pp).add(CAM_OFF);
+      _camLook.copy(pp);
+    }
+    camera.lookAt(_camLook);
+  }
+  try{localStorage.setItem('az_cammode', _camMode);}catch(e){}
+  showBanner(_camMode === 'third' ? '3RD PERSON — OVER SHOULDER' : 'TOP-DOWN MODE', 1500);
+}
 const clock  = new THREE.Clock();
 const _ray   = new THREE.Raycaster();
 const _gPlaneNormal = new THREE.Vector3(0,1,0);
@@ -1970,27 +2034,171 @@ const Map3D = {
 
   _buildMesh(g,G){
     const off=-(G/2)*C.CELL;
-    const mF=new THREE.MeshLambertMaterial({color:0x1c1c2a});
-    const mW=new THREE.MeshLambertMaterial({color:0x242436});
+    const z=Zone.zone||1;
+    // Color palette shifts with zone depth — early zones industrial grey, deep zones alien/tech
+    const floorCol = z<=5?0x1a1a22:z<=15?0x161620:z<=30?0x12121a:0x0e0e16;
+    const wallCol  = z<=5?0x222230:z<=15?0x1c1c2c:z<=30?0x18182a:0x141424;
+    const trimCol  = z<=5?0x2a2a3a:z<=15?0x242438:z<=30?0x1e1e32:0x18182a;
+    const accentCol= z<=5?0x334455:z<=15?0x2a3348:z<=30?0x22334a:0x1a2840;
+
+    const mF=new THREE.MeshLambertMaterial({color:floorCol});
+    const mW=new THREE.MeshLambertMaterial({color:wallCol});
+    const mT=new THREE.MeshLambertMaterial({color:trimCol});
+    const mA=new THREE.MeshLambertMaterial({color:accentCol});
     const gFl=new THREE.BoxGeometry(C.CELL,.25,C.CELL);
     const gWZ=new THREE.BoxGeometry(C.CELL+.2,C.WALL_H,.25);
     const gWX=new THREE.BoxGeometry(.25,C.WALL_H,C.CELL+.2);
-    for(let z=0;z<G;z++)for(let x=0;x<G;x++){
-      if(!g[z][x])continue;
-      const wx=off+x*C.CELL+C.CELL/2,wz=off+z*C.CELL+C.CELL/2;
+
+    for(let z2=0;z2<G;z2++)for(let x=0;x<G;x++){
+      if(!g[z2][x])continue;
+      const wx=off+x*C.CELL+C.CELL/2,wz=off+z2*C.CELL+C.CELL/2;
+
+      // Floor tile with slight edge trim
       const fl=new THREE.Mesh(gFl,mF);fl.position.set(wx,-.12,wz);this.group.add(fl);
-      for(const[,dx,dz]of[['N',0,-1],['S',0,1],['W',-1,0],['E',1,0]]){
-        const nx=x+dx,nz=z+dz;
-        if(nx<0||nx>=G||nz<0||nz>=G||!g[nz][nx]){
+      // Floor trim line (alternating grid pattern)
+      if((x+z2)%2===0){
+        const trim=new THREE.Mesh(new THREE.BoxGeometry(C.CELL-.2,.04,C.CELL-.2),mT);
+        trim.position.set(wx,.02,wz);this.group.add(trim);
+      }
+
+      for(const[dir,dx,dz]of[['N',0,-1],['S',0,1],['W',-1,0],['E',1,0]]){
+        const nx=x+dx,nz2=z2+dz;
+        if(nx<0||nx>=G||nz2<0||nz2>=G||!g[nz2][nx]){
+          // Main wall
           const w=new THREE.Mesh(dz!==0?gWZ:gWX,mW);
           w.position.set(wx+dx*C.CELL/2,C.WALL_H/2,wz+dz*C.CELL/2);
           this.group.add(w);this.collidables.push(w);
+
+          // ── Wall detail ──────────────────────────────────────────
+          const wpx=wx+dx*C.CELL/2,wpz=wz+dz*C.CELL/2;
+
+          // Base skirting board — darker trim at floor level
+          const skirt=new THREE.Mesh(
+            dz!==0?new THREE.BoxGeometry(C.CELL,.22,.12):new THREE.BoxGeometry(.12,.22,C.CELL),
+            new THREE.MeshLambertMaterial({color:0x0d0d14})
+          );
+          skirt.position.set(wpx,.11,wpz);this.group.add(skirt);
+
+          // Upper wall panel band — lighter accent
+          const panel=new THREE.Mesh(
+            dz!==0?new THREE.BoxGeometry(C.CELL-.4,.3,.1):new THREE.BoxGeometry(.1,.3,C.CELL-.4),
+            mA
+          );
+          panel.position.set(wpx,C.WALL_H*.72,wpz);this.group.add(panel);
+
+          // ── Window on outer walls (rooms only, not corridors) ───
+          // Windows appear roughly every other wall segment
+          if(Math.random()<.35&&C.WALL_H>3){
+            const winW=dz!==0?1.6:.12,winH=1.1,winD=dz!==0?.12:1.6;
+            const winFrame=new THREE.Mesh(
+              new THREE.BoxGeometry(winW+.14,winH+.14,winD+.14),
+              new THREE.MeshLambertMaterial({color:0x1a1a2a})
+            );
+            winFrame.position.set(wpx,C.WALL_H*.52,wpz);this.group.add(winFrame);
+            // Glass — slightly emissive teal/blue
+            const glassColor=z<=5?0x004466:z<=15?0x003355:0x002244;
+            const glass=new THREE.Mesh(
+              new THREE.BoxGeometry(winW,winH,winD),
+              new THREE.MeshLambertMaterial({color:glassColor,emissive:new THREE.Color(glassColor),emissiveIntensity:.15,transparent:true,opacity:.7})
+            );
+            glass.position.set(wpx,C.WALL_H*.52,wpz);this.group.add(glass);
+            // Window light spill
+            if(Math.random()<.4){
+              const wl=new THREE.PointLight(0x003366,.4,6);
+              wl.position.set(wpx+dx*.5,C.WALL_H*.52,wpz+dz*.5);
+              this.group.add(wl);this.lights.push(wl);
+            }
+          }
+
+          // ── Vent grate on lower wall ─────────────────────────────
+          if(Math.random()<.2){
+            const vent=new THREE.Mesh(
+              dz!==0?new THREE.BoxGeometry(.9,.3,.08):new THREE.BoxGeometry(.08,.3,.9),
+              new THREE.MeshLambertMaterial({color:0x111118})
+            );
+            vent.position.set(wpx,.5,wpz);this.group.add(vent);
+            // Vent slats
+            for(let vi=0;vi<4;vi++){
+              const slat=new THREE.Mesh(
+                dz!==0?new THREE.BoxGeometry(.85,.03,.1):new THREE.BoxGeometry(.1,.03,.85),
+                new THREE.MeshLambertMaterial({color:0x0a0a12})
+              );
+              slat.position.set(wpx,.36+vi*.075,wpz);this.group.add(slat);
+            }
+          }
         }
       }
     }
+
+    // ── Per-room detail ──────────────────────────────────────────────
     for(const r of this.rooms){
       const cx=off+(r.x+r.w/2)*C.CELL,cz=off+(r.z+r.h/2)*C.CELL;
-      // Add multiple candidate spawn points per room (center + 4 quadrants)
+      const rw=r.w*C.CELL,rh=r.h*C.CELL;
+
+      // Ceiling light fixture — overhead strip/panel light
+      const fixW=Math.min(rw*.6,4),fixD=Math.min(rh*.6,4);
+      const fixture=new THREE.Mesh(
+        new THREE.BoxGeometry(fixW,.06,fixD),
+        new THREE.MeshLambertMaterial({color:0x2a2a3a})
+      );
+      fixture.position.set(cx,C.WALL_H-.14,cz);this.group.add(fixture);
+      // Light panel (emissive)
+      const panel=new THREE.Mesh(
+        new THREE.BoxGeometry(fixW-.2,.04,fixD-.2),
+        new THREE.MeshLambertMaterial({
+          color:r.type==='boss_room'?0x330000:0x8899aa,
+          emissive:new THREE.Color(r.type==='boss_room'?0x220000:0x445566),
+          emissiveIntensity:.6
+        })
+      );
+      panel.position.set(cx,C.WALL_H-.12,cz);this.group.add(panel);
+
+      // Room light
+      const lightCol=r.type==='boss_room'?0xff1100:r.type==='start'?0x3366aa:0x4466aa;
+      const intensity=r.type==='boss_room'?3.5:2.5;
+      const pl=new THREE.PointLight(lightCol,intensity,Math.max(rw,rh)+6);
+      pl.position.set(cx,C.WALL_H-.8,cz);
+      this.group.add(pl);this.lights.push(pl);
+
+      // Secondary fill lights in large rooms
+      if(r.w>6||r.h>6){
+        [[-.3,.3],[.3,-.3]].forEach(([ox,oz])=>{
+          const fl2=new THREE.PointLight(0x223344,1.2,(Math.max(rw,rh)/2)+3);
+          fl2.position.set(cx+rw*ox,C.WALL_H-.9,cz+rh*oz);
+          this.group.add(fl2);this.lights.push(fl2);
+        });
+      }
+
+      // Floor hazard stripes in boss room
+      if(r.type==='boss_room'){
+        for(let i=-2;i<=2;i++){
+          const stripe=new THREE.Mesh(
+            new THREE.BoxGeometry(rw*.8,.04,.25),
+            new THREE.MeshLambertMaterial({color:i%2===0?0x220000:0x1a1a1a})
+          );
+          stripe.position.set(cx,.01,cz+i*.5);this.group.add(stripe);
+        }
+      }
+
+      // Cover objects — crates, pillars
+      const numCover=Math.max(1,~~((r.w*r.h)/20));
+      for(let ci=0;ci<numCover;ci++){
+        const angle=(ci/numCover)*Math.PI*2+Math.random()*.5;
+        const dist=(Math.min(rw,rh)/2*.6);
+        const ox=Math.cos(angle)*dist,oz=Math.sin(angle)*dist;
+        const covH=.8+Math.random()*.8;
+        const cov=new THREE.Mesh(
+          new THREE.BoxGeometry(.9,covH,.9),
+          new THREE.MeshLambertMaterial({color:r.type==='warehouse'?0x3a2a10:0x1a1a28})
+        );
+        cov.position.set(cx+ox,.4+covH/2,cz+oz);this.group.add(cov);
+        cov.userData.solidBB={min:{x:cx+ox-.55,y:0,z:cz+oz-.55},max:{x:cx+ox+.55,y:2,z:cz+oz+.55}};
+        this.furniture.push(cov);
+        // Cover point nearby
+        this.coverPts.push(new THREE.Vector3(cx+ox+Math.cos(angle+.5),0,cz+oz+Math.sin(angle+.5)));
+      }
+
+      // Candidate spawn points
       const candidates=[
         new THREE.Vector3(cx,0,cz),
         new THREE.Vector3(off+(r.x+r.w*.25)*C.CELL,0,off+(r.z+r.h*.25)*C.CELL),
@@ -2425,7 +2633,7 @@ const Loot = {
       if(d.beam&&d.beam.material)d.beam.material.opacity=.35+Math.sin(d.age*3)*.18;
       if(!d.mesh)continue;
       const dx=d.mesh.position.x-pp.x,dz=d.mesh.position.z-pp.z;
-      if(dx*dx+dz*dz<C.PICKUP_R2){d.dead=true;if(d.item.kind==='weapon')Player.pickupWeapon(d.item);else Armor.offer(d.item);try{Audio.pickup();}catch(e){}UI.lootPickup(d.item);}
+      if(dx*dx+dz*dz<C.PICKUP_R2){d.dead=true;if(d.item.kind==='weapon')Player.pickupWeapon(d.item);else Armor.offer(d.item);try{Audio.pickupRarity(d.item.rarity);}catch(e){}UI.lootPickup(d.item);}
     }
   },
 };
@@ -2779,6 +2987,7 @@ const Enemies = {
     }
     // Regenerator modifier
     if(e.modifier==='REGENERATOR'&&e.hp<e.maxHp*.3)e.hp=Math.min(e.maxHp,e.hp+dmg*.1);
+    try{Audio.bulletHit(isCrit);}catch(ex){}
     if(e.hp<=0)this._kill(e);else e.state='chase';
   },
 
@@ -2890,22 +3099,97 @@ const Enemies = {
           if(!Map3D.isFloor(prevX,ep.z))ep.z=prevZ;
         }
       }else{
-        if(e.state==='chase'||e.state==='idle'){
+        // ── Type-specific AI ──────────────────────────────────────
+        if(e.key==='SNIPER'){
+          // Sniper: hold distance 14-20u, strafe side to side, only shoots when stationary
+          const idealDist=16;
+          e.stateTimer+=dt;
+          if(dist<idealDist-2){
+            // Back away from player
+            const prevX=ep.x,prevZ=ep.z;
+            ep.x-=dx/dist*spd*.7*dt;
+            if(!Map3D.isFloor(ep.x,ep.z))ep.x=prevX;
+            ep.z-=dz/dist*spd*.7*dt;
+            if(!Map3D.isFloor(ep.x,ep.z))ep.z=prevZ;
+          } else if(dist>idealDist+2){
+            // Approach to ideal range
+            const prevX=ep.x,prevZ=ep.z;
+            ep.x+=dx/dist*spd*.5*dt;
+            if(!Map3D.isFloor(ep.x,ep.z))ep.x=prevX;
+            ep.z+=dz/dist*spd*.5*dt;
+            if(!Map3D.isFloor(ep.x,ep.z))ep.z=prevZ;
+          } else {
+            // At ideal range — strafe perpendicular
+            if(e.stateTimer>2){e._strafeDir=Math.sign(Math.random()-.5);e.stateTimer=0;}
+            const sx=-dz/dist,sz=dx/dist;
+            const prevX=ep.x,prevZ=ep.z;
+            ep.x+=sx*(e._strafeDir||1)*spd*.4*dt;
+            if(!Map3D.isFloor(ep.x,ep.z))ep.x=prevX;
+            ep.z+=sz*(e._strafeDir||1)*spd*.4*dt;
+            if(!Map3D.isFloor(ep.x,ep.z))ep.z=prevZ;
+          }
+          e.mesh.rotation.y=Math.atan2(dx,dz);
+
+        } else if(e.key==='RUSHER'){
+          // Rusher: sprint directly, attempt to flank by approaching at a 45° angle
+          e._flankAngle=e._flankAngle||((Math.random()-.5)*Math.PI*.5);
+          const fa=e._flankAngle;
+          const fdx=dx*Math.cos(fa)-dz*Math.sin(fa);
+          const fdz=dx*Math.sin(fa)+dz*Math.cos(fa);
+          const fm=Math.sqrt(fdx*fdx+fdz*fdz);
+          if(fm>.1){
+            const prevX=ep.x,prevZ=ep.z;
+            ep.x+=fdx/fm*spd*1.2*dt;
+            if(!Map3D.isFloor(ep.x,ep.z))ep.x=prevX;
+            ep.z+=fdz/fm*spd*1.2*dt;
+            if(!Map3D.isFloor(ep.x,ep.z)){ep.z=prevZ;e._flankAngle=0;}
+          }
+          if(dist<3)e.state='attack';
+          e.mesh.rotation.y=Math.atan2(dx,dz);
+
+        } else if(e.key==='HEAVY'){
+          // Heavy: slow advance, stop and suppress at range 8-12, suppression bursts
+          e.stateTimer+=dt;
+          const suppressDist=10;
+          if(dist>suppressDist){
+            // Slowly advance
+            const prevX=ep.x,prevZ=ep.z;
+            ep.x+=dx/dist*spd*.6*dt;
+            if(!Map3D.isFloor(ep.x,ep.z))ep.x=prevX;
+            ep.z+=dz/dist*spd*.6*dt;
+            if(!Map3D.isFloor(ep.x,ep.z))ep.z=prevZ;
+          } else {
+            // Suppression position — shuffle slightly but mostly hold
+            if(e.stateTimer>1.5){
+              const shuffle=(Math.random()-.5)*2;
+              const prevX=ep.x,prevZ=ep.z;
+              ep.x+=(-dz/dist)*shuffle*dt;
+              if(!Map3D.isFloor(ep.x,ep.z))ep.x=prevX;
+              e.stateTimer=0;
+            }
+          }
+          e.state=dist<4?'attack':'chase';
+          e.mesh.rotation.y=Math.atan2(dx,dz);
+
+        } else if(e.state==='chase'||e.state==='idle'){
+          // SOLDIER/ELITE: standard chase with occasional cover seek
           e.state='chase';
-          if(dist>5){
+          if(dist>4){
             const prevX=ep.x,prevZ=ep.z;
             ep.x+=dx/dist*spd*dt;
             if(!Map3D.isFloor(ep.x,ep.z)||Map3D.hitFurniture(ep.x,ep.z))ep.x=prevX;
             ep.z+=dz/dist*spd*dt;
             if(!Map3D.isFloor(ep.x,ep.z)||Map3D.hitFurniture(ep.x,ep.z))ep.z=prevZ;
-          }
-          else e.state='attack';
+          } else e.state='attack';
           if(e.stateTimer>3+Math.random()*2&&Map3D.coverPts.length>0){
             let best=null,bd=Infinity;
             for(const cp of Map3D.coverPts){const cd=cp.distanceTo(ep);if(cd<10&&cd<bd){bd=cd;best=cp;}}
             if(best){e.coverTarget=best;e.state='cover';e.stateTimer=0;}
           }
-        }else if(e.state==='cover'&&e.coverTarget){
+          e.mesh.rotation.y=Math.atan2(dx,dz);
+        }
+        // Cover state applies to soldier/elite only
+        if(e.state==='cover'&&e.coverTarget){
           const cdx=e.coverTarget.x-ep.x,cdz=e.coverTarget.z-ep.z,cd=Math.sqrt(cdx*cdx+cdz*cdz);
           if(cd>.6){
             const prevX=ep.x,prevZ=ep.z;
@@ -3421,15 +3705,18 @@ const Player={
     this._legR=new THREE.Group();this._legR.position.set(.2,.9,0);root.add(this._legR);
     const ll=box(.3,.68,.32,0x1a2818);ll.position.set(0,-.34,0);this._legL.add(ll);
     const rl=box(.3,.68,.32,0x1a2818);rl.position.set(0,-.34,0);this._legR.add(rl);
-    const lb=box(.28,.22,.44,0x111111);lb.position.set(0,-.73,.04);this._legL.add(lb);
-    const rb=box(.28,.22,.44,0x111111);rb.position.set(0,-.73,.04);this._legR.add(rb);
+    const lb=box(.28,.22,.44,0x111111);lb.position.set(0,-.73,-.04);this._legL.add(lb);
+    const rb=box(.28,.22,.44,0x111111);rb.position.set(0,-.73,-.04);this._legR.add(rb);
 
     // ── Torso ──
     const torso=box(.72,.72,.52,uCol);torso.position.set(0,1.08,0);root.add(torso);
 
     // ── Body Armor overlay ──
     if(barmor==='light'){
+      // Front plate
       const vest=box(.68,.64,.14,0x0d0d0d);vest.position.set(0,1.1,.3);root.add(vest);
+      // Back plate — matching dark panel on rear of character
+      const vestB=box(.68,.64,.1,0x0a0a14);vestB.position.set(0,1.1,-.28);root.add(vestB);
       [[-.22,1.02],[.22,1.02],[-.22,.86],[.22,.86],[0,.92]].forEach(([x,y])=>{
         const p=box(.13,.14,.1,0x1a1a1a);p.position.set(x,y,.37);root.add(p);});
     } else if(barmor==='medium'){
@@ -3458,7 +3745,7 @@ const Player={
       const bt=new THREE.CanvasTexture(bc);
       // DoubleSide so it shows regardless of face direction
       // Rotate Y by PI so it faces -Z (the character's front after +PI mesh rotation)
-      const bm=new THREE.MeshBasicMaterial({map:bt,transparent:true,side:THREE.DoubleSide});
+      const bm=new THREE.MeshBasicMaterial({map:bt,transparent:true,side:THREE.FrontSide});
       const badgeZ=barmor==='light'?-.32:barmor==='medium'?-.36:-.38;
       const badge=new THREE.Mesh(new THREE.PlaneGeometry(.52,.17),bm);
       badge.position.set(0,1.06,badgeZ);
@@ -3541,10 +3828,20 @@ const Player={
       }
     }
 
-    // ── Weapon model — matches equipped weapon type, faces forward ──
+    // ── Weapon model — attached to ROOT at forward-right position ──
+    // Arms are rotated to visually "hold" the weapon position
     this._weaponGroup=new THREE.Group();
-    this._weaponGroup.position.set(.4,1.05,0);
+    // Centered forward, chest height. Local -Z = world forward (away from camera).
+    this._weaponGroup.position.set(.18, 0.94, -.48);
+    this._weaponGroup.rotation.x = 0.05;
     root.add(this._weaponGroup);
+
+    // Arms reach FORWARD (local -Z). R_x(+θ) on arm (0,-1,0) → z' = -sinθ < 0 ✓
+    this._armR.rotation.x = 1.15;  // right arm grips weapon
+    this._armR.rotation.z = 0.14;  // cant inward to center
+    this._armL.rotation.x = 0.9;   // left arm braces below
+    this._armL.rotation.z = -0.14; // cant inward to center
+
     this._updateWeaponMesh();
 
     // ── Vest label userData (for StyleSystem) ──
@@ -3932,7 +4229,20 @@ const Player={
     let mx=0,mz=0;
     if(IS_MOB){mx=Input.moveX;mz=Input.moveZ;}
     else{if(Input.down('KeyW')||Input.down('ArrowUp'))mz-=1;if(Input.down('KeyS')||Input.down('ArrowDown'))mz+=1;if(Input.down('KeyA')||Input.down('ArrowLeft'))mx-=1;if(Input.down('KeyD')||Input.down('ArrowRight'))mx+=1;}
+
+    // In 3rd person: remap left-stick to camera-relative world movement
+    // Left stick up = forward along facing, right = strafe along right vector
+    if(_camMode==='third'&&gameState===GS.MISSION&&(Math.abs(mx)+Math.abs(mz))>.05){
+      const fx=this.facing.x,fz=this.facing.z;
+      const rx=-fz,rz=fx; // right vector perpendicular to facing
+      const rawMag=Math.hypot(mx,mz);
+      const nmx=mx/rawMag,nmz=mz/rawMag; // normalize raw stick
+      mx=(rx*nmx + fx*(-nmz))*rawMag;
+      mz=(rz*nmx + fz*(-nmz))*rawMag;
+    }
+
     const mag=Math.hypot(mx,mz);
+
 
     if(!this.dodging){
       const stats=Armor.getStats();
@@ -3974,8 +4284,9 @@ const Player={
         // ── Walking Animation ──
         this._walkT+=dt*(sprint?2.2:1.5);
         const swing=Math.sin(this._walkT*5.5)*(sprint?.42:.28);
-        if(this._armL)this._armL.rotation.x=swing;
-        if(this._armR)this._armR.rotation.x=-swing;
+        // Arms swing around their forward-held base angle
+        if(this._armL)this._armL.rotation.x=0.85+swing*.35;
+        if(this._armR)this._armR.rotation.x=1.1-swing*.2;
         if(this._legL)this._legL.rotation.x=-swing*.8;
         if(this._legR)this._legR.rotation.x=swing*.8;
         // ── Footstep audio ──
@@ -3988,7 +4299,7 @@ const Player={
         // ── Dodge while stationary ──
         const doDodge=Input.down('Space')||(IS_MOB&&Input.mDodge);
         if(doDodge&&this.dodgeCd<=0){const dodgeCdMult=1-SkillTree.nodes.dodgeUp.lvl*.25;this.dodging=true;this.dodgeTimer=.22;this.dodgeCd=1.4*dodgeCdMult;this.dodgeDir.copy(this.facing);Input.mDodge=false;}
-        if(this._armL){this._armL.rotation.x*=.82;this._armR.rotation.x*=.82;}
+        if(this._armL){this._armL.rotation.x+=(0.85-this._armL.rotation.x)*.18;this._armR.rotation.x+=(1.1-this._armR.rotation.x)*.18;}
         if(this._legL){this._legL.rotation.x*=.82;this._legR.rotation.x*=.82;}
       }
     }
@@ -4037,18 +4348,73 @@ const Player={
     if(IS_MOB){
       const aiming=(Math.abs(Input.aimX)+Math.abs(Input.aimZ))>.2;
       const moving=mag>.05;
-      if(aiming){
-        this.facing.set(Input.aimX,0,Input.aimZ).normalize();
-        // +PI because mesh front faces -Z
-        this.mesh.rotation.y=Math.atan2(Input.aimX,Input.aimZ)+Math.PI;
-      } else if(moving){
-        const tx=mx/Math.max(mag,.001),tz=mz/Math.max(mag,.001);
-        this.facing.set(tx,0,tz).normalize();
-        const targetAngle=Math.atan2(tx,tz)+Math.PI;
-        let diff=targetAngle-this.mesh.rotation.y;
-        while(diff>Math.PI)diff-=Math.PI*2;
-        while(diff<-Math.PI)diff+=Math.PI*2;
-        this.mesh.rotation.y+=diff*Math.min(1,dt*14);
+      if(_camMode==='third'&&gameState===GS.MISSION){
+        // In 3rd person — smooth facing from right stick
+        if(aiming){
+          const targetFX=Input.aimX,targetFZ=Input.aimZ;
+          const tMag=Math.hypot(targetFX,targetFZ);
+          if(tMag>.08){
+            const turnSpeed=8.0;
+            const nFX=targetFX/tMag,nFZ=targetFZ/tMag;
+            this.facing.x+=(nFX-this.facing.x)*Math.min(1,turnSpeed*dt);
+            this.facing.z+=(nFZ-this.facing.z)*Math.min(1,turnSpeed*dt);
+            const fmag=Math.hypot(this.facing.x,this.facing.z);
+            if(fmag>.001){this.facing.x/=fmag;this.facing.z/=fmag;}
+            this.mesh.rotation.y=Math.atan2(this.facing.x,this.facing.z)+Math.PI;
+          }
+        } else if(moving){
+          // No aim stick — update facing from movement direction
+          // so bullets travel the way you're actually running
+          const rawX=Input.moveX,rawZ=Input.moveZ;
+          const rmag=Math.hypot(rawX,rawZ);
+          if(rmag>.1){
+            const fx=this.facing.x,fz=this.facing.z;
+            const rx=-fz,rz=fx;
+            const wdx=rx*(rawX/rmag)+fx*(-rawZ/rmag);
+            const wdz=rz*(rawX/rmag)+fz*(-rawZ/rmag);
+            const wmag=Math.hypot(wdx,wdz);
+            if(wmag>.01){
+              const turnSpeed=5.0;
+              this.facing.x+=(wdx/wmag-this.facing.x)*Math.min(1,turnSpeed*dt);
+              this.facing.z+=(wdz/wmag-this.facing.z)*Math.min(1,turnSpeed*dt);
+              const fmag=Math.hypot(this.facing.x,this.facing.z);
+              if(fmag>.001){this.facing.x/=fmag;this.facing.z/=fmag;}
+              this.mesh.rotation.y=Math.atan2(this.facing.x,this.facing.z)+Math.PI;
+            }
+          }
+        }
+        // When moving without aiming, player body turns to face movement direction
+        // but facing stays locked to right stick
+        if(!aiming&&moving){
+          const rawX=Input.moveX,rawZ=Input.moveZ;
+          const rmag=Math.hypot(rawX,rawZ);
+          if(rmag>.05){
+            // Rotate body toward camera-relative movement direction (smooth lean)
+            const fx=this.facing.x,fz=this.facing.z;
+            const rx=-fz,rz=fx;
+            const wdx=rx*(rawX/rmag)+fx*(-rawZ/rmag);
+            const wdz=rz*(rawX/rmag)+fz*(-rawZ/rmag);
+            const targetAngle=Math.atan2(wdx,wdz)+Math.PI;
+            let diff=targetAngle-this.mesh.rotation.y;
+            while(diff>Math.PI)diff-=Math.PI*2;
+            while(diff<-Math.PI)diff+=Math.PI*2;
+            this.mesh.rotation.y+=diff*Math.min(1,dt*8);
+          }
+        }
+      } else {
+        // Top-down: original behavior
+        if(aiming){
+          this.facing.set(Input.aimX,0,Input.aimZ).normalize();
+          this.mesh.rotation.y=Math.atan2(Input.aimX,Input.aimZ)+Math.PI;
+        } else if(moving){
+          const tx=mx/Math.max(mag,.001),tz=mz/Math.max(mag,.001);
+          this.facing.set(tx,0,tz).normalize();
+          const targetAngle=Math.atan2(tx,tz)+Math.PI;
+          let diff=targetAngle-this.mesh.rotation.y;
+          while(diff>Math.PI)diff-=Math.PI*2;
+          while(diff<-Math.PI)diff+=Math.PI*2;
+          this.mesh.rotation.y+=diff*Math.min(1,dt*14);
+        }
       }
     } else {
       // Desktop — face mouse cursor
@@ -5031,6 +5397,26 @@ function _spawnEnemies(){
   });
   Zone.killsToNext=Enemies.list.length;
   Zone._hud();
+  // Zone lore — story reason to go deeper
+  const _LORE=[
+    'SECTOR ALPHA — First contact. They knew you were coming.',
+    'SECTOR BRAVO — Comms intercepted: "Kill on sight. Leave no trace."',
+    'SECTOR CHARLIE — A name keeps appearing in enemy data: DIRECTOR.',
+    'SECTOR DELTA — The deeper you go, the older the tech. Someone built this place long ago.',
+    'SECTOR ECHO — Evidence of civilian disappearances. 47 names. The trail leads down.',
+    'SECTOR FOXTROT — Intercepted order: "Do not let them reach Sub-Level 6."',
+    'SECTOR GHOST — This area was scrubbed from all maps. You found it anyway.',
+    'SECTOR ZERO — The Director is here. Everything that happened led to this floor.',
+    'SECTOR SIGMA — They thought you were dead. They were wrong.',
+    'SECTOR OMEGA — Final protocol activated. Someone wants this place buried.',
+    'VOID SECTOR — No records. No names. Only the mission.',
+    'NEXUS — The signal source. Whatever they are building, it ends here.',
+    'ABYSS LEVEL — You have gone further than any operative before. Keep going.',
+    'PRIME SECTOR — The architecture changes. This was never meant to be found.',
+    'NULL ZONE — Classified beyond your clearance. Press forward anyway.',
+  ];
+  const loreIdx=(Zone.zone-1)%_LORE.length;
+  setTimeout(()=>showBanner(_LORE[loreIdx],3500),1200);
   // Tycoon gameplay effects on zone start
   try{
     if(Player._ammoPress&&Player.weapon){Player.weapon.currentAmmo=Player.weapon.magazine;UI.updateWeaponAmmo();}
@@ -6800,10 +7186,73 @@ function loop(){
     HubWorld.update();
     flicker(dt);
     if(Player.mesh){
-      const tgt=Player.mesh.position.clone().add(CAM_OFF);
-      camera.position.lerp(tgt,7*dt);
-      _camLook.lerp(Player.mesh.position,7*dt);
-      camera.lookAt(_camLook);
+      if(_camMode==='third'&&gameState===GS.MISSION){
+        // ── Over-RIGHT-shoulder — Resident Evil / Division style ──
+        const pp = Player.mesh.position;
+        const facing = Player.facing || new THREE.Vector3(0,0,-1);
+        const rightX = -facing.z;
+        const rightZ =  facing.x;
+
+        // Camera below ceiling (4.4) — height 3.2 so ceiling is visible above player
+        const behindDist = 7.0;
+        const rightOffset = 0.9;
+        const heightOffset = 3.2;
+
+        const targetCamX = pp.x - facing.x * behindDist + rightX * rightOffset;
+        const targetCamY = pp.y + heightOffset;
+        const targetCamZ = pp.z - facing.z * behindDist + rightZ * rightOffset;
+
+        camera.position.x += (targetCamX - camera.position.x) * Math.min(1, 10*dt);
+        camera.position.y += (targetCamY - camera.position.y) * Math.min(1, 6*dt);
+        camera.position.z += (targetCamZ - camera.position.z) * Math.min(1, 10*dt);
+
+        // Wall collision — push camera back toward player if it clips into a wall
+        try{
+          const camX=camera.position.x,camZ=camera.position.z;
+          if(!Map3D.isFloor(camX,camZ)){
+            // Find safe position along player→camera ray
+            let safe=0.1;
+            for(let t2=0.1;t2<=1.0;t2+=0.1){
+              const tx2=pp.x+(camX-pp.x)*t2;
+              const tz2=pp.z+(camZ-pp.z)*t2;
+              if(Map3D.isFloor(tx2,tz2))safe=t2;else break;
+            }
+            camera.position.x=pp.x+(camX-pp.x)*safe;
+            camera.position.z=pp.z+(camZ-pp.z)*safe;
+          }
+        }catch(e){}
+
+        const lookAheadDist = 9.0;
+        const lookTgtX = pp.x + facing.x * lookAheadDist + rightX * 0.3;
+        const lookTgtY = pp.y + 1.3;
+        const lookTgtZ = pp.z + facing.z * lookAheadDist + rightZ * 0.3;
+        _camLook.x += (lookTgtX - _camLook.x) * Math.min(1, 14*dt);
+        _camLook.y += (lookTgtY - _camLook.y) * Math.min(1, 8*dt);
+        _camLook.z += (lookTgtZ - _camLook.z) * Math.min(1, 14*dt);
+        camera.lookAt(_camLook);
+
+        // ── Ceiling (indoor) / stars (outdoor) ─────────────────────
+        try{
+          const isIndoor = Map3D.isFloor(pp.x, pp.z);
+          _ceilingMesh.position.set(pp.x, 4.4, pp.z);
+          _ceilingMesh.visible = isIndoor;
+          _ceilBeams.position.set(pp.x, 0, pp.z);
+          _ceilBeams.visible = isIndoor;
+          _stars.position.set(pp.x, 0, pp.z);
+          _stars.visible = !isIndoor;
+          renderer.setClearColor(isIndoor ? 0x070709 : 0x05050d);
+        }catch(e){}
+
+      } else {
+        // ── Top-down camera (default) ──────────────────────────────
+        if(_ceilingMesh)_ceilingMesh.visible=false;
+        if(_skyDome)_skyDome.visible=false;
+        renderer.setClearColor(0x080810);
+        const tgt = Player.mesh.position.clone().add(CAM_OFF);
+        camera.position.lerp(tgt, 7*dt);
+        _camLook.lerp(Player.mesh.position, 7*dt);
+        camera.lookAt(_camLook);
+      }
     }
     UI.drawMinimap();
   }catch(ex){
@@ -7811,15 +8260,72 @@ const Audio={
     n.connect(f);f.connect(g);g.connect(this.sfxGain);n.start(t);n.stop(t+.2);
   },
 
-  pickup(){
+  enemyDie(){
     if(!this.ctx)return;this._r();const t=this.ctx.currentTime;
-    [880,1108,1320].forEach((freq,i)=>{
-      const st=t+i*.065;
+    const n=this._noise(.18),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain();
+    f.type='bandpass';f.frequency.value=700;
+    g.gain.setValueAtTime(.4,t);g.gain.exponentialRampToValueAtTime(.001,t+.18);
+    n.connect(f);f.connect(g);g.connect(this.sfxGain);n.start(t);n.stop(t+.2);
+  },
+
+  // Bullet impact — short metallic thwack
+  bulletHit(isCrit){
+    if(!this.ctx)return;this._r();const t=this.ctx.currentTime;
+    const n=this._noise(.04),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain();
+    f.type='highpass';f.frequency.value=isCrit?2200:1400;
+    const vol=isCrit?.35:.18;
+    g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+.06);
+    n.connect(f);f.connect(g);g.connect(this.sfxGain);n.start(t);n.stop(t+.07);
+    if(isCrit){// Extra crack for crits
+      const o=this.ctx.createOscillator(),g2=this.ctx.createGain();
+      o.frequency.value=180;g2.gain.setValueAtTime(.12,t);g2.gain.exponentialRampToValueAtTime(.001,t+.06);
+      o.connect(g2);g2.connect(this.sfxGain);o.start(t);o.stop(t+.07);
+    }
+  },
+
+  // Loot pickup — varies by rarity
+  pickupRarity(rarity){
+    if(!this.ctx)return;this._r();const t=this.ctx.currentTime;
+    if(rarity==='LEGENDARY'||rarity==='EXOTIC'){
+      // Ascending golden fanfare — 6 notes
+      [523,659,784,1047,1319,1568].forEach((f2,i)=>{
+        const st=t+i*.075;
+        const o=this.ctx.createOscillator(),g=this.ctx.createGain();
+        o.type='triangle';o.frequency.value=f2;
+        g.gain.setValueAtTime(.3,st);g.gain.exponentialRampToValueAtTime(.001,st+.22);
+        o.connect(g);g.connect(this.sfxGain);o.start(st);o.stop(st+.25);
+      });
+      // Gold shimmer noise
+      const n=this._noise(.5),gn=this.ctx.createGain(),fi=this.ctx.createBiquadFilter();
+      fi.type='highpass';fi.frequency.value=3000;
+      gn.gain.setValueAtTime(.08,t);gn.gain.exponentialRampToValueAtTime(.001,t+.5);
+      n.connect(fi);fi.connect(gn);gn.connect(this.sfxGain);n.start(t);n.stop(t+.5);
+    } else if(rarity==='EPIC'){
+      [659,880,1108].forEach((f2,i)=>{
+        const st=t+i*.07;
+        const o=this.ctx.createOscillator(),g=this.ctx.createGain();
+        o.type='sine';o.frequency.value=f2;
+        g.gain.setValueAtTime(.22,st);g.gain.exponentialRampToValueAtTime(.001,st+.18);
+        o.connect(g);g.connect(this.sfxGain);o.start(st);o.stop(st+.2);
+      });
+    } else if(rarity==='RARE'){
+      [523,659,784].forEach((f2,i)=>{
+        const st=t+i*.065;
+        const o=this.ctx.createOscillator(),g=this.ctx.createGain();
+        o.frequency.value=f2;
+        g.gain.setValueAtTime(.18,st);g.gain.exponentialRampToValueAtTime(.001,st+.14);
+        o.connect(g);g.connect(this.sfxGain);o.start(st);o.stop(st+.17);
+      });
+    } else {
+      // Common — quiet blip
       const o=this.ctx.createOscillator(),g=this.ctx.createGain();
-      o.frequency.value=freq;
-      g.gain.setValueAtTime(.24,st);g.gain.exponentialRampToValueAtTime(.001,st+.14);
-      o.connect(g);g.connect(this.sfxGain);o.start(st);o.stop(st+.17);
-    });
+      o.frequency.value=660;g.gain.setValueAtTime(.1,t);g.gain.exponentialRampToValueAtTime(.001,t+.06);
+      o.connect(g);g.connect(this.sfxGain);o.start(t);o.stop(t+.07);
+    }
+  },
+
+  pickup(){
+    this.pickupRarity('UNCOMMON');
   },
 
   levelUp(){
@@ -11365,18 +11871,33 @@ Skills.activate=function(i){
 
 // Measure hub header height so tabs stick correctly below it
 const UPDATES=[
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Interactive 3D hub — walk around Shadow City, tap NPCs to open their shops'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Market stalls — each vendor has a themed stall with counter, awning & NPC'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Full fishing overhaul — cast meter, tension bar, 20 fish across 5 rarities'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Fishing ambient audio — dark drone, water drips, industrial thuds'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Hub Tycoon — 30 upgrades in 6 tiers, buy land and build your base'},
-  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Zone portal now correctly returns you to active mission'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Quest system — NPC dialog quests at zones 1/3/5/7/10'},
-  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Taper Fade hair replaces broken Dreads — new icon + 3D mesh'},
-  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Dragonborn + Commander Shepard mercs with FUS RO DAH & Biotic Charge'},
-  {date:'RECENT',tag:'NEW',col:'#3498db',text:'George Droid merc — yoinks ammo, says need fent, wildly inconsistent'},
-  {date:'RECENT',tag:'NEW',col:'#3498db',text:'FATE-style grave — all items drop on death, walk over to recover'},
-  {date:'RECENT',tag:'FIX',col:'#3498db',text:'Grenade throw distance reduced. Goldeneye rattling fixed'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'3RD PERSON MODE — over-right-shoulder camera like RE4 & The Division. Toggle in Settings'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'3rd person movement fixed — left stick now moves relative to camera direction, no spin loop'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Sky dome when outdoors in 3rd person — gradient night sky with 300 stars'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Ceiling geometry when indoors in 3rd person — concrete slab with beam grid'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Weapon models — 9 detailed weapon types with proper geometry (pistol/SMG/AR/shotgun/sniper/LMG/rocket/grenade/plasma)'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Weapon attachments visible on model — red dot, suppressor, drum mag, laser sight all show as geometry'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Enemy tactical suits — each type has unique gear: soldier (plate carrier), elite (exo-suit/red visor), heavy (juggernaut), rusher (street gang), sniper (ghillie)'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Enemies hold matching weapons — soldiers carry AR, heavies LMG, rushers SMG, snipers bolt-action'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Enemy weapons no longer backwards — barrel now faces forward correctly'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Gypsy Crusader merc — Joker cosplay, JOKER\'S GAMBIT passive rolls random buff/debuff each zone'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'George Droid rebuilt — half dark skin / half chrome cyborg with glowing red eye, matching reference image'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Merc wanderers in hub fixed — all non-active mercs patrol plaza with walk animation'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Companion follows player in hub with walk animation'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Sheriff Buford T. Justice merc — PURSUIT MANDATE: +40% credits, stun on kill with Smokey quotes'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Identify system — take unidentified RARE+ loot to Weapon Dealer or Armory to reveal affixes for 50 CR'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Item affixes — 17 roll modifiers: BRUTAL/RAPID/VAMPIRIC/EXPLOSIVE/CRYO/ELECTRIC and more'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Item sets — 4 sets × 5 pieces: Ironclad, Shadow Operative, Reactor Core, Agent Zero with set bonuses'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Weapon attachments replace gems — 17 tactical attachments across 5 slots (OPTIC/MUZZLE/MAG/GRIP/UNDERBARREL)'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Boss loot fountain — bosses explode into a surge of EPIC/LEGENDARY drops with screen flash'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Subclasses at level 5 — Assault/Ghost/Engineer/Berserker each change grenade + grant unique passive'},
+  {date:'RECENT',tag:'NEW',col:'#3498db',text:'Hub tycoon building — each upgrade adds actual 3D geometry (walls, roof, command center, med bay)'},
+  {date:'RECENT',tag:'FIX',col:'#3498db',text:'Horse racing repeatable — _racing flag reset + button binding fixed after each race'},
+  {date:'OLDER',tag:'NEW',col:'#9b59b6',text:'World Tiers every 10 zones — Torchlight-style infinite scaling with reward multiplier'},
+  {date:'OLDER',tag:'NEW',col:'#9b59b6',text:'Zone modifiers — FRENZY/ARMORED/VOLLEY/ELITE WAVE/HORDE/HAUNTED/BONANZA'},
+  {date:'OLDER',tag:'NEW',col:'#9b59b6',text:'28-node skill tree across 4 branches: Combat/Survival/Tech/Operative'},
+  {date:'OLDER',tag:'NEW',col:'#9b59b6',text:'15 procedural music tracks — BLACKSITE/VENDETTA/NIGHT DRIVE/REACTOR/SECTOR ZERO added'},
+  {date:'OLDER',tag:'FIX',col:'#9b59b6',text:'Shooting fixed — fireTimer never decremented in Player.update (one line, massive bug)'},
 ];
 function _renderWhatsNew(){
   const el=document.getElementById('whats-new-list');if(!el)return;
@@ -11437,6 +11958,11 @@ try{BattlePass.load();}catch(e){}
 try{HubTycoon.load();}catch(e){}
 try{Quests.load();}catch(e){}
 try{Mercs._load();}catch(e){}
+// Load camera mode
+try{const cm=localStorage.getItem('az_cammode');if(cm){_camMode=cm;const btn=document.getElementById('s-cam-btn');if(btn)btn.textContent=cm==='third'?'3RD PERSON':'TOP-DOWN';
+// Snap camera if starting in 3rd person
+if(cm==='third'&&Player.mesh){const pp=Player.mesh.position;const f=Player.facing||new THREE.Vector3(0,0,-1);const rx=-f.z;camera.position.set(pp.x-f.x*8+rx*1,pp.y+5,pp.z-f.z*8+(f.x)*1);_camLook.set(pp.x+f.x*8,pp.y+1.6,pp.z+f.z*8);camera.lookAt(_camLook);}
+}}catch(e){}
 
 // unlockAudio is called by the TAP TO START screen onclick
 function unlockAudio(){
