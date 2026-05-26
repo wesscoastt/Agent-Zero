@@ -1485,6 +1485,15 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
 <!-- Fishing prompt OUTSIDE hud so position:fixed works correctly on iOS -->
 <div id="fishing-prompt" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,20,10,.95);border:2px solid rgba(0,255,100,.55);padding:14px 32px;font-family:'Courier New',monospace;font-size:14px;letter-spacing:4px;color:#00ff88;z-index:30;white-space:nowrap;-webkit-tap-highlight-color:transparent;box-shadow:0 0 28px rgba(0,255,100,.2);border-radius:2px" onclick="Fishing.openNearest()" ontouchend="event.preventDefault();Fishing.openNearest()">🎣 FISH HERE</div>
   <div id="dmg-layer"></div>
+  <!-- 3rd person crosshair -->
+  <div id="crosshair" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:200">
+    <div style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.9);box-shadow:0 0 4px rgba(0,0,0,0.8),0 0 8px rgba(255,255,255,0.3)"></div>
+    <!-- Subtle corner brackets around center -->
+    <div style="position:absolute;top:-7px;left:-7px;width:5px;height:5px;border-top:1.5px solid rgba(255,255,255,0.6);border-left:1.5px solid rgba(255,255,255,0.6)"></div>
+    <div style="position:absolute;top:-7px;right:-7px;width:5px;height:5px;border-top:1.5px solid rgba(255,255,255,0.6);border-right:1.5px solid rgba(255,255,255,0.6)"></div>
+    <div style="position:absolute;bottom:-7px;left:-7px;width:5px;height:5px;border-bottom:1.5px solid rgba(255,255,255,0.6);border-left:1.5px solid rgba(255,255,255,0.6)"></div>
+    <div style="position:absolute;bottom:-7px;right:-7px;width:5px;height:5px;border-bottom:1.5px solid rgba(255,255,255,0.6);border-right:1.5px solid rgba(255,255,255,0.6)"></div>
+  </div>
   <div id="dmg-flash"></div>
   <div id="skill-notify"></div>
   <div id="headshot-text">HEADSHOT</div>
@@ -1824,6 +1833,8 @@ function toggleCameraMode(){
   _camMode = _camMode === 'top' ? 'third' : 'top';
   const btn = document.getElementById('s-cam-btn');
   if(btn) btn.textContent = _camMode === 'top' ? 'TOP-DOWN' : '3RD PERSON';
+  const xh = document.getElementById('crosshair');
+  if(xh) xh.style.display = _camMode==='third' ? 'block' : 'none';
   // Snap camera immediately to avoid the lerp-from-far-away black frame
   if(Player.mesh){
     const pp = Player.mesh.position;
@@ -2667,6 +2678,17 @@ const Loot = {
     };
   },
 
+  spawnDropAt(item,x,z){
+    const info=RARITY[item.rarity]||RARITY.UNCOMMON;
+    const geo=item.kind==='armor'?new THREE.BoxGeometry(.5,.5,.5):new THREE.OctahedronGeometry(.34,0);
+    const mesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:info.hex}));
+    mesh.position.set(x,.5,z);scene.add(mesh);
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,3.5,6),new THREE.MeshBasicMaterial({color:info.hex,transparent:true,opacity:.55}));
+    beam.position.set(x,2.0,z);scene.add(beam);
+    const glow=new THREE.PointLight(info.hex,2.5,5);glow.position.copy(mesh.position);scene.add(glow);
+    this.drops.push({mesh,glow,beam,item,rar:item.rarity,age:0,dead:false});
+  },
+
   spawnDrop(x,z,rar,forceArmor){
     rar=rar||this.rollRarity();
     const item=(forceArmor||Math.random()<.4)?this.genArmor(rar):this.genWeapon(rar);
@@ -2725,7 +2747,15 @@ const Armor = {
     if(a&&a.unidentified){showBanner('IDENTIFY FIRST — TAKE TO WEAPON DEALER IN HUB',2000);try{Audio.uiClick();}catch(e){}return;}
     const old=this.equipped[a.slot];if(old)this._bag(old);this.equipped[a.slot]=a;Player.recalc();InvUI.refresh();
   },
-  _bag(item){if(this.bag.length>=this.MAX_BAG)this.bag.shift();this.bag.push(item);InvUI.refresh();},
+  _bag(item){
+    if(this.bag.length>=this.MAX_BAG){
+      showBanner('🎒 BAG FULL ('+this.MAX_BAG+' SLOTS) — BUY MORE SPACE AT THE HUB',2500);
+      // Drop to ground near player instead of losing
+      if(Player.mesh)try{Loot.spawnDropAt(item,Player.mesh.position.x+(Math.random()-.5)*3,Player.mesh.position.z+(Math.random()-.5)*3);}catch(e){}
+      return false;
+    }
+    this.bag.push(item);InvUI.refresh();return true;
+  },
   getStats(){let arm=0,hp=0,spd=0,cdr=0;for(const k in this.equipped){const p=this.equipped[k];if(!p)continue;arm+=p.armor;hp+=p.healthBonus;spd+=p.speedBonus;cdr+=p.cdrBonus;}return{armor:arm,hp,spd,cdr};},
   save(){return{equipped:this.equipped,bag:this.bag};},
   load(d){if(d){this.equipped=d.equipped||this.equipped;this.bag=d.bag||[];}},
@@ -3284,6 +3314,13 @@ const Enemies = {
           Bullets.fire(ep.clone().add(new THREE.Vector3(0,1.1,0)),new THREE.Vector3(dx,0,dz),e.T.dmg*(isBerserk?1.5:1),false,.08);
         }
         if(!e.isDrone&&dist>14&&e.stateTimer>1.5){e.state='chase';e.stateTimer=0;}
+      }
+      // ── Separation — push enemy out if overlapping player ──────────
+      if(!e.isDrone&&dist<1.2&&dist>0.01){
+        const pushStr=Math.min(6,(1.2-dist)*8)*dt;
+        ep.x-=dx/dist*pushStr;
+        ep.z-=dz/dist*pushStr;
+        e.mesh.position.set(ep.x,ep.y,ep.z);
       }
       // Face player and update HP bar — wrapped in try/catch so one bad enemy can't crash the loop
       try{
@@ -3860,13 +3897,13 @@ const Player={
       else if(hair==='buzz'){const h=box(.44,.06,.42,0x333333);h.position.set(0,2.03,0);root.add(h);}
       else if(hair==='dreads'||hair==='fade'){
         // Taper fade — flat top with tight sides
-        const ft=new THREE.Mesh(new THREE.BoxGeometry(.44,.1,.42),M(hairHex));ft.position.set(0,2.06,0);root.add(ft);
-        const ft2=new THREE.Mesh(new THREE.BoxGeometry(.4,.08,.38),M(hairHex));ft2.position.set(0,2.0,0);root.add(ft2);
+        const ft=new THREE.Mesh(new THREE.BoxGeometry(.44,.1,.42),M(hairCol));ft.position.set(0,2.06,0);root.add(ft);
+        const ft2=new THREE.Mesh(new THREE.BoxGeometry(.4,.08,.38),M(hairCol));ft2.position.set(0,2.0,0);root.add(ft2);
       }
     } else {
       // Show hair under certain hats
       if((hat==='beanie'||hat==='cap')&&(hair==='dreads'||hair==='fade')){
-        const ft=new THREE.Mesh(new THREE.BoxGeometry(.4,.08,.38),M(hairHex));ft.position.set(0,2.0,0);root.add(ft);
+        const ft=new THREE.Mesh(new THREE.BoxGeometry(.4,.08,.38),M(hairCol));ft.position.set(0,2.0,0);root.add(ft);
       }
     }
 
@@ -4035,10 +4072,35 @@ const Player={
       const cheek=box(.08,.06,.14,DK);cheek.position.set(0,.1,.1);g.add(cheek);
       // Pistol grip
       const grip=box(.07,.18,.07,MK);grip.position.set(0,-.12,-.24);g.add(grip);
-      // Scope rail (scope added as attachment below)
+      // Scope rail
       const rail=box(.06,.02,.28,LK);rail.position.set(0,.08,-.3);g.add(rail);
       const mag=box(.06,.12,.05,rc);mag.position.set(0,-.1,-.3);g.add(mag);
       const str=box(.01,.07,.74,rc,.4);str.position.set(-.045,.01,-.37);g.add(str);
+      // ── Built-in scope — always present on snipers ──
+      // Scope tube — long cylinder body
+      const scopeTube=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,.42,10),M(DK));
+      scopeTube.rotation.x=Math.PI/2;scopeTube.position.set(0,.16,-.28);g.add(scopeTube);
+      // Scope turret (elevation knob)
+      const turretV=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,.08,8),M(MK));
+      turretV.position.set(0,.21,-.26);g.add(turretV);
+      // Windage knob
+      const turretH=new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,.07,8),M(MK));
+      turretH.rotation.z=Math.PI/2;turretH.position.set(.07,.18,-.26);g.add(turretH);
+      // Scope bell (front objective lens — wider)
+      const frontBell=new THREE.Mesh(new THREE.CylinderGeometry(.065,.045,.06,10),M(MK));
+      frontBell.rotation.x=Math.PI/2;frontBell.position.set(0,.16,-.48);g.add(frontBell);
+      // Front lens (dark glass with rarity tint)
+      const frontLens=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.02,10),new THREE.MeshLambertMaterial({color:0x001133,emissive:new THREE.Color(rc),transparent:true,opacity:.7}));
+      frontLens.rotation.x=Math.PI/2;frontLens.position.set(0,.16,-.5);g.add(frontLens);
+      // Rear bell (eyepiece — slightly wider)
+      const rearBell=new THREE.Mesh(new THREE.CylinderGeometry(.055,.045,.05,10),M(MK));
+      rearBell.rotation.x=Math.PI/2;rearBell.position.set(0,.16,-.08);g.add(rearBell);
+      // Scope mount rings clamping to rail
+      [-.2,-.36].forEach(z=>{
+        const ring=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,.04,10),M(LK));
+        ring.rotation.x=Math.PI/2;ring.position.set(0,.16,z);g.add(ring);
+        const clamp=box(.06,.04,.04,LK);clamp.position.set(0,.1,z);g.add(clamp);
+      });
 
     }else if(t==='LMG'){
       // Heavy receiver
@@ -4269,34 +4331,42 @@ const Player={
   },
 
   autoEquipBest(){
-    // Equip highest-damage weapon from bag
-    const allWeapons=[...this.weaponBag];
-    if(this.weapon)allWeapons.push(this.weapon);
-    allWeapons.sort((a,b)=>b.damage-a.damage);
+    let equipped=[];
+    // Best weapon from bag (not unidentified)
+    const allWeapons=[...this.weaponBag.filter(w=>!w.unidentified)];
+    if(this.weapon&&!this.weapon.unidentified)allWeapons.push(this.weapon);
     if(allWeapons.length>0){
-      this.weapon=allWeapons[0];
-      this.weaponBag=allWeapons.slice(1);
-      this._updateWeaponMesh();
-      UI.updateWeaponHUD();
+      allWeapons.sort((a,b)=>b.damage-a.damage);
+      if(!this.weapon||allWeapons[0].damage>this.weapon.damage){
+        if(this.weapon)this.weaponBag.unshift(this.weapon);
+        this.weapon=allWeapons[0];
+        this.weaponBag=this.weaponBag.filter(w=>w!==this.weapon).slice(0,4);
+        this._updateWeaponMesh();UI.updateWeaponHUD();
+        equipped.push(this.weapon.name.split(' ').slice(0,2).join(' '));
+      }
     }
-    // Auto-equip best armor from stash
+    // Best armor from bag AND stash (not unidentified)
     const slots=['helmet','chest','gloves','kneepads','backpack'];
-    const stash=HubSystem.stash||[];
-    const armor=stash.filter(i=>i&&i.kind==='armor');
+    const allArmor=[...Armor.bag,...(HubSystem.stash||[])].filter(a=>a&&a.kind==='armor'&&!a.unidentified);
     for(const slot of slots){
-      const candidates=armor.filter(a=>a.slot===slot);
+      const candidates=allArmor.filter(a=>a.slot===slot);
       if(!candidates.length)continue;
       candidates.sort((a,b)=>(b.armor||0)-(a.armor||0));
       const best=candidates[0];
       const current=Armor.equipped[slot];
       if(!current||(best.armor||0)>(current.armor||0)){
-        Armor.equip(best);
-        HubSystem.stash=HubSystem.stash.filter(x=>x!==best);
-        if(current)HubSystem.stash.push(current);
+        // Move current back to bag
+        if(current){Armor.bag=Armor.bag.filter(x=>x!==best);Armor.bag.push(current);}
+        else Armor.bag=Armor.bag.filter(x=>x!==best);
+        HubSystem.stash=(HubSystem.stash||[]).filter(x=>x!==best);
+        Armor.equipped[slot]=best;
+        equipped.push(best.name.split(' ').slice(0,2).join(' '));
       }
     }
+    try{Player.recalc();}catch(e){}
     try{InvUI.refresh();}catch(ex){}
-    showBanner('⬆ BEST GEAR EQUIPPED');
+    if(equipped.length>0)showBanner('⬆ EQUIPPED: '+equipped.slice(0,3).join(', '),2500);
+    else showBanner('⬆ ALREADY OPTIMAL LOADOUT');
     Audio.uiClick();
     Save.save();
   },
@@ -5480,6 +5550,10 @@ function _spawnEnemies(){
       let key;
       if(isEliteWave||(isLast&&z>=3&&Math.random()<.7)||(Math.random()<eliteChance))key='ELITE';
       else key=canSpawn[~~(Math.random()*canSpawn.length)];
+      // Don't spawn inside furniture — check cover BBs
+      let blocked=false;
+      try{for(const f of Map3D.furniture){const bb=f.userData?.solidBB;if(!bb)continue;if(ex>=(bb.min?.x??bb.minX)&&ex<=(bb.max?.x??bb.maxX)&&ez>=(bb.min?.z??bb.minZ)&&ez<=(bb.max?.z??bb.maxZ)){blocked=true;break;}}}catch(fe){}
+      if(blocked)continue;
       const e=Enemies.spawn(new THREE.Vector3(ex,0,ez),key);
       if(e)e.state='dormant';
     }
@@ -7897,10 +7971,10 @@ const Audio={
       // Cold synth bass
       const cf=[55,55,41,46,55,62,55,49];
       this._osc('sawtooth',cf[bar%8]/2,t,B*3.8,.35,D);
-      // Icy high synth lead
+      // Icy high synth lead — sine not square to avoid buzz/rattle
       if(bar%2===0){
         const iceNotes=[523,659,784,698,523,440];
-        iceNotes.forEach((f,i)=>this._osc('square',f,t+i*B*.66,B*.5,.025,D));
+        iceNotes.forEach((f,i)=>this._osc('sine',f,t+i*B*.66,B*.5,.022,D));
       }
       this._pad007([55,69,82,98],t,B*4,.03,D);
       if(bar%4===0)this._strings([220,277,330],t,B*2,.035,D);
@@ -9387,12 +9461,12 @@ const LoginReward={
   KEY:'az_login',
   REWARDS:[
     {day:1, icon:'💰', name:'CREDITS BONUS',   val:'+200 CR',   color:'#f1c40f', apply(){Player.credits+=200;}},
-    {day:2, icon:'🔫', name:'RARE WEAPON',      val:'RARE DROP', color:'#3498db', apply(){Player.pickupWeapon(Loot.genWeapon('RARE'));}},
+    {day:2, icon:'🔫', name:'RARE WEAPON',      val:'RARE DROP', color:'#3498db', apply(){const w=Loot.genWeapon('RARE');if(!Player.weapon){Player.weapon=w;try{Player._updateWeaponMesh();UI.updateWeaponHUD();}catch(e){}}else{Player.weaponBag.unshift(w);if(Player.weaponBag.length>8)Player.weaponBag.pop();}showBanner('🔫 RARE WEAPON ADDED TO BAG',2000);}},
     {day:3, icon:'💰', name:'CREDITS BONUS',   val:'+500 CR',   color:'#f1c40f', apply(){Player.credits+=500;}},
-    {day:4, icon:'🛡', name:'EPIC ARMOR PIECE', val:'EPIC DROP', color:'#9b59b6', apply(){Armor.equip(Loot.genArmor('EPIC'));}},
+    {day:4, icon:'🛡', name:'EPIC ARMOR PIECE', val:'EPIC DROP', color:'#9b59b6', apply(){const a=Loot.genArmor('EPIC');if(Armor.bag.length<Armor.MAX_BAG){Armor.bag.push(a);showBanner('🛡 EPIC ARMOR IN BAG — IDENTIFY & EQUIP',2000);}else{try{Loot.spawnDropAt(a,Player.mesh?Player.mesh.position.x+2:2,Player.mesh?Player.mesh.position.z:0);}catch(e){}showBanner('🛡 BAG FULL — EPIC ARMOR DROPPED NEARBY',2000);}}},
     {day:5, icon:'💰', name:'CREDITS BONUS',   val:'+1000 CR',  color:'#f1c40f', apply(){Player.credits+=1000;}},
-    {day:6, icon:'⚡', name:'LEGENDARY WEAPON', val:'LEGENDARY', color:'#f39c12', apply(){Player.pickupWeapon(Loot.genWeapon('LEGENDARY'));}},
-    {day:7, icon:'🔴', name:'EXOTIC DROP',      val:'EXOTIC',    color:'#e74c3c', apply(){Player.pickupWeapon(Loot.genWeapon('EXOTIC'));Player.credits+=2000;}},
+    {day:6, icon:'⚡', name:'LEGENDARY WEAPON', val:'LEGENDARY', color:'#f39c12', apply(){const w=Loot.genWeapon('LEGENDARY');Player.weaponBag.unshift(w);if(Player.weaponBag.length>8)Player.weaponBag.pop();showBanner('⚡ LEGENDARY WEAPON IN BAG — CHECK INVENTORY!',3000);}},
+    {day:7, icon:'🔴', name:'EXOTIC DROP',      val:'EXOTIC',    color:'#e74c3c', apply(){const w=Loot.genWeapon('EXOTIC');Player.weaponBag.unshift(w);if(Player.weaponBag.length>8)Player.weaponBag.pop();Player.credits+=2000;showBanner('🔴 EXOTIC WEAPON IN BAG! CHECK INVENTORY!',3000);}},
   ],
 
   load(){try{return JSON.parse(localStorage.getItem(this.KEY));}catch{return null;}},
@@ -12052,6 +12126,7 @@ try{Quests.load();}catch(e){}
 try{Mercs._load();}catch(e){}
 // Load camera mode
 try{const cm=localStorage.getItem('az_cammode');if(cm){_camMode=cm;const btn=document.getElementById('s-cam-btn');if(btn)btn.textContent=cm==='third'?'3RD PERSON':'TOP-DOWN';
+const xh=document.getElementById('crosshair');if(xh)xh.style.display=cm==='third'?'block':'none';
 // Snap camera if starting in 3rd person
 if(cm==='third'&&Player.mesh){const pp=Player.mesh.position;const f=Player.facing||new THREE.Vector3(0,0,-1);const rx=-f.z;camera.position.set(pp.x-f.x*8+rx*1,pp.y+5,pp.z-f.z*8+(f.x)*1);_camLook.set(pp.x+f.x*8,pp.y+1.6,pp.z+f.z*8);camera.lookAt(_camLook);}
 }}catch(e){}
