@@ -5966,6 +5966,9 @@ function togglePause(){
   _paused=!_paused;
   gameRunning=!_paused;
   document.getElementById('pause-screen').classList.toggle('on',_paused);
+  // Hide crosshair when paused
+  const xhair=document.getElementById('crosshair');
+  if(xhair)xhair.style.display=(_paused||_camMode!=='third')?'none':'block';
   if(_paused){
     // Suspend game music without triggering menu music restart
     if(Audio.ctx&&Audio.gameGain){
