@@ -5805,14 +5805,19 @@ function hubContinueRun(){
   // Show/hide crosshair based on camera mode
   try{_updateCrosshair();}catch(e){}
   // Don't respawn enemies — preserve zone state exactly as left
-  const aliveCount=Enemies.list.filter(e=>e.alive).length;
-  if(aliveCount===0&&Enemies.list.length===0){
-    // Zone was fully completed before going to hub - advance zone
+  // Count enemies that were alive when we left (saved on hub enter)
+  const savedAlive = HubWorld._savedAliveCount != null ? HubWorld._savedAliveCount : Enemies.list.filter(e=>e.alive).length;
+  HubWorld._savedAliveCount = null;
+
+  if(savedAlive <= 0){
+    // Zone was fully completed before going to hub — advance zone
     Zone.zone++;
+    Enemies.list=[];
     try{_spawnEnemies();}catch(e){}
     showBanner('ZONE '+Zone.zone+' — ENEMIES INCOMING');
   } else {
-    showBanner('BACK IN THE FIELD — '+aliveCount+' ENEMIES REMAIN');
+    // Enemies still alive — they're still in Enemies.list, just return
+    showBanner('BACK IN THE FIELD — '+Enemies.list.filter(e=>e.alive).length+' ENEMIES REMAIN');
   }
   try{Zone._hud();}catch(e){}
   try{UI.updateBars();}catch(e){}
@@ -11046,6 +11051,7 @@ const HubWorld={
     const hubAmb=new THREE.AmbientLight(0x1a1a44,.7);hubAmb.name='hub_ambient';scene.add(hubAmb);
     // Save player's in-mission position
     this._savedPlayerPos=Player.mesh?Player.mesh.position.clone():null;
+    this._savedAliveCount=Enemies.list.filter(e=>e.alive).length;
     // Show hub geometry, hide mission geometry
     if(this._group)this._group.visible=true;
     if(Map3D.group)Map3D.group.visible=false;
