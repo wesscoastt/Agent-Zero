@@ -1485,10 +1485,8 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
 <!-- Fishing prompt OUTSIDE hud so position:fixed works correctly on iOS -->
 <div id="fishing-prompt" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,20,10,.95);border:2px solid rgba(0,255,100,.55);padding:14px 32px;font-family:'Courier New',monospace;font-size:14px;letter-spacing:4px;color:#00ff88;z-index:30;white-space:nowrap;-webkit-tap-highlight-color:transparent;box-shadow:0 0 28px rgba(0,255,100,.2);border-radius:2px" onclick="Fishing.openNearest()" ontouchend="event.preventDefault();Fishing.openNearest()">🎣 FISH HERE</div>
   <div id="dmg-layer"></div>
-  <!-- 3rd person crosshair -->
-  <div id="crosshair" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:200">
-    <div style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.9);box-shadow:0 0 4px rgba(0,0,0,0.8),0 0 8px rgba(255,255,255,0.3)"></div>
-    <!-- Subtle corner brackets around center -->
+  <div id="crosshair" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:15">&nbsp;
+    <div style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.9);box-shadow:0 0 4px rgba(0,0,0,0.8)"></div>
     <div style="position:absolute;top:-7px;left:-7px;width:5px;height:5px;border-top:1.5px solid rgba(255,255,255,0.6);border-left:1.5px solid rgba(255,255,255,0.6)"></div>
     <div style="position:absolute;top:-7px;right:-7px;width:5px;height:5px;border-top:1.5px solid rgba(255,255,255,0.6);border-right:1.5px solid rgba(255,255,255,0.6)"></div>
     <div style="position:absolute;bottom:-7px;left:-7px;width:5px;height:5px;border-bottom:1.5px solid rgba(255,255,255,0.6);border-left:1.5px solid rgba(255,255,255,0.6)"></div>
@@ -1829,12 +1827,19 @@ const CAM_OFF = new THREE.Vector3(0, 24, 18);
 let _camLook = new THREE.Vector3();
 let _camMode = 'top'; // 'top' or 'third'
 
+function _updateCrosshair(){
+  const xh=document.getElementById('crosshair');
+  if(!xh)return;
+  // Only show in 3rd person mode, during active mission, not paused
+  xh.style.display=(_camMode==='third'&&gameState===GS.MISSION&&!_paused)?'block':'none';
+}
 function toggleCameraMode(){
   _camMode = _camMode === 'top' ? 'third' : 'top';
   const btn = document.getElementById('s-cam-btn');
   if(btn) btn.textContent = _camMode === 'top' ? 'TOP-DOWN' : '3RD PERSON';
   const xh = document.getElementById('crosshair');
   if(xh) xh.style.display = _camMode==='third' ? 'block' : 'none';
+  _updateCrosshair();
   // Snap camera immediately to avoid the lerp-from-far-away black frame
   if(Player.mesh){
     const pp = Player.mesh.position;
@@ -1963,6 +1968,7 @@ function setState(s) {
     HubWorld.leave();
   }
   document.getElementById('hud').style.display = (s===GS.MISSION)?'block':'none';
+  try{_updateCrosshair();}catch(e){}
   document.getElementById('btn-pause').style.display = (s===GS.MISSION)?'flex':'none';
   document.getElementById('pause-screen').classList.remove('on');
   document.getElementById('fullmap-screen').classList.remove('on');
@@ -4509,8 +4515,9 @@ const Player={
         if(aiming){
           const targetFX=Input.aimX,targetFZ=Input.aimZ;
           const tMag=Math.hypot(targetFX,targetFZ);
-          if(tMag>.08){
-            const turnSpeed=8.0;
+          if(tMag>.15){ // higher deadzone = less jitter
+            // Progressive: slow near center (comfortable), faster at full stick
+            const turnSpeed=2.5+tMag*4.0; // 2.5–6.5 range
             const nFX=targetFX/tMag,nFZ=targetFZ/tMag;
             this.facing.x+=(nFX-this.facing.x)*Math.min(1,turnSpeed*dt);
             this.facing.z+=(nFZ-this.facing.z)*Math.min(1,turnSpeed*dt);
@@ -5788,7 +5795,7 @@ function hubContinueRun(){
   if(cr)cr.style.display='none';
   setState(GS.MISSION);
   gameRunning=true;
-  // Place player back where they were (or startPos if no saved position)
+  // Place player back where they were
   if(Player.mesh&&Map3D.rooms&&Map3D.rooms.length>0){
     let px,pz;
     if(HubWorld._savedPlayerPos&&Map3D.isFloor(HubWorld._savedPlayerPos.x,HubWorld._savedPlayerPos.z)){
@@ -5801,19 +5808,21 @@ function hubContinueRun(){
     _camLook.copy(Player.mesh.position);camera.lookAt(_camLook);
     HubWorld._savedPlayerPos=null;
   }
-  // Respawn enemies if zone was cleared before hub visit
+  // Show/hide crosshair based on camera mode
+  try{_updateCrosshair();}catch(e){}
+  // Don't respawn enemies — preserve zone state exactly as left
   const aliveCount=Enemies.list.filter(e=>e.alive).length;
-  if(aliveCount===0){
+  if(aliveCount===0&&Enemies.list.length===0){
+    // Zone was fully completed before going to hub - advance zone
+    Zone.zone++;
     try{_spawnEnemies();}catch(e){}
-    showBanner('ENEMIES RESPAWNED — GOOD LUCK');
+    showBanner('ZONE '+Zone.zone+' — ENEMIES INCOMING');
   } else {
-    showBanner('BACK IN THE FIELD');
+    showBanner('BACK IN THE FIELD — '+aliveCount+' ENEMIES REMAIN');
   }
-  // Refresh HUD
   try{Zone._hud();}catch(e){}
   try{UI.updateBars();}catch(e){}
-  // Spawn companion mesh
-  if(Mercs.active){try{Mercs.spawnMesh();}catch(e){console.warn('Merc spawn:',e);}}
+  if(Mercs.active){try{Mercs.spawnMesh();}catch(e){}}
   Player._spawnShield=true;
   const sv=document.getElementById('shield-vfx');if(sv)sv.classList.add('on');
   setTimeout(()=>{Player._spawnShield=false;if(sv)sv.classList.remove('on');},3000);
@@ -5966,9 +5975,7 @@ function togglePause(){
   _paused=!_paused;
   gameRunning=!_paused;
   document.getElementById('pause-screen').classList.toggle('on',_paused);
-  // Hide crosshair when paused
-  const xhair=document.getElementById('crosshair');
-  if(xhair)xhair.style.display=(_paused||_camMode!=='third')?'none':'block';
+  _updateCrosshair();
   if(_paused){
     // Suspend game music without triggering menu music restart
     if(Audio.ctx&&Audio.gameGain){
@@ -11600,6 +11607,11 @@ Boss._kill=function(){
   document.body.appendChild(sf);
   setTimeout(()=>{sf.style.opacity='0';setTimeout(()=>sf.remove(),600);},150);
   showBanner('⚡ '+T.name+' DEFEATED — LOOT SURGE! ×'+dropCount+' DROPS',3500);
+  // Guaranteed 2 attachments from boss
+  try{
+    for(let ai=0;ai<2;ai++){const att=dropAttachment();Player._attachmentBag=Player._attachmentBag||[];Player._attachmentBag.push(att);}
+    showBanner('🔧 ×2 ATTACHMENTS FROM BOSS — CHECK ARMORY',2500);
+  }catch(e){}
   try{Particles.burst(pos,0xffd700,IS_MOB?20:40);}catch(e){}
   try{const fl=new THREE.PointLight(0xffd700,25,20);fl.position.copy(pos);scene.add(fl);setTimeout(()=>scene.remove(fl),500);}catch(e){}
   try{Player.gainXP(800+Zone.zone*50);}catch(e){}
@@ -11913,12 +11925,13 @@ Enemies._kill=function(e){
   if(Player._bufordActive&&Math.random()<.15){
     try{const quotes=['"YOU SUMABITCH!"','"ILLEGAL U-TURN!"','"I\'M GONNA NAIL YOUR ASS!"','"STOP RIGHT THERE!"'];showBanner(quotes[~~(Math.random()*quotes.length)]+' — PURSUIT MANDATE',1600);for(const te of Enemies.list){if(!te.alive)continue;const dx=te.mesh.position.x-bp.x,dz=te.mesh.position.z-bp.z;if(dx*dx+dz*dz<196)Enemies.stun(te,2);}try{Audio.uiClick();}catch(e){}}catch(ex){}
   }
-  // Attachment drop (replaces gems — lore friendly)
-  if(Math.random()<(elite?.10:.025)){
+  // Attachment drop — much more frequent so players actually see them like Torchlight gems
+  // Elite: 35%, Normal: 12%, Boss: handled separately
+  if(Math.random()<(elite?.35:.12)){
     const att=dropAttachment();
     Player._attachmentBag=Player._attachmentBag||[];
     Player._attachmentBag.push(att);
-    showBanner('🔧 ATTACHMENT: '+att.name+' ['+att.slot+'] — '+att.desc,2500);
+    showBanner('🔧 '+att.name+' ['+att.slot+'] — '+att.desc,2000);
   }
   // Pet XP
   try{if(Mercs.active)Mercs.gainXP(elite?12:5);}catch(ex){}
