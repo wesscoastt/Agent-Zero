@@ -1485,13 +1485,7 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
 <!-- Fishing prompt OUTSIDE hud so position:fixed works correctly on iOS -->
 <div id="fishing-prompt" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,20,10,.95);border:2px solid rgba(0,255,100,.55);padding:14px 32px;font-family:'Courier New',monospace;font-size:14px;letter-spacing:4px;color:#00ff88;z-index:30;white-space:nowrap;-webkit-tap-highlight-color:transparent;box-shadow:0 0 28px rgba(0,255,100,.2);border-radius:2px" onclick="Fishing.openNearest()" ontouchend="event.preventDefault();Fishing.openNearest()">🎣 FISH HERE</div>
   <div id="dmg-layer"></div>
-  <div id="crosshair" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:15">&nbsp;
-    <div style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.9);box-shadow:0 0 4px rgba(0,0,0,0.8)"></div>
-    <div style="position:absolute;top:-7px;left:-7px;width:5px;height:5px;border-top:1.5px solid rgba(255,255,255,0.6);border-left:1.5px solid rgba(255,255,255,0.6)"></div>
-    <div style="position:absolute;top:-7px;right:-7px;width:5px;height:5px;border-top:1.5px solid rgba(255,255,255,0.6);border-right:1.5px solid rgba(255,255,255,0.6)"></div>
-    <div style="position:absolute;bottom:-7px;left:-7px;width:5px;height:5px;border-bottom:1.5px solid rgba(255,255,255,0.6);border-left:1.5px solid rgba(255,255,255,0.6)"></div>
-    <div style="position:absolute;bottom:-7px;right:-7px;width:5px;height:5px;border-bottom:1.5px solid rgba(255,255,255,0.6);border-right:1.5px solid rgba(255,255,255,0.6)"></div>
-  </div>
+  <div id="crosshair" style="display:none;position:fixed;top:50%;left:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:rgba(255,255,255,0.9);box-shadow:0 0 3px rgba(0,0,0,0.8);pointer-events:none;z-index:15"></div>
   <div id="dmg-flash"></div>
   <div id="skill-notify"></div>
   <div id="headshot-text">HEADSHOT</div>
