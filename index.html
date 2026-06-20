@@ -1630,6 +1630,10 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
 
 <div id="shield-vfx"></div>
 <div id="wave-banner"></div>
+<div id="combo-display" style="display:none;position:fixed;top:120px;left:50%;transform:translate(-50%,0);pointer-events:none;z-index:30;text-align:center;font-family:'Courier New',monospace">
+  <div id="combo-num" style="font-size:32px;font-weight:bold;text-shadow:0 0 8px currentColor,0 2px 4px rgba(0,0,0,.8);transition:transform .1s">0</div>
+  <div id="combo-lbl" style="font-size:10px;letter-spacing:4px;opacity:.85;margin-top:-4px">KILL STREAK</div>
+</div>
 
 <!-- Inventory -->
 <div id="inventory">
@@ -1987,6 +1991,7 @@ function setState(s) {
     HubWorld.leave();
   }
   document.getElementById('hud').style.display = (s===GS.MISSION)?'block':'none';
+  if(s!==GS.MISSION){try{Combo.reset();}catch(e){}}
   try{_updateCrosshair();}catch(e){}
   document.getElementById('btn-pause').style.display = (s===GS.MISSION)?'flex':'none';
   document.getElementById('pause-screen').classList.remove('on');
@@ -2074,6 +2079,8 @@ const Map3D = {
     }
 
     this.grid=g;
+    // Fog-of-war: explored[gz][gx] tracks which cells the player has visited
+    this.explored=Array.from({length:G},()=>new Array(G).fill(false));
     this._buildMesh(g,G);
   },
 
@@ -2581,6 +2588,21 @@ const Map3D = {
     if(gx<0||gx>=G||gz<0||gz>=G)return false;
     return this.grid[gz][gx]===1;
   },
+  // Reveal a radius of cells around a world position — called each frame from player position
+  revealAround(wx,wz,radiusCells){
+    if(!this.explored)return;
+    const G=this._G||C.GRID,off=-(G/2)*C.CELL;
+    const gx=~~((wx-off)/C.CELL),gz=~~((wz-off)/C.CELL);
+    const r=radiusCells||2;
+    for(let dz=-r;dz<=r;dz++){
+      for(let dx=-r;dx<=r;dx++){
+        if(dx*dx+dz*dz>r*r)continue; // circular reveal, not square
+        const nx=gx+dx,nz=gz+dz;
+        if(nx<0||nx>=G||nz<0||nz>=G)continue;
+        this.explored[nz][nx]=true;
+      }
+    }
+  },
 };
 
 // ── BANNER HELPER ──────────────────────────────────────────────────
@@ -2703,6 +2725,8 @@ const Loot = {
       armor:~~(8+Math.random()*18*tm),healthBonus:~~(5+Math.random()*15*tm),
       speedBonus:Math.random()<.4?+(Math.random()*.12*tm).toFixed(2):0,
       cdrBonus:Math.random()<.4?+(Math.random()*.15*tm).toFixed(2):0,
+      attachments:{},
+      sockets:Array({COMMON:0,UNCOMMON:0,RARE:1,EPIC:1,LEGENDARY:2,EXOTIC:2}[rar]||0).fill(null),
       sellValue:~~(RARITY[rar].cr*.6)
     };
   },
@@ -3482,6 +3506,56 @@ const Grenades={
 // =====================================================================
 //  ZONE
 // =====================================================================
+// ── KILL COMBO / MOMENTUM SYSTEM ─────────────────────────────────────
+const Combo={
+  count:0,timer:0,window:4.0,
+  _hideTimer:null,
+  tiers:[
+    {min:0,  col:'#888888',label:'KILL STREAK',  mult:1.0,scale:1.0},
+    {min:3,  col:'#f1c40f',label:'ON FIRE',      mult:1.1,scale:1.1},
+    {min:6,  col:'#e67e22',label:'RAMPAGE',      mult:1.2,scale:1.25},
+    {min:10, col:'#e74c3c',label:'UNSTOPPABLE',  mult:1.35,scale:1.4},
+    {min:15, col:'#9b59b6',label:'GODLIKE',      mult:1.5,scale:1.6},
+    {min:25, col:'#ff00ff',label:'LEGENDARY',    mult:1.75,scale:1.8},
+  ],
+  _tier(){let t=this.tiers[0];for(const tier of this.tiers){if(this.count>=tier.min)t=tier;}return t;},
+  add(){
+    this.count++;
+    this.timer=this.window;
+    const tier=this._tier();
+    try{
+      const disp=document.getElementById('combo-display');
+      const num=document.getElementById('combo-num');
+      const lbl=document.getElementById('combo-lbl');
+      if(disp&&num&&lbl){
+        disp.style.display='block';
+        num.textContent=this.count;
+        num.style.color=tier.col;
+        lbl.style.color=tier.col;
+        lbl.textContent=tier.label;
+        num.style.transform=`scale(${tier.scale*1.25})`;
+        setTimeout(()=>{try{num.style.transform=`scale(${tier.scale})`;}catch(e){}},100);
+        // Flash banner on tier-up
+        const prevTier=this._lastTierMin;
+        if(prevTier!==tier.min&&this.count>=3){
+          showBanner(tier.label+'! ×'+this.count,1400);
+          this._lastTierMin=tier.min;
+        }
+      }
+    }catch(e){}
+    return tier.mult;
+  },
+  reset(){
+    this.count=0;this.timer=0;this._lastTierMin=0;
+    try{const disp=document.getElementById('combo-display');if(disp)disp.style.display='none';}catch(e){}
+  },
+  update(dt){
+    if(this.count<=0)return;
+    this.timer-=dt;
+    if(this.timer<=0)this.reset();
+  },
+};
+
 const Zone={
   zone:1,killsInZone:0,killsToNext:10,
   _worldTier:1, // increases every 10 zones, multiplies all rewards
@@ -4404,6 +4478,19 @@ const Player={
     Save.save();
   },
   load(d){if(d)Object.assign(this,d);},
+  save(){
+    return{
+      hp:this.hp,maxHp:this.maxHp,armor:this.armor,maxArmor:this.maxArmor,
+      xp:this.xp,level:this.level,xpNext:this.xpNext,
+      credits:this.credits,
+      weapon:this.weapon,weaponBag:this.weaponBag,
+      agentName:this.agentName,
+      bonusDmg:this.bonusDmg,bonusCrit:this.bonusCrit,bonusSpd:this.bonusSpd,
+      _classRegen:this._classRegen,
+      _attachmentBag:this._attachmentBag||[],
+      _ownedSkins:this._ownedSkins||[],
+    };
+  },
 
   update(dt){
     if(!this.mesh)return;
@@ -4686,11 +4773,12 @@ const UI={
     const CX=W/2,CY=H/2;
     const cellPx=C.CELL*S; // size of one grid cell in pixels
 
-    // Draw every floor tile (rooms + corridors) directly from the grid
+    // Draw every floor tile (rooms + corridors) directly from the grid — fog of war applied
     ctx.fillStyle='#1e1e2e';
     for(let gz=0;gz<G;gz++){
       for(let gx=0;gx<G;gx++){
         if(!Map3D.grid[gz][gx])continue;
+        if(!(Map3D.explored&&Map3D.explored[gz]&&Map3D.explored[gz][gx]))continue;
         const wx=(off+gx*C.CELL-px)*S+CX;
         const wz=(off+gz*C.CELL-pz)*S+CY;
         if(wx+cellPx<-1||wx>W+1||wz+cellPx<-1||wz>H+1)continue;
@@ -4698,8 +4786,10 @@ const UI={
       }
     }
 
-    // Room outlines + type color tint on top
+    // Room outlines + type color tint on top — only for explored rooms
     for(const r of Map3D.rooms){
+      const rcx=~~(r.x+r.w/2),rcz=~~(r.z+r.h/2);
+      if(!(Map3D.explored&&Map3D.explored[rcz]&&Map3D.explored[rcz][rcx]))continue;
       const wx=(off+r.x*C.CELL-px)*S+CX;
       const wz=(off+r.z*C.CELL-pz)*S+CY;
       const rw=r.w*C.CELL*S, rh=r.h*C.CELL*S;
@@ -5050,6 +5140,36 @@ const HubSystem={
         grid.appendChild(sec);
       }
     }
+    // ── AFFIX REROLL ────────────────────────────────────────────────
+    {
+      const rerollable=[Player.weapon,...(Player.weaponBag||[]),...(Armor.bag||[]),...Object.values(Armor.equipped||{})]
+        .filter(it=>it&&it._baseSnapshot&&!it.unidentified&&['RARE','EPIC','LEGENDARY','EXOTIC'].includes(it.rarity));
+      const sec=document.createElement('div');
+      sec.style.cssText='margin-bottom:14px;border:1px solid rgba(180,100,255,.2);padding:10px;background:rgba(15,5,20,.4)';
+      sec.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;color:#b864ff;margin-bottom:4px">🎲 AFFIX REROLL</div><div style="font-family:'Courier New',monospace;font-size:8px;color:#554;margin-bottom:8px">RE-ROLL AN ITEM'S AFFIXES FOR CREDITS — KEEPS BASE STATS</div>`;
+      if(rerollable.length===0){
+        sec.innerHTML+=`<div style="font-family:'Courier New',monospace;font-size:8px;color:#446">NO IDENTIFIED RARE+ GEAR YET</div>`;
+      } else {
+        rerollable.forEach(it=>{
+          const cost={RARE:100,EPIC:200,LEGENDARY:400,EXOTIC:700}[it.rarity]||100;
+          const r=RARITY[it.rarity]||RARITY.RARE;
+          const row=document.createElement('div');
+          row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)';
+          const affixNames=(it.affixes||[]).map(id=>{
+            const pool=it.kind==='weapon'?AFFIXES.weapon:AFFIXES.armor;
+            return pool.find(a=>a.id===id)?.name||id;
+          }).join(', ');
+          row.innerHTML=`<div style="flex:1;font-family:'Courier New',monospace"><div style="font-size:9px;color:${r.col}">${it.name}</div><div style="font-size:8px;color:#556">${affixNames||'NO AFFIXES'}</div></div>`;
+          const btn=document.createElement('button');
+          const canAfford=Player.credits>=cost;
+          btn.style.cssText=`padding:6px 10px;border:1px solid ${canAfford?'#b864ff':'#443'};background:transparent;color:${canAfford?'#b864ff':'#443'};font-family:'Courier New',monospace;font-size:8px;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
+          btn.textContent=`🎲 ${cost} CR`;
+          btn.onclick=btn.ontouchend=(e)=>{if(e.type==='touchend')e.preventDefault();if(rerollAffixes(it))this.renderArmory();};
+          row.appendChild(btn);sec.appendChild(row);
+        });
+      }
+      grid.appendChild(sec);
+    }
     // ── WEAPON SKINS ──────────────────────────────────────────────
     {
       const sec=document.createElement('div');
@@ -5397,7 +5517,9 @@ function _loadSaveIntoGame(d){
   Zone.zone=d.zone||1;Zone.killsToNext=~~(10*Math.pow(1.4,Zone.zone-1));
   Enemies.totalKills=d.kills||0;SkillTree.points=d.skillPts||0;
   if(d.skillTree)Object.entries(d.skillTree).forEach(([k,v])=>{if(SkillTree.nodes[k])SkillTree.nodes[k].lvl=v;});
-  Player.recalc();UI.updateWeaponHUD();Zone._hud();UI.credit(Player.credits);
+  Player.recalc();
+  try{Player._updateWeaponMesh();}catch(e){}
+  UI.updateWeaponHUD();Zone._hud();UI.credit(Player.credits);
 }
 
 // ── Slot picker ─────────────────────────────────────────────────────
@@ -5729,6 +5851,7 @@ function _die(){
   if(!gameRunning)return;
   gameRunning=false;
   Audio.stopMusic();
+  Combo.reset();
   if(_isDailyRun){DailyChallenge.recordScore(Enemies.totalKills,Zone.zone);_isDailyRun=false;}
 
   // ── Penalties: lose XP and credits, keep gear ──
@@ -5951,17 +6074,20 @@ function _drawFullMap(){
   const cellSize=W/G;
   const off=-(G/2)*C.CELL;
 
-  // Draw floor cells
+  // Draw floor cells — fog of war: only explored tiles render
   ctx.fillStyle='#1a1a2a';
   for(let z=0;z<G;z++)for(let x=0;x<G;x++){
     if(Map3D.grid&&Map3D.grid[z]&&Map3D.grid[z][x]){
+      if(!(Map3D.explored&&Map3D.explored[z]&&Map3D.explored[z][x]))continue;
       ctx.fillRect(x*cellSize,z*cellSize,cellSize+.5,cellSize+.5);
     }
   }
 
-  // Room outlines with type color
+  // Room outlines with type color — only show explored rooms
   const roomCols={office:'#1e2a3a',warehouse:'#2a1e14',garage:'#1a1a14',subway:'#14141e',rooftop:'#1a2414',lab:'#14221a',start:'#1e2a1e'};
   for(const r of Map3D.rooms){
+    const rcx=~~(r.x+r.w/2),rcz=~~(r.z+r.h/2);
+    if(!(Map3D.explored&&Map3D.explored[rcz]&&Map3D.explored[rcz][rcx]))continue;
     ctx.fillStyle=roomCols[r.type]||'#1a1a2a';
     ctx.fillRect((r.x)*cellSize,(r.z)*cellSize,r.w*cellSize,r.h*cellSize);
     ctx.strokeStyle='rgba(255,140,0,.15)';ctx.lineWidth=1;
@@ -5970,39 +6096,48 @@ function _drawFullMap(){
     ctx.fillText(r.type.slice(0,3).toUpperCase(),(r.x+r.w/2)*cellSize,(r.z+r.h/2)*cellSize+4);
   }
 
-  // Chests
+  // Chests — only show if their cell has been explored
   for(const ch of Loot.chests){
+    const gxC=~~((ch.position.x-off)/C.CELL),gzC=~~((ch.position.z-off)/C.CELL);
+    if(!(Map3D.explored&&Map3D.explored[gzC]&&Map3D.explored[gzC][gxC]))continue;
     const cx=(ch.position.x-off)/C.CELL*cellSize;
     const cz=(ch.position.z-off)/C.CELL*cellSize;
     ctx.fillStyle=ch.userData.open?'#334422':'#ff8800';
     ctx.fillRect(cx-4,cz-4,8,8);
   }
 
-  // Loot drops
+  // Loot drops — only show if explored
   for(const d of Loot.drops){
+    const gxL=~~((d.mesh.position.x-off)/C.CELL),gzL=~~((d.mesh.position.z-off)/C.CELL);
+    if(!(Map3D.explored&&Map3D.explored[gzL]&&Map3D.explored[gzL][gxL]))continue;
     const lx=(d.mesh.position.x-off)/C.CELL*cellSize;
     const lz=(d.mesh.position.z-off)/C.CELL*cellSize;
     ctx.fillStyle=RARITY[d.rar].col;
     ctx.beginPath();ctx.arc(lx,lz,4,0,Math.PI*2);ctx.fill();
   }
 
-  // Enemies
+  // Enemies — only show if explored
   for(const e of Enemies.list){
     if(!e.alive)continue;
+    const gxE=~~((e.mesh.position.x-off)/C.CELL),gzE=~~((e.mesh.position.z-off)/C.CELL);
+    if(!(Map3D.explored&&Map3D.explored[gzE]&&Map3D.explored[gzE][gxE]))continue;
     const ex=(e.mesh.position.x-off)/C.CELL*cellSize;
     const ez=(e.mesh.position.z-off)/C.CELL*cellSize;
     ctx.fillStyle=e.isDrone?'#4444ff':e.key==='ELITE'?'#ff8800':'#ff3300';
     ctx.beginPath();ctx.arc(ex,ez,e.key==='ELITE'?6:4,0,Math.PI*2);ctx.fill();
   }
 
-  // Boss
+  // Boss — only show if explored
   if(Boss.active){
-    const bx=(Boss.active.mesh.position.x-off)/C.CELL*cellSize;
-    const bz=(Boss.active.mesh.position.z-off)/C.CELL*cellSize;
-    ctx.fillStyle='#ff0000';ctx.strokeStyle='#ff8800';ctx.lineWidth=2;
-    ctx.beginPath();ctx.arc(bx,bz,10,0,Math.PI*2);ctx.fill();ctx.stroke();
-    ctx.fillStyle='#fff';ctx.font='bold 10px Courier New';ctx.textAlign='center';
-    ctx.fillText('B',bx,bz+4);
+    const gxB=~~((Boss.active.mesh.position.x-off)/C.CELL),gzB=~~((Boss.active.mesh.position.z-off)/C.CELL);
+    if(Map3D.explored&&Map3D.explored[gzB]&&Map3D.explored[gzB][gxB]){
+      const bx=(Boss.active.mesh.position.x-off)/C.CELL*cellSize;
+      const bz=(Boss.active.mesh.position.z-off)/C.CELL*cellSize;
+      ctx.fillStyle='#ff0000';ctx.strokeStyle='#ff8800';ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(bx,bz,10,0,Math.PI*2);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#fff';ctx.font='bold 10px Courier New';ctx.textAlign='center';
+      ctx.fillText('B',bx,bz+4);
+    }
   }
 
   // Gravestone
@@ -7055,7 +7190,7 @@ const Mercs={
       const w=this._weapon||null;
       const wType=w?w.type:(this.active.bonus==='shepard'?'Assault Rifle':this.active.bonus==='shout'?'Assault Rifle':this.active.bonus==='george'?'SMG':this.active.bonus==='buford'?'Revolver':this.active.bonus==='gypsy'?'Pistol':'Assault Rifle');
       const rc=w?parseInt((RARITY[w.rarity]?.col||'#888888').replace('#',''),16):parseInt((this.active.col||'#888888').replace('#',''),16);
-      const wMesh=Player._buildWeaponModel(wType,rc,w?w.attachments||{}:{});
+      const wMesh=Player._buildWeaponModel(wType,rc,w?w.attachments||{}:{},w?w.skin||null:null);
       wMesh.position.set(.5,.92,0);
       this.mesh.add(wMesh);
       this._weaponMesh=wMesh;
@@ -7416,7 +7551,9 @@ function loop(){
       Boss.update(dt);
       Skills.update(dt);
       Grenades.update(dt);
+      Combo.update(dt);
       if(Player.mesh)Loot.update(dt,Player.mesh.position);
+      if(Player.mesh)try{Map3D.revealAround(Player.mesh.position.x,Player.mesh.position.z,2.5);}catch(e){}
     }
     Particles.update(dt);
     Rain.update(dt);
@@ -11120,6 +11257,7 @@ const HubWorld={
     // Save player's in-mission position
     this._savedPlayerPos=Player.mesh?Player.mesh.position.clone():null;
     this._savedAliveCount=Enemies.list.filter(e=>e.alive).length;
+    try{Combo.reset();}catch(e){}
     // Show hub geometry, hide mission geometry
     if(this._group)this._group.visible=true;
     if(Map3D.group)Map3D.group.visible=false;
@@ -11747,9 +11885,33 @@ function identifyItem(item){
   if(!item||!item.unidentified)return item;
   item.unidentified=false;
   item.name=item._hiddenName||item.name;
+  // Snapshot stats BEFORE affixes are applied — needed for clean reroll later
+  item._baseSnapshot=JSON.parse(JSON.stringify(item));
   _rollAffixes(item);
   showBanner('IDENTIFIED: '+item.name+(item.affixes?.length?' +'+item.affixes.length+' AFFIXES':''),2500);
   return item;
+}
+// Reroll affixes on an already-identified item — reverts to base stats first, costs credits
+function rerollAffixes(item){
+  if(!item||!item._baseSnapshot)return false;
+  const rar=item.rarity;
+  const cost={RARE:100,EPIC:200,LEGENDARY:400,EXOTIC:700}[rar]||100;
+  if(Player.credits<cost){showBanner('NOT ENOUGH CREDITS — NEED '+cost+' CR',1800);return false;}
+  Player.credits-=cost;
+  try{UI.credit(Player.credits);}catch(e){}
+  // Restore base stats (deep clone, minus the snapshot field itself to avoid recursion)
+  const base=JSON.parse(JSON.stringify(item._baseSnapshot));
+  delete base._baseSnapshot;
+  delete item._baseSnapshot; // clear BEFORE re-snapshotting so the new snapshot doesn't nest the old one
+  // Clear transient affix/attachment marker flags — base restore won't remove keys it never had
+  ['_vampiric','_blastAffix','_thermal','_suppressed','_laserSight','_underGLauncher','_underShotgun'].forEach(k=>delete item[k]);
+  Object.assign(item,base);
+  item._baseSnapshot=JSON.parse(JSON.stringify(item));
+  _rollAffixes(item);
+  showBanner('🎲 REROLLED — '+item.name+' +'+(item.affixes?.length||0)+' NEW AFFIXES',2200);
+  if(item===Player.weapon)try{Player._updateWeaponMesh();}catch(e){}
+  try{InvUI.refresh();}catch(e){}
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -11982,8 +12144,9 @@ Enemies._kill=function(e){
   try{scene.remove(e.mesh);}catch(ex){}
   this.totalKills++;
   try{BattlePass.addXP(elite?30:10);}catch(ex){}
-  const crMult=(Player._bufordActive?1.4:1)*(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1);
-  const xpMult=(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1);
+  const comboMult=Combo.add();
+  const crMult=(Player._bufordActive?1.4:1)*(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1)*comboMult;
+  const xpMult=(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1)*comboMult;
   Player.credits+=~~(eT.cr*(1+Zone.zone*.1)*crMult);
   UI.credit(Player.credits);
   try{Player.gainXP(~~(eT.xp*xpMult));}catch(ex){}
