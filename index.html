@@ -361,6 +361,26 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:#000;
   #reload-bar{bottom:calc(var(--sB) + 70px)}
 }
 
+/* ── LANDSCAPE / SHORT-SCREEN OVERRIDES ──
+   In landscape the viewport is short, so the bottom-anchored stat stack
+   (status bars at +228px) collides with the top header. Compress everything. */
+@media (orientation:landscape) and (max-height:520px){
+  /* Move status bars to TOP-LEFT, below the zone header, stacked downward */
+  #status-bars{top:calc(var(--sT) + 70px);bottom:auto;left:calc(var(--sL) + 8px);width:140px}
+  #lvl-badge{top:calc(var(--sT) + 132px);bottom:auto;left:calc(var(--sL) + 8px)}
+  #credits-hud{top:calc(var(--sT) + 146px);bottom:auto;left:calc(var(--sL) + 8px)}
+  /* HUB button moves to far-left edge, vertically centred, away from stats */
+  #btn-hub{top:50%;transform:translateY(-50%);left:calc(var(--sL) + 6px);width:42px;height:42px}
+  /* Bottom controls pulled closer to the bottom edge */
+  #btn-reload{bottom:calc(var(--sB) + 90px);left:calc(var(--sL) + 70px)}
+  #btn-roll{bottom:calc(var(--sB) + 90px);right:calc(var(--sR) + 14px)}
+  #mob-skills{bottom:calc(var(--sB) + 6px)}
+  #weapon-hud{bottom:calc(var(--sB) + 62px)}
+  #reload-bar{bottom:calc(var(--sB) + 62px)}
+  /* Inventory button below minimap stays, but tighten */
+  #btn-inv{top:calc(var(--sT) + 96px)}
+}
+
 /* ──────────────────────────────────────────────────────
    INVENTORY
 ────────────────────────────────────────────────────── */
@@ -2082,6 +2102,11 @@ const Map3D = {
     // Fog-of-war: explored[gz][gx] tracks which cells the player has visited
     this.explored=Array.from({length:G},()=>new Array(G).fill(false));
     this._buildMesh(g,G);
+    // Reveal the starting room immediately so the map isn't fully black on spawn
+    try{
+      const sp=this.startPos();
+      this.revealAround(sp.x,sp.z,4);
+    }catch(e){}
   },
 
   _buildMesh(g,G){
@@ -2593,13 +2618,24 @@ const Map3D = {
     if(!this.explored)return;
     const G=this._G||C.GRID,off=-(G/2)*C.CELL;
     const gx=~~((wx-off)/C.CELL),gz=~~((wz-off)/C.CELL);
-    const r=radiusCells||2;
+    const r=radiusCells||3;
     for(let dz=-r;dz<=r;dz++){
       for(let dx=-r;dx<=r;dx++){
-        if(dx*dx+dz*dz>r*r)continue; // circular reveal, not square
+        if(dx*dx+dz*dz>r*r)continue; // circular reveal
         const nx=gx+dx,nz=gz+dz;
         if(nx<0||nx>=G||nz<0||nz>=G)continue;
         this.explored[nz][nx]=true;
+      }
+    }
+    // If player is inside a room, reveal the WHOLE room (you can see the room you're standing in)
+    for(const room of this.rooms){
+      if(gx>=room.x-1&&gx<=room.x+room.w&&gz>=room.z-1&&gz<=room.z+room.h){
+        for(let rz=room.z-1;rz<=room.z+room.h;rz++){
+          for(let rx=room.x-1;rx<=room.x+room.w;rx++){
+            if(rx<0||rx>=G||rz<0||rz>=G)continue;
+            this.explored[rz][rx]=true;
+          }
+        }
       }
     }
   },
@@ -6152,6 +6188,7 @@ function openFullMap(){
   Audio.uiClick();
   _fullMapOpen=true;
   gameRunning=false;
+  try{Map3D.revealAround(Player.mesh.position.x,Player.mesh.position.z,3);}catch(e){}
   document.getElementById('fullmap-screen').classList.add('on');
   _drawFullMap();
 }
