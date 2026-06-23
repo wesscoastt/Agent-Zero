@@ -2852,9 +2852,25 @@ const Bullets = {
               // Headshot: bullet is in upper third of enemy
               const headY=e.isDrone?3.5:(e.T.sz[1]*.65);
               const isHead=(!e.isDrone)&&dy>headY*.5;
-              const cr=Math.random()<(Player.weapon?.critChance||.05)||(isHead);
-              const mult=isHead?1.8:1;
-              Enemies.hit(e,~~(ud.dmg*mult*(cr&&!isHead?1.9:1)),cr,isHead,ud.element);
+              const ghostCrit=Player._ghosting&&!Player._ghostUsed;
+              const cr=Math.random()<(Player.weapon?.critChance||.05)||(isHead)||ghostCrit;
+              if(ghostCrit)Player._ghostUsed=true;
+              // Headshot multiplier (with Headhunter bonus)
+              const headMult=isHead?(1.8*(Player._headMult||1)):1;
+              // Crit damage multiplier (with Crit Damage skill)
+              const critMult=(cr&&!isHead)?(1.9*(Player._critDmgMult||1)):1;
+              // Damage bonuses: rampage (combo), berserker (low HP), sprinter (moving)
+              let dmgBonus=1;
+              if(Player._rampageMult&&Combo.count>0){const tier=Combo._tier?Combo.tiers.indexOf(Combo._tier()):0;dmgBonus+=Player._rampageMult*tier;}
+              if(Player._berserk&&Player.hp<Player.maxHp*.4)dmgBonus+=.30;
+              if(Player._sprinterMult&&Player._moveTime>3)dmgBonus+=Player._sprinterMult;
+              if(Player._armorPen&&e.T&&e.T.armored)dmgBonus+=Player._armorPen;
+              let finalDmg=~~(ud.dmg*headMult*critMult*dmgBonus);
+              // Executioner — instakill low HP enemies
+              if(Player._executioner&&e.hp>0&&e.maxHp&&(e.hp-finalDmg)<e.maxHp*.15&&(e.hp-finalDmg)>0){finalDmg=e.hp;}
+              Enemies.hit(e,finalDmg,cr,isHead,ud.element);
+              // Lifesteal
+              if(Player._lifesteal>0)Player.heal(finalDmg*Player._lifesteal);
               if(ud.isBlast)this._blast(b.position.clone(),ud.dmg);
               kill=true;break;
             }
@@ -3758,74 +3774,104 @@ const Zone={
 const SkillTree = {
   points:0,
   nodes:{
-    // ── COMBAT TREE ─────────────────────────────────────
+    // ══ COMBAT TREE (red) — offense, crit, weapon handling ══════════
     dmgUp:      {lvl:0,max:5,label:'DAMAGE',        desc:'+12% damage/lvl',  category:'COMBAT', icon:'💢',col:'#e74c3c',req:null,
                  bonus:n=>Player.bonusDmg=(1+n.lvl*.12)},
-    critUp:     {lvl:0,max:4,label:'CRIT CHANCE',   desc:'+6% crit/lvl',     category:'COMBAT', icon:'★', col:'#e74c3c',req:'dmgUp',
+    critUp:     {lvl:0,max:5,label:'CRIT CHANCE',   desc:'+6% crit/lvl',     category:'COMBAT', icon:'★', col:'#e74c3c',req:'dmgUp',
                  bonus:n=>Player.bonusCrit=n.lvl*.06},
-    critDmg:    {lvl:0,max:3,label:'CRIT DAMAGE',   desc:'+25% crit dmg/lvl',category:'COMBAT', icon:'💥',col:'#e74c3c',req:'critUp',
-                 bonus:()=>{}},
-    armorPen:   {lvl:0,max:3,label:'ARMOR PEN',     desc:'+20% armor pen/lvl',category:'COMBAT',icon:'⬡', col:'#e74c3c',req:'dmgUp',
-                 bonus:()=>{}},
-    fireRate:   {lvl:0,max:3,label:'FIRE RATE',     desc:'-8% fire delay/lvl',category:'COMBAT',icon:'🔫',col:'#e74c3c',req:'dmgUp',
-                 bonus:n=>{if(Player.weapon)Player.weapon.fireRate=Math.max(.04,Player.weapon.fireRate*(1-n.lvl*.08));}},
-    blastRadius:{lvl:0,max:2,label:'BLAST RADIUS',  desc:'+20% AoE size/lvl', category:'COMBAT',icon:'💣',col:'#e74c3c',req:'armorPen',
-                 bonus:()=>{}},
-    overkill:   {lvl:0,max:1,label:'OVERKILL',      desc:'Excess dmg carries over to next target',category:'COMBAT',icon:'☠',col:'#e74c3c',req:'critDmg',
-                 bonus:()=>{}},
+    critDmg:    {lvl:0,max:4,label:'CRIT DAMAGE',   desc:'+25% crit dmg/lvl',category:'COMBAT', icon:'💥',col:'#e74c3c',req:'critUp',
+                 bonus:n=>Player._critDmgMult=1+n.lvl*.25},
+    headhunter: {lvl:0,max:3,label:'HEADHUNTER',    desc:'+20% headshot dmg/lvl',category:'COMBAT',icon:'🎯',col:'#e74c3c',req:'critUp',
+                 bonus:n=>Player._headMult=1+n.lvl*.20},
+    armorPen:   {lvl:0,max:3,label:'ARMOR PEN',     desc:'+15% dmg vs armored/lvl',category:'COMBAT',icon:'⬡', col:'#e74c3c',req:'dmgUp',
+                 bonus:n=>Player._armorPen=n.lvl*.15},
+    fireRate:   {lvl:0,max:4,label:'FIRE RATE',     desc:'-7% fire delay/lvl',category:'COMBAT',icon:'🔫',col:'#e74c3c',req:'dmgUp',
+                 bonus:n=>Player._fireRateMult=1-n.lvl*.07},
+    blastRadius:{lvl:0,max:3,label:'BLAST RADIUS',  desc:'+20% AoE size/lvl', category:'COMBAT',icon:'💣',col:'#e74c3c',req:'armorPen',
+                 bonus:n=>Player._blastMult=1+n.lvl*.20},
+    rampage:    {lvl:0,max:3,label:'RAMPAGE',       desc:'+8% dmg per active combo tier/lvl',category:'COMBAT',icon:'🔥',col:'#e74c3c',req:'fireRate',
+                 bonus:n=>Player._rampageMult=n.lvl*.08},
+    overkill:   {lvl:0,max:1,label:'OVERKILL',      desc:'Excess kill dmg explodes (AoE)',category:'COMBAT',icon:'☠',col:'#e74c3c',req:'critDmg',
+                 bonus:n=>Player._overkill=n.lvl>0},
+    executioner:{lvl:0,max:1,label:'EXECUTIONER',   desc:'Instakill enemies below 15% HP',category:'COMBAT',icon:'🗡',col:'#e74c3c',req:'headhunter',
+                 bonus:n=>Player._executioner=n.lvl>0},
+    berserk:    {lvl:0,max:1,label:'BERSERKER',     desc:'+30% dmg when below 40% HP',category:'COMBAT',icon:'😤',col:'#e74c3c',req:'rampage',
+                 bonus:n=>Player._berserk=n.lvl>0},
 
-    // ── SURVIVAL TREE ───────────────────────────────────
-    hpUp:       {lvl:0,max:5,label:'HEALTH',         desc:'+20 max HP/lvl',   category:'SURVIVAL',icon:'❤',col:'#2ecc71',req:null,
-                 bonus:n=>{Player.maxHp=100+(n.lvl*20);Player.hp=Math.min(Player.hp,Player.maxHp);}},
-    armorUp:    {lvl:0,max:4,label:'ARMOR',          desc:'+15 max armor/lvl',category:'SURVIVAL',icon:'🛡',col:'#2ecc71',req:'hpUp',
-                 bonus:n=>{Player.maxArmor=100+(n.lvl*15);Player.armor=Math.min(Player.armor,Player.maxArmor);}},
-    regen:      {lvl:0,max:3,label:'REGEN',          desc:'+1 HP/sec per lvl',category:'SURVIVAL',icon:'💉',col:'#2ecc71',req:'hpUp',
-                 bonus:n=>Player._passiveRegen=n.lvl},
-    toughness:  {lvl:0,max:3,label:'TOUGHNESS',      desc:'-8% dmg taken/lvl',category:'SURVIVAL',icon:'🦺',col:'#2ecc71',req:'armorUp',
-                 bonus:n=>Player._dmgReduce=1-n.lvl*.08},
+    // ══ SURVIVAL TREE (green) — health, armor, sustain ═════════════
+    hpUp:       {lvl:0,max:6,label:'HEALTH',         desc:'+20 max HP/lvl',   category:'SURVIVAL',icon:'❤',col:'#2ecc71',req:null,
+                 bonus:n=>{Player.maxHp=100+(n.lvl*20)+(Player._classHpBonus||0);Player.hp=Math.min(Player.hp,Player.maxHp);}},
+    armorUp:    {lvl:0,max:5,label:'ARMOR',          desc:'+15 max armor/lvl',category:'SURVIVAL',icon:'🛡',col:'#2ecc71',req:'hpUp',
+                 bonus:n=>{Player._skillArmorBonus=n.lvl*15;Player.recalc&&Player.recalc();}},
+    regen:      {lvl:0,max:4,label:'REGEN',          desc:'+1.5 HP/sec per lvl',category:'SURVIVAL',icon:'💉',col:'#2ecc71',req:'hpUp',
+                 bonus:n=>Player._passiveRegen=n.lvl*1.5},
+    toughness:  {lvl:0,max:4,label:'TOUGHNESS',      desc:'-7% dmg taken/lvl',category:'SURVIVAL',icon:'🦺',col:'#2ecc71',req:'armorUp',
+                 bonus:n=>Player._dmgReduce=1-n.lvl*.07},
+    lifesteal:  {lvl:0,max:3,label:'LIFESTEAL',      desc:'Heal 3% of dmg dealt/lvl',category:'SURVIVAL',icon:'🩸',col:'#2ecc71',req:'regen',
+                 bonus:n=>Player._lifesteal=n.lvl*.03},
     lastStand:  {lvl:0,max:1,label:'LAST STAND',     desc:'Survive one lethal hit per zone',category:'SURVIVAL',icon:'🔱',col:'#2ecc71',req:'toughness',
-                 bonus:()=>{}},
-    combat_medic:{lvl:0,max:2,label:'COMBAT MEDIC',  desc:'+30% healing received/lvl',category:'SURVIVAL',icon:'➕',col:'#2ecc71',req:'regen',
-                 bonus:()=>{}},
-    bulletproof:{lvl:0,max:1,label:'BULLETPROOF',    desc:'Armor absorbs 20% more damage',category:'SURVIVAL',icon:'⚙',col:'#2ecc71',req:'armorUp',
-                 bonus:()=>{}},
+                 bonus:n=>Player._lastStand=n.lvl>0},
+    combatMedic:{lvl:0,max:3,label:'COMBAT MEDIC',  desc:'+25% all healing/lvl',category:'SURVIVAL',icon:'➕',col:'#2ecc71',req:'regen',
+                 bonus:n=>Player._healMult=1+n.lvl*.25},
+    bulletproof:{lvl:0,max:2,label:'BULLETPROOF',    desc:'Armor absorbs +12% dmg/lvl',category:'SURVIVAL',icon:'⚙',col:'#2ecc71',req:'armorUp',
+                 bonus:n=>Player._armorAbsorb=n.lvl*.12},
+    secondWind: {lvl:0,max:1,label:'SECOND WIND',    desc:'Heal 40% HP on killing an Elite',category:'SURVIVAL',icon:'🌬',col:'#2ecc71',req:'lifesteal',
+                 bonus:n=>Player._secondWind=n.lvl>0},
+    fortress:   {lvl:0,max:1,label:'FORTRESS',       desc:'Standing still 2s grants 50% dmg reduction',category:'SURVIVAL',icon:'🏰',col:'#2ecc71',req:'bulletproof',
+                 bonus:n=>Player._fortress=n.lvl>0},
 
-    // ── TECH TREE ───────────────────────────────────────
-    droneUp:    {lvl:0,max:3,label:'DRONE POWER',    desc:'+30% drone heal/lvl',category:'TECH',  icon:'🤖',col:'#3498db',req:null,
-                 bonus:()=>{}},
+    // ══ TECH TREE (blue) — skills, drone, gadgets ═════════════════
+    droneUp:    {lvl:0,max:4,label:'DRONE POWER',    desc:'+30% drone heal/lvl',category:'TECH',  icon:'🤖',col:'#3498db',req:null,
+                 bonus:n=>{}},
     empUp:      {lvl:0,max:3,label:'EMP RADIUS',     desc:'+30% EMP range/lvl',category:'TECH',   icon:'⚡',col:'#3498db',req:'droneUp',
-                 bonus:()=>{}},
+                 bonus:n=>{}},
     shieldUp:   {lvl:0,max:3,label:'SHIELD WALL',    desc:'+25% shield dur/lvl',category:'TECH',  icon:'🔷',col:'#3498db',req:null,
-                 bonus:()=>{}},
-    techJunkie: {lvl:0,max:2,label:'TECH JUNKIE',    desc:'-15% skill CD/lvl', category:'TECH',   icon:'🔧',col:'#3498db',req:'droneUp',
-                 bonus:n=>{}},// handled in Skills.update via cdrBonus
-    overclock:  {lvl:0,max:1,label:'OVERCLOCK',      desc:'Skills active 40% longer',category:'TECH',icon:'🔬',col:'#3498db',req:'techJunkie',
-                 bonus:()=>{}},
-    nanobots:   {lvl:0,max:2,label:'NANOBOTS',       desc:'Drone also repairs armor',category:'TECH',icon:'🧬',col:'#3498db',req:'empUp',
-                 bonus:()=>{}},
+                 bonus:n=>{}},
+    techJunkie: {lvl:0,max:3,label:'TECH JUNKIE',    desc:'-12% skill CD/lvl', category:'TECH',   icon:'🔧',col:'#3498db',req:'droneUp',
+                 bonus:n=>Player._skillCdr=n.lvl*.12},
+    overclock:  {lvl:0,max:2,label:'OVERCLOCK',      desc:'+25% skill duration/lvl',category:'TECH',icon:'🔬',col:'#3498db',req:'techJunkie',
+                 bonus:n=>Player._skillDurMult=1+n.lvl*.25},
+    nanobots:   {lvl:0,max:2,label:'NANOBOTS',       desc:'Drone also repairs armor/lvl',category:'TECH',icon:'🧬',col:'#3498db',req:'empUp',
+                 bonus:n=>Player._nanobots=n.lvl},
     chainEMP:   {lvl:0,max:1,label:'CHAIN EMP',       desc:'EMP chains to 3 nearby enemies',category:'TECH',icon:'🌐',col:'#3498db',req:'empUp',
-                 bonus:()=>{}},
+                 bonus:n=>Player._chainEmp=n.lvl>0},
+    turret:     {lvl:0,max:1,label:'AUTO-TURRET',    desc:'Shield Wall also deploys a turret',category:'TECH',icon:'🛰',col:'#3498db',req:'shieldUp',
+                 bonus:n=>Player._turret=n.lvl>0},
+    energized:  {lvl:0,max:2,label:'ENERGIZED',      desc:'Kills reduce skill CDs by 0.5s/lvl',category:'TECH',icon:'🔋',col:'#3498db',req:'overclock',
+                 bonus:n=>Player._energizedCdr=n.lvl*.5},
 
-    // ── OPERATIVE TREE ─────────────────────────────────
-    speedUp:    {lvl:0,max:4,label:'MOVE SPEED',     desc:'+8% speed/lvl',    category:'OPERATIVE',icon:'🏃',col:'#9b59b6',req:null,
-                 bonus:n=>Player.bonusSpd=n.lvl*.08},
-    reloadUp:   {lvl:0,max:3,label:'QUICK HANDS',    desc:'-12% reload time/lvl',category:'OPERATIVE',icon:'🔄',col:'#9b59b6',req:null,
-                 bonus:()=>{}},
+    // ══ OPERATIVE TREE (purple) — mobility, economy, utility ══════
+    speedUp:    {lvl:0,max:5,label:'MOVE SPEED',     desc:'+7% speed/lvl',    category:'OPERATIVE',icon:'🏃',col:'#9b59b6',req:null,
+                 bonus:n=>Player.bonusSpd=n.lvl*.07},
+    reloadUp:   {lvl:0,max:4,label:'QUICK HANDS',    desc:'-12% reload time/lvl',category:'OPERATIVE',icon:'🔄',col:'#9b59b6',req:null,
+                 bonus:n=>{}},
     dodgeUp:    {lvl:0,max:3,label:'EVASION',        desc:'-20% dodge CD/lvl',category:'OPERATIVE',icon:'💨',col:'#9b59b6',req:'speedUp',
-                 bonus:()=>{}},
-    ammoHog:    {lvl:0,max:2,label:'AMMO HOG',       desc:'+25% mag size/lvl',category:'OPERATIVE',icon:'📦',col:'#9b59b6',req:'reloadUp',
-                 bonus:n=>{if(Player.weapon)Player.weapon.magazine=~~(Player.weapon.magazine*(1+n.lvl*.25));}},
-    scavenger:  {lvl:0,max:2,label:'SCAVENGER',      desc:'+20% credits from kills/lvl',category:'OPERATIVE',icon:'💰',col:'#9b59b6',req:null,
-                 bonus:n=>{}},// handled in kill
+                 bonus:n=>{}},
+    ammoHog:    {lvl:0,max:3,label:'AMMO HOG',       desc:'+20% mag size/lvl',category:'OPERATIVE',icon:'📦',col:'#9b59b6',req:'reloadUp',
+                 bonus:n=>{}},
+    scavenger:  {lvl:0,max:3,label:'SCAVENGER',      desc:'+20% credits from kills/lvl',category:'OPERATIVE',icon:'💰',col:'#9b59b6',req:null,
+                 bonus:n=>Player._scavenger=1+n.lvl*.20},
+    looter:     {lvl:0,max:2,label:'LOOTER',         desc:'+15% rare drop chance/lvl',category:'OPERATIVE',icon:'🎁',col:'#9b59b6',req:'scavenger',
+                 bonus:n=>Player._luck=n.lvl*.15},
     ghosting:   {lvl:0,max:1,label:'GHOSTING',       desc:'First hit of each zone is guaranteed crit',category:'OPERATIVE',icon:'👻',col:'#9b59b6',req:'dodgeUp',
-                 bonus:()=>{}},
-    tactician:  {lvl:0,max:1,label:'TACTICIAN',      desc:'Spawn with full ammo + 1 extra skill charge',category:'OPERATIVE',icon:'🗺',col:'#9b59b6',req:'ammoHog',
-                 bonus:()=>{}},
+                 bonus:n=>Player._ghosting=n.lvl>0},
+    sprinter:   {lvl:0,max:2,label:'SPRINTER',       desc:'Moving 3s+ grants +10% dmg/lvl',category:'OPERATIVE',icon:'⚡',col:'#9b59b6',req:'speedUp',
+                 bonus:n=>Player._sprinterMult=n.lvl*.10},
+    fastHands:  {lvl:0,max:1,label:'COMBAT RELOAD',  desc:'Reload 50% faster after a kill',category:'OPERATIVE',icon:'🤲',col:'#9b59b6',req:'ammoHog',
+                 bonus:n=>Player._combatReload=n.lvl>0},
+    tactician:  {lvl:0,max:1,label:'TACTICIAN',      desc:'Spawn with full ammo + reduced skill CDs',category:'OPERATIVE',icon:'🗺',col:'#9b59b6',req:'fastHands',
+                 bonus:n=>Player._tactician=n.lvl>0},
+    midas:      {lvl:0,max:1,label:'MIDAS TOUCH',    desc:'10% of credits earned converts to XP',category:'OPERATIVE',icon:'👑',col:'#9b59b6',req:'looter',
+                 bonus:n=>Player._midas=n.lvl>0},
+  },
+
+  // Re-apply ALL node bonuses — call after loading a save so stats reflect skill levels
+  applyAll(){
+    Object.values(this.nodes).forEach(n=>{try{n.bonus(n);}catch(e){}});
   },
 
   upgrade(key){
     const n=this.nodes[key];if(!n||n.lvl>=n.max||this.points<=0)return;
-    // Check prerequisite
     if(n.req&&(!this.nodes[n.req]||this.nodes[n.req].lvl===0)){showBanner('REQUIRES: '+this.nodes[n.req].label);return;}
     n.lvl++;this.points--;n.bonus(n);
     try{HubSystem.renderSkills();}catch(e){}
@@ -3850,19 +3896,18 @@ const Skills={
   activate(i){
     if(this.cds[i]>0)return;this.cds[i]=this.defs[i].cd;UI.notifySkill(this.defs[i].name);
     if(i===0){
-      this.active[0]=true;this.timers[0]=this.defs[0].dur;
+      this.active[0]=true;this.timers[0]=this.defs[0].dur*(Player._skillDurMult||1);
       if(!this._drone){const m=new THREE.Mesh(new THREE.SphereGeometry(.28,6,6),new THREE.MeshBasicMaterial({color:0x00ffaa}));const gl=new THREE.PointLight(0x00ffaa,2.5,5);m.add(gl);scene.add(m);this._drone=m;}
       this._drone.visible=true;document.getElementById('drone-hud').style.display='block';
-      // Instant burst heal on activation — 25 HP immediately
       Player.heal(25*(1+SkillTree.nodes.droneUp.lvl*.3));
       Particles.burst(Player.mesh.position.clone().add(new THREE.Vector3(0,1.5,0)),0x00ffaa,IS_MOB?10:18);
     }
-    if(i===1){Enemies.list.forEach(e=>{if(e.alive&&e.mesh.position.distanceTo(Player.mesh.position)<12*(1+SkillTree.nodes.empUp.lvl*.3))Enemies.stun(e,3);});Particles.burst(Player.mesh.position.clone().add(new THREE.Vector3(0,1,0)),0x0088ff,15);}
+    if(i===1){const empR=12*(1+SkillTree.nodes.empUp.lvl*.3);Enemies.list.forEach(e=>{if(e.alive&&e.mesh.position.distanceTo(Player.mesh.position)<empR)Enemies.stun(e,3);});Particles.burst(Player.mesh.position.clone().add(new THREE.Vector3(0,1,0)),0x0088ff,15);}
     if(i===2)Grenades.throw(Player.mesh.position.clone().add(new THREE.Vector3(0,1.1,0)),Player.facing.clone());
-    if(i===3){this.active[3]=true;this.timers[3]=this.defs[3].dur*(1+SkillTree.nodes.shieldUp.lvl*.2);Player.shielded=true;document.getElementById('shield-vfx').classList.add('on');}
+    if(i===3){this.active[3]=true;this.timers[3]=this.defs[3].dur*(1+SkillTree.nodes.shieldUp.lvl*.2)*(Player._skillDurMult||1);Player.shielded=true;document.getElementById('shield-vfx').classList.add('on');}
   },
   update(dt){
-    const cdrBonus=Armor.getStats().cdr+CharCreator.classBonus.cdBonus;
+    const cdrBonus=Armor.getStats().cdr+CharCreator.classBonus.cdBonus+(Player._skillCdr||0);
     for(let i=0;i<4;i++){
       if(this.cds[i]>0)this.cds[i]=Math.max(0,this.cds[i]-dt*(1+cdrBonus));
       if(this.active[i]){
@@ -4372,8 +4417,8 @@ const Player={
     this._weaponGroup.add(model);
   },
 
-  recalc(){const s=Armor.getStats();this.maxArmor=100+s.armor;this.maxHp=100+s.hp;this.armor=Math.min(this.armor+s.armor,this.maxArmor);UI.updateBars();InvUI.refresh();},
-  heal(amt){this.hp=Math.min(this.maxHp,this.hp+amt);UI.updateBars();},
+  recalc(){const s=Armor.getStats();this.maxArmor=100+s.armor+(this._skillArmorBonus||0);this.maxHp=100+s.hp+(this._classHpBonus||0);this.armor=Math.min(this.armor+s.armor,this.maxArmor);UI.updateBars();InvUI.refresh();},
+  heal(amt){this.hp=Math.min(this.maxHp,this.hp+amt*(this._healMult||1));UI.updateBars();},
   gainXP(amt){this.xp+=amt;while(this.xp>=this.xpNext){this.xp-=this.xpNext;this.level++;this.xpNext=~~(this.xpNext*1.45);this.maxHp+=12;this.hp=this.maxHp;this.maxArmor+=5;SkillTree.points++;Audio.levelUp();UI.levelUp(this.level);}UI.updateBars();},
 
   pickupWeapon(w){
@@ -4391,7 +4436,7 @@ const Player={
     if(gameState===GS.HUB)return; // no shooting in the hub
     if(!this.weapon||this.reloading||this.fireTimer>0)return;
     if(this.weapon.currentAmmo<=0){this.startReload();return;}
-    this.weapon.currentAmmo--;this.fireTimer=this.weapon.fireRate;
+    this.weapon.currentAmmo--;this.fireTimer=this.weapon.fireRate*(this._fireRateMult||1);
     const o=this.mesh.position.clone().add(new THREE.Vector3(0,1.1,0));
     const dmg=~~(this.weapon.damage*this.bonusDmg);
     // ── Soft aim assist — nudge facing toward nearest enemy in a 50° cone ──
@@ -4426,13 +4471,26 @@ const Player={
     Audio.gunshot(this.weapon.type);
     UI.updateWeaponAmmo();
   },
-  startReload(){if(this.reloading||!this.weapon||this.weapon.currentAmmo>=this.weapon.magazine)return;this.reloading=true;const reloadMult=1-SkillTree.nodes.reloadUp.lvl*.12;this.reloadTotal=this.weapon.reloadTime*reloadMult;this.reloadTimer=this.reloadTotal;Audio.reload();UI.showReload(true);},
+  startReload(){if(this.reloading||!this.weapon||this.weapon.currentAmmo>=this.weapon.magazine)return;this.reloading=true;let reloadMult=1-SkillTree.nodes.reloadUp.lvl*.12;if(this._combatReload&&this._recentKill)reloadMult*=.5;this.reloadTotal=this.weapon.reloadTime*reloadMult;this.reloadTimer=this.reloadTotal;Audio.reload();UI.showReload(true);},
   takeDmg(amt){
     if(this.dodging||this._spawnShield)return;
     if(this.shielded)amt*=.25;
-    const abs=Math.min(this.armor,amt*(.3+Math.random()*.3));
+    // Toughness — flat damage reduction
+    if(this._dmgReduce!=null&&this._dmgReduce<1)amt*=this._dmgReduce;
+    // Fortress — standing still 2s+ gives 50% reduction
+    if(this._fortress&&this._stillTime>2)amt*=.5;
+    // Armor absorbs more with bulletproof
+    const absorbRate=(.3+Math.random()*.3)*(1+(this._armorAbsorb||0));
+    const abs=Math.min(this.armor,amt*absorbRate);
     this.armor=Math.max(0,this.armor-abs);
-    this.hp=Math.max(0,this.hp-(amt-abs));
+    let hpDmg=amt-abs;
+    // Last Stand — survive one lethal hit per zone
+    if(this._lastStand&&!this._lastStandUsed&&hpDmg>=this.hp){
+      this._lastStandUsed=true;hpDmg=this.hp-1;
+      showBanner('🔱 LAST STAND — SURVIVED LETHAL HIT',2000);
+      try{Particles.burst(this.mesh.position.clone().add(new THREE.Vector3(0,1.5,0)),0xffdd00,24);}catch(e){}
+    }
+    this.hp=Math.max(0,this.hp-hpDmg);
     Audio.hit();UI.flashDmg();UI.updateBars();
     if(this.hp<=0)_die();
   },
@@ -4496,6 +4554,13 @@ const Player={
     if(!this.mesh)return;
     if(this.fireTimer>0)this.fireTimer-=dt;
     if(this.dodgeCd>0)this.dodgeCd-=dt;
+    // Track movement vs standing-still time (for Sprinter / Fortress skills)
+    {
+      const mvMag=IS_MOB?(Math.abs(Input.moveX)+Math.abs(Input.moveZ)):0;
+      const kbMoving=!IS_MOB&&(Input.down('KeyW')||Input.down('KeyS')||Input.down('KeyA')||Input.down('KeyD')||Input.down('ArrowUp')||Input.down('ArrowDown')||Input.down('ArrowLeft')||Input.down('ArrowRight'));
+      if(mvMag>.1||kbMoving){this._moveTime=(this._moveTime||0)+dt;this._stillTime=0;}
+      else{this._stillTime=(this._stillTime||0)+dt;this._moveTime=0;}
+    }
     // Passive regen from REGEN skill
     if(this._passiveRegen&&this._passiveRegen>0&&this.hp<this.maxHp)this.heal(this._passiveRegen*dt);
     if(this.reloading){this.reloadTimer-=dt;UI.updateReloadBar(1-this.reloadTimer/this.reloadTotal);if(this.reloadTimer<=0){this.reloading=false;this.weapon.currentAmmo=this.weapon.magazine;UI.showReload(false);UI.updateWeaponHUD();}}
@@ -5282,6 +5347,32 @@ const HubSystem={
   renderSkills(){
     document.getElementById('skill-pts-display').textContent=`${SkillTree.points} SP`;
     const container=document.getElementById('skill-tree-ui');if(!container)return;container.innerHTML='';
+    // Respec button — refund all spent points for credits
+    {
+      const spent=Object.values(SkillTree.nodes).reduce((s,n)=>s+n.lvl,0);
+      if(spent>0){
+        const respecCost=200+spent*50;
+        const rb=document.createElement('button');
+        rb.style.cssText='width:100%;padding:8px;margin-bottom:12px;border:1px solid rgba(255,180,0,.4);background:rgba(255,140,0,.08);color:#e6a020;font-family:"Courier New",monospace;font-size:9px;letter-spacing:2px;cursor:pointer;touch-action:manipulation';
+        rb.textContent=`↺ RESPEC ALL (${respecCost} CR) — REFUND ${spent} SP`;
+        rb.onclick=rb.ontouchend=(e)=>{if(e.type==='touchend')e.preventDefault();
+          if(Player.credits<respecCost){showBanner('NOT ENOUGH CREDITS — NEED '+respecCost+' CR',1800);return;}
+          Player.credits-=respecCost;try{UI.credit(Player.credits);}catch(ex){}
+          // Refund points, reset all node levels
+          SkillTree.points+=spent;
+          Object.values(SkillTree.nodes).forEach(n=>{n.lvl=0;});
+          // Clear all skill-derived player flags
+          ['_critDmgMult','_headMult','_armorPen','_fireRateMult','_blastMult','_rampageMult','_overkill','_executioner','_berserk','_passiveRegen','_dmgReduce','_lifesteal','_lastStand','_healMult','_armorAbsorb','_secondWind','_fortress','_skillCdr','_skillDurMult','_nanobots','_chainEmp','_turret','_energizedCdr','_scavenger','_luck','_ghosting','_sprinterMult','_combatReload','_tactician','_midas','_skillArmorBonus'].forEach(k=>delete Player[k]);
+          Player.bonusDmg=1;Player.bonusCrit=0;Player.bonusSpd=0;
+          SkillTree.applyAll();
+          try{Player.recalc();}catch(ex){}
+          showBanner('↺ SKILLS RESPEC — '+spent+' SP REFUNDED',2200);
+          try{Audio.uiClick();}catch(ex){}
+          this.renderSkills();
+        };
+        container.appendChild(rb);
+      }
+    }
     const TREES=[
       {id:'COMBAT',   label:'COMBAT',    col:'#e74c3c', icon:'💢'},
       {id:'SURVIVAL', label:'SURVIVAL',  col:'#2ecc71', icon:'❤'},
@@ -5517,6 +5608,7 @@ function _loadSaveIntoGame(d){
   Zone.zone=d.zone||1;Zone.killsToNext=~~(10*Math.pow(1.4,Zone.zone-1));
   Enemies.totalKills=d.kills||0;SkillTree.points=d.skillPts||0;
   if(d.skillTree)Object.entries(d.skillTree).forEach(([k,v])=>{if(SkillTree.nodes[k])SkillTree.nodes[k].lvl=v;});
+  try{SkillTree.applyAll();}catch(e){}
   Player.recalc();
   try{Player._updateWeaponMesh();}catch(e){}
   UI.updateWeaponHUD();Zone._hud();UI.credit(Player.credits);
@@ -5621,6 +5713,9 @@ function _startNewGame(){
   Player.hp=100;Player.maxHp=100;Player.armor=60;Player.maxArmor=100;
   Player.xp=0;Player.level=1;Player.xpNext=100;Player.credits=0;Player.weapon=null;Player.weaponBag=[];
   Player.bonusDmg=1;Player.bonusCrit=0;Player.bonusSpd=0;Player._classRegen=false;
+  // Clear all skill-derived flags for a fresh agent
+  ['_critDmgMult','_headMult','_armorPen','_fireRateMult','_blastMult','_rampageMult','_overkill','_executioner','_berserk','_passiveRegen','_dmgReduce','_lifesteal','_lastStand','_healMult','_armorAbsorb','_secondWind','_fortress','_skillCdr','_skillDurMult','_nanobots','_chainEmp','_turret','_energizedCdr','_scavenger','_luck','_ghosting','_sprinterMult','_combatReload','_tactician','_midas','_skillArmorBonus','_ghostUsed','_lastStandUsed','_recentKill','_moveTime','_stillTime'].forEach(k=>delete Player[k]);
+  Player._attachmentBag=[];Player._ownedSkins=[];
   SkillTree.points=0;Object.values(SkillTree.nodes).forEach(n=>{n.lvl=0;});
   CharCreator.classBonus={speedBonus:0,cdBonus:0,regen:false};
   try{Map3D.generate();}catch(mapErr){
@@ -5686,6 +5781,9 @@ function _startMission(missionIdx){
 }
 
 function _spawnEnemies(){
+  // Reset per-zone skill states
+  Player._ghostUsed=false;
+  Player._lastStandUsed=false;
   const G=Map3D._G||C.GRID;
   const off=-(G/2)*C.CELL;
   const z=Zone.zone;
@@ -12145,9 +12243,19 @@ Enemies._kill=function(e){
   this.totalKills++;
   try{BattlePass.addXP(elite?30:10);}catch(ex){}
   const comboMult=Combo.add();
-  const crMult=(Player._bufordActive?1.4:1)*(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1)*comboMult;
+  const scavMult=Player._scavenger||1;
+  const crMult=(Player._bufordActive?1.4:1)*(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1)*comboMult*scavMult;
   const xpMult=(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1)*comboMult;
-  Player.credits+=~~(eT.cr*(1+Zone.zone*.1)*crMult);
+  const creditsEarned=~~(eT.cr*(1+Zone.zone*.1)*crMult);
+  Player.credits+=creditsEarned;
+  // Midas Touch — convert 10% of credits earned into XP
+  if(Player._midas)try{Player.gainXP(~~(creditsEarned*.1));}catch(ex){}
+  // Combat Reload — flag a recent kill for 3s
+  if(Player._combatReload){Player._recentKill=true;clearTimeout(Player._recentKillTimer);Player._recentKillTimer=setTimeout(()=>{Player._recentKill=false;},3000);}
+  // Energized — kills shave time off skill cooldowns
+  if(Player._energizedCdr)try{for(let i=0;i<Skills.cds.length;i++)if(Skills.cds[i]>0)Skills.cds[i]=Math.max(0,Skills.cds[i]-Player._energizedCdr);}catch(ex){}
+  // Second Wind — heal on elite kill
+  if(elite&&Player._secondWind)try{Player.heal(Player.maxHp*.4);showBanner('🌬 SECOND WIND',1200);}catch(ex){}
   UI.credit(Player.credits);
   try{Player.gainXP(~~(eT.xp*xpMult));}catch(ex){}
   try{UI.killFeed(eT.label,'#e74c3c');}catch(ex){}
@@ -12284,19 +12392,32 @@ Skills.activate=function(i){
 
 // Measure hub header height so tabs stick correctly below it
 const UPDATES=[
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'3RD PERSON MODE — over-right-shoulder camera like RE4 & The Division. Toggle in Settings'},
-  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'3rd person movement fixed — left stick now moves relative to camera direction, no spin loop'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Sky dome when outdoors in 3rd person — gradient night sky with 300 stars'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Ceiling geometry when indoors in 3rd person — concrete slab with beam grid'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Weapon models — 9 detailed weapon types with proper geometry (pistol/SMG/AR/shotgun/sniper/LMG/rocket/grenade/plasma)'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Weapon attachments visible on model — red dot, suppressor, drum mag, laser sight all show as geometry'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Enemy tactical suits — each type has unique gear: soldier (plate carrier), elite (exo-suit/red visor), heavy (juggernaut), rusher (street gang), sniper (ghillie)'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Enemies hold matching weapons — soldiers carry AR, heavies LMG, rushers SMG, snipers bolt-action'},
-  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Enemy weapons no longer backwards — barrel now faces forward correctly'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Gypsy Crusader merc — Joker cosplay, JOKER\'S GAMBIT passive rolls random buff/debuff each zone'},
-  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'George Droid rebuilt — half dark skin / half chrome cyborg with glowing red eye, matching reference image'},
-  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Merc wanderers in hub fixed — all non-active mercs patrol plaza with walk animation'},
-  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Companion follows player in hub with walk animation'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'SKILL TREE EXPANDED — 39 nodes across 4 trees (Division-style). New capstones: Executioner, Berserker, Fortress, Second Wind, Auto-Turret, Midas Touch & more'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Every skill now has a real gameplay effect — crit damage, headshot dmg, armor pen, lifesteal, toughness, rampage (combo dmg), sprinter, combat reload all wired in'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'RESPEC button in skill menu — refund all skill points for credits to rebuild your loadout'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Skill bonuses now re-apply correctly when loading a save (were silently lost before)'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Weapon skins — 8 skins (Stealth/Desert/Forest/Arctic/Crimson/Gold/Void/Chrome) change your gun colour in-game, buy & apply in Armory'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Attachment system overhaul — clear bag → socket → remove flow in Armory, attachments change weapon appearance'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Affix reroll — spend credits to re-roll an item\u2019s affixes while keeping base stats'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Fog-of-war minimap — map reveals as you explore, Hades-style, on both radar & full map'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Kill combo system — chain kills for escalating tiers (ON FIRE → RAMPAGE → GODLIKE) with credit/XP multipliers up to 1.75x'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'CRITICAL: saving was silently broken (missing Player.save) — progress now persists properly including skins & attachments'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Returning from hub no longer resets the zone or wipes enemies'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Enemies no longer get stuck inside you — separation push added'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Sniper rifle now has a proper built-in scope (tube, turrets, lens, mount rings)'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Reset Zone button in Settings — respawns enemies if a zone ever bugs out empty'},
+  {date:'RECENT',tag:'FIX',col:'#2ecc71',text:'3rd person movement fixed — left stick now moves relative to camera direction, no spin loop'},
+  {date:'RECENT',tag:'NEW',col:'#e67e22',text:'Sky dome when outdoors in 3rd person — gradient night sky with 300 stars'},
+  {date:'RECENT',tag:'NEW',col:'#e67e22',text:'Ceiling geometry when indoors in 3rd person — concrete slab with beam grid'},
+  {date:'RECENT',tag:'NEW',col:'#e67e22',text:'Weapon models — 9 detailed weapon types with proper geometry (pistol/SMG/AR/shotgun/sniper/LMG/rocket/grenade/plasma)'},
+  {date:'RECENT',tag:'NEW',col:'#e67e22',text:'Weapon attachments visible on model — red dot, suppressor, drum mag, laser sight all show as geometry'},
+  {date:'RECENT',tag:'NEW',col:'#e67e22',text:'Enemy tactical suits — each type has unique gear: soldier (plate carrier), elite (exo-suit/red visor), heavy (juggernaut), rusher (street gang), sniper (ghillie)'},
+  {date:'RECENT',tag:'NEW',col:'#e67e22',text:'Enemies hold matching weapons — soldiers carry AR, heavies LMG, rushers SMG, snipers bolt-action'},
+  {date:'RECENT',tag:'FIX',col:'#2ecc71',text:'Enemy weapons no longer backwards — barrel now faces forward correctly'},
+  {date:'RECENT',tag:'NEW',col:'#e67e22',text:'Gypsy Crusader merc — Joker cosplay, JOKER\'S GAMBIT passive rolls random buff/debuff each zone'},
+  {date:'RECENT',tag:'NEW',col:'#e67e22',text:'George Droid rebuilt — half dark skin / half chrome cyborg with glowing red eye, matching reference image'},
+  {date:'RECENT',tag:'FIX',col:'#2ecc71',text:'Merc wanderers in hub fixed — all non-active mercs patrol plaza with walk animation'},
+  {date:'RECENT',tag:'FIX',col:'#2ecc71',text:'Companion follows player in hub with walk animation'},
   {date:'RECENT',tag:'NEW',col:'#3498db',text:'Sheriff Buford T. Justice merc — PURSUIT MANDATE: +40% credits, stun on kill with Smokey quotes'},
   {date:'RECENT',tag:'NEW',col:'#3498db',text:'Identify system — take unidentified RARE+ loot to Weapon Dealer or Armory to reveal affixes for 50 CR'},
   {date:'RECENT',tag:'NEW',col:'#3498db',text:'Item affixes — 17 roll modifiers: BRUTAL/RAPID/VAMPIRIC/EXPLOSIVE/CRYO/ELECTRIC and more'},
