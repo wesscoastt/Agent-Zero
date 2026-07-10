@@ -1518,7 +1518,7 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
     </div>
   </div>
   <div id="reload-bar"><div id="reload-lbl">RELOADING</div><div style="background:rgba(255,255,255,.07);height:2px"><div id="reload-fill"></div></div></div>
-  <div id="hints">WASD · SHIFT SPRINT · SPACE DODGE · R RELOAD<br>Q/E/F/X SKILLS · I INVENTORY · H HUB</div>
+  <div id="hints">WASD · SHIFT SPRINT · SPACE DODGE · R RELOAD<br>Q/E/F/X SKILLS · I INVENTORY · H HUB · 🎮 GAMEPAD OK</div>
   <div id="drone-hud">✦ DRONE ACTIVE</div>
   <div id="event-banner" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
     font-size:13px;letter-spacing:4px;color:#ffd700;text-shadow:0 0 22px #ffd700;
@@ -1943,7 +1943,7 @@ const Input = {
     const t=rd.y!==0?-ro.y/rd.y:0;
     this.world.set(ro.x+rd.x*t,0,ro.z+rd.z*t);
   },
-  firing(){return this.mouse.btn||this.mFire;},
+  firing(){return this.mouse.btn||this.mFire||this.gpFire;},
   consumeFire(){this.mFire=false;}, // called by Player.shoot after firing
 };
 Input.init();
@@ -1985,6 +1985,85 @@ const Joystick = {
   _flush(){Input.moveX=this.L.dx;Input.moveZ=this.L.dy;Input.aimX=this.R.dx;Input.aimZ=this.R.dy;Input.mAiming=this.R.id!==null&&Math.hypot(this.R.dx,this.R.dy)>.25;},
 };
 Joystick.init();
+
+// ── Gamepad / Controller Support ───────────────────────────────────────
+// Standard mapping: left stick move, right stick aim, RT fire, A dodge,
+// X reload, Y inventory, LB/RB/LT/B skills, Start pause, Select map
+const Gamepad = {
+  connected:false, _prev:[], _aimed:false, _moved:false,
+  DEAD:0.16,
+  init(){
+    window.addEventListener('gamepadconnected',e=>{
+      this.connected=true;
+      showBanner('🎮 CONTROLLER CONNECTED — '+(e.gamepad.id||'').slice(0,28),2500);
+    });
+    window.addEventListener('gamepaddisconnected',()=>{
+      this.connected=false;
+      // Release anything we were holding
+      if(this._moved){Input.moveX=0;Input.moveZ=0;this._moved=false;}
+      if(this._aimed){Input.aimX=0;Input.aimZ=0;Input.mAiming=false;this._aimed=false;}
+      Input.gpFire=false;Input.mDodge=false;
+      showBanner('🎮 CONTROLLER DISCONNECTED',2000);
+    });
+  },
+  _pressed(gp,i){return !!(gp.buttons[i]&&gp.buttons[i].pressed);},
+  _edge(gp,i){ // true only on the frame the button transitions to pressed
+    const now=this._pressed(gp,i);
+    const was=!!this._prev[i];
+    this._prev[i]=now;
+    return now&&!was;
+  },
+  update(){
+    const pads=navigator.getGamepads?navigator.getGamepads():[];
+    let gp=null;
+    for(const p of pads){if(p&&p.connected){gp=p;break;}}
+    if(!gp)return;
+    if(!this.connected)this.connected=true;
+
+    const dz=v=>Math.abs(v)>this.DEAD?v:0;
+
+    // ── Left stick → movement ──
+    const lx=dz(gp.axes[0]||0), ly=dz(gp.axes[1]||0);
+    if(lx!==0||ly!==0){
+      // Only override touch joystick if it isn't actively held
+      if(Joystick.L.id===null){Input.moveX=lx;Input.moveZ=ly;this._moved=true;}
+    } else if(this._moved&&Joystick.L.id===null){
+      Input.moveX=0;Input.moveZ=0;this._moved=false;
+    }
+
+    // ── Right stick → aim ──
+    const rx=dz(gp.axes[2]||0), ry=dz(gp.axes[3]||0);
+    if(rx!==0||ry!==0){
+      if(Joystick.R.id===null){Input.aimX=rx;Input.aimZ=ry;Input.mAiming=Math.hypot(rx,ry)>.25;this._aimed=true;}
+    } else if(this._aimed&&Joystick.R.id===null){
+      Input.aimX=0;Input.aimZ=0;Input.mAiming=false;this._aimed=false;
+    }
+
+    // ── RT (7) → fire (held) ──
+    Input.gpFire=this._pressed(gp,7);
+
+    // ── Buttons (edge-triggered) ──
+    if(gameState===GS.MISSION&&!_paused){
+      // A / Cross — dodge: set on press edge, clear on release (only if WE set it)
+      if(this._edge(gp,0)){Input.mDodge=true;this._dodgeHeld=true;}
+      else if(this._dodgeHeld&&!this._pressed(gp,0)){Input.mDodge=false;this._dodgeHeld=false;}
+      if(this._edge(gp,2)) Player.startReload();           // X / Square — reload
+      if(this._edge(gp,3)) InvUI.toggle();                 // Y / Triangle — inventory
+      if(this._edge(gp,4)) Skills.activate(0);             // LB — drone
+      if(this._edge(gp,5)) Skills.activate(1);             // RB — EMP
+      if(this._edge(gp,6)) Skills.activate(2);             // LT — grenade
+      if(this._edge(gp,1)) Skills.activate(3);             // B / Circle — shield
+      if(this._edge(gp,8)) _fullMapOpen?closeFullMap():openFullMap(); // Select — map
+    } else {
+      // consume edges so they don't queue while paused
+      [0,1,2,3,4,5,6,8].forEach(i=>this._edge(gp,i));
+      if(this._dodgeHeld){Input.mDodge=false;this._dodgeHeld=false;}
+    }
+    // Start — pause toggle works in mission or while paused
+    if(this._edge(gp,9)&&(gameState===GS.MISSION||_paused))togglePause();
+  },
+};
+Gamepad.init();
 
 // =====================================================================
 //  GAME STATE MACHINE
@@ -2887,16 +2966,19 @@ const Bullets = {
             if(r2<(e.isDrone?.5:.7)){
               // Headshot: bullet is in upper third of enemy
               const headY=e.isDrone?3.5:(e.T.sz[1]*.65);
+              // PHANTOM elites — 25% chance bullets phase through
+              if(e.modifier==='PHANTOM'&&Math.random()<.25){Particles.burst(b.position.clone(),0xaa44ff,4);kill=true;break;}
               const isHead=(!e.isDrone)&&dy>headY*.5;
               const ghostCrit=Player._ghosting&&!Player._ghostUsed;
-              const cr=Math.random()<(Player.weapon?.critChance||.05)||(isHead)||ghostCrit;
+              const critChance=(Player.weapon?.critChance||.05)+(Player.bonusCrit||0)+(Player._setCrit||0);
+              const cr=Math.random()<critChance||(isHead)||ghostCrit;
               if(ghostCrit)Player._ghostUsed=true;
               // Headshot multiplier (with Headhunter bonus)
               const headMult=isHead?(1.8*(Player._headMult||1)):1;
               // Crit damage multiplier (with Crit Damage skill)
               const critMult=(cr&&!isHead)?(1.9*(Player._critDmgMult||1)):1;
-              // Damage bonuses: rampage (combo), berserker (low HP), sprinter (moving)
-              let dmgBonus=1;
+              // Damage bonuses: rampage (combo), berserker (low HP), sprinter (moving), gear sets
+              let dmgBonus=1+(Player._setDmg||0);
               if(Player._rampageMult&&Combo.count>0){const tier=Combo._tier?Combo.tiers.indexOf(Combo._tier()):0;dmgBonus+=Player._rampageMult*tier;}
               if(Player._berserk&&Player.hp<Player.maxHp*.4)dmgBonus+=.30;
               if(Player._sprinterMult&&Player._moveTime>3)dmgBonus+=Player._sprinterMult;
@@ -3170,15 +3252,33 @@ const Enemies = {
     G.position.copy(pos).setY(key==='DRONE'?3.2:0);
     scene.add(G);
     let modifier=null;
-    if(key==='ELITE'){
-      const mods=['ARMORED','BERSERKER','REGENERATOR','PHANTOM'];
+    const MOD_DEFS={
+      ARMORED:    {col:0x8899aa,desc:'TAKES 50% REDUCED DAMAGE'},
+      BERSERKER:  {col:0xff2200,desc:'+50% DAMAGE DEALT'},
+      REGENERATOR:{col:0x22ff66,desc:'REGENERATES WHEN WOUNDED'},
+      PHANTOM:    {col:0xaa44ff,desc:'25% OF SHOTS PHASE THROUGH'},
+      VOLATILE:   {col:0xff6600,desc:'EXPLODES ON DEATH — KEEP DISTANCE'},
+      SWIFT:      {col:0x00ddff,desc:'MOVES 45% FASTER'},
+    };
+    if(key==='ELITE'||((key==='HEAVY'||key==='SNIPER')&&z>=8&&Math.random()<.20)){
+      const mods=Object.keys(MOD_DEFS);
       modifier=mods[~~(Math.random()*mods.length)];
+      // SWIFT — bake speed into scaled stats
+      if(modifier==='SWIFT')scaledT.spd=(scaledT.spd||T.spd)*1.45;
+      // Visual: colored ring on the ground under the enemy, pulsing light
+      try{
+        const md=MOD_DEFS[modifier];
+        const ring=new THREE.Mesh(new THREE.RingGeometry(.55,.75,20),new THREE.MeshBasicMaterial({color:md.col,transparent:true,opacity:.75,side:THREE.DoubleSide}));
+        ring.rotation.x=-Math.PI/2;ring.position.y=.06;G.add(ring);
+        const ml=new THREE.PointLight(md.col,1.6,5);ml.position.y=1.2;G.add(ml);
+      }catch(re){}
     }
-    this.list.push({mesh:G,hpBar,bodyMats,key,T:scaledT,hp:scaledT.hp,maxHp:scaledT.hp,alive:true,state:'chase',fireTimer:Math.random()*T.fRate,stateTimer:0,coverTarget:null,stunTimer:0,isDrone:key==='DRONE',modifier,dotTimer:0,slow:0,elite:key==='ELITE'});
+    this.list.push({mesh:G,hpBar,bodyMats,key,T:scaledT,hp:scaledT.hp,maxHp:scaledT.hp,alive:true,state:'chase',fireTimer:Math.random()*T.fRate,stateTimer:0,coverTarget:null,stunTimer:0,isDrone:key==='DRONE',modifier,_modDesc:modifier?MOD_DEFS[modifier].desc:null,dotTimer:0,slow:0,elite:key==='ELITE'});
   },
 
   hit(e,dmg,isCrit,isHead,element){
     if(!e.alive)return;
+    if(e.modifier&&!e._modAnnounced){e._modAnnounced=true;try{showBanner('⚠ '+e.modifier+' — '+(e._modDesc||''),2200);}catch(ex){}}
     // Armor modifier
     if(e.modifier==='ARMORED')dmg=~~(dmg*.5);
     e.hp-=dmg;
@@ -3271,7 +3371,7 @@ const Enemies = {
       if(Player._gypsyConfuse&&Math.random()<.12)try{Enemies.list.forEach(e=>{if(e.alive&&e.mesh.position.distanceTo(bp)<8)Enemies.stun(e,1.5);});}catch(ex){}
     }
     // Give pet XP on kill
-    try{if(Mercs.active)Mercs.gainXP(elite?12:5);}catch(ex){}
+    try{if(Mercs.active)Mercs.gainXP((elite?12:5)*(Player._setPetXP?2:1));}catch(ex){}
     try{if(eKey==='HEAVY'&&Math.random()<.8)Loot.spawnDrop(lx,lz,'RARE',true);}catch(ex){}
     try{if(eKey==='ELITE')Loot.spawnDrop(lx,lz,'EPIC');}catch(ex){}
 
@@ -3943,7 +4043,7 @@ const Skills={
     if(i===3){this.active[3]=true;this.timers[3]=this.defs[3].dur*(1+SkillTree.nodes.shieldUp.lvl*.2)*(Player._skillDurMult||1);Player.shielded=true;document.getElementById('shield-vfx').classList.add('on');}
   },
   update(dt){
-    const cdrBonus=Armor.getStats().cdr+CharCreator.classBonus.cdBonus+(Player._skillCdr||0);
+    const cdrBonus=Armor.getStats().cdr+CharCreator.classBonus.cdBonus+(Player._skillCdr||0)+(Player._setCdr||0);
     for(let i=0;i<4;i++){
       if(this.cds[i]>0)this.cds[i]=Math.max(0,this.cds[i]-dt*(1+cdrBonus));
       if(this.active[i]){
@@ -4453,7 +4553,7 @@ const Player={
     this._weaponGroup.add(model);
   },
 
-  recalc(){const s=Armor.getStats();this.maxArmor=100+s.armor+(this._skillArmorBonus||0);this.maxHp=100+s.hp+(this._classHpBonus||0);this.armor=Math.min(this.armor+s.armor,this.maxArmor);UI.updateBars();InvUI.refresh();},
+  recalc(){const s=Armor.getStats();this.maxArmor=100+s.armor+(this._skillArmorBonus||0)+(this._setArmor||0);this.maxHp=100+s.hp+(this._classHpBonus||0);this.armor=Math.min(this.armor,this.maxArmor);UI.updateBars();InvUI.refresh();},
   heal(amt){this.hp=Math.min(this.maxHp,this.hp+amt*(this._healMult||1));UI.updateBars();},
   gainXP(amt){this.xp+=amt;while(this.xp>=this.xpNext){this.xp-=this.xpNext;this.level++;this.xpNext=~~(this.xpNext*1.45);this.maxHp+=12;this.hp=this.maxHp;this.maxArmor+=5;SkillTree.points++;Audio.levelUp();UI.levelUp(this.level);}UI.updateBars();},
 
@@ -4510,9 +4610,12 @@ const Player={
   startReload(){if(this.reloading||!this.weapon||this.weapon.currentAmmo>=this.weapon.magazine)return;this.reloading=true;let reloadMult=1-SkillTree.nodes.reloadUp.lvl*.12;if(this._combatReload&&this._recentKill)reloadMult*=.5;this.reloadTotal=this.weapon.reloadTime*reloadMult;this.reloadTimer=this.reloadTotal;Audio.reload();UI.showReload(true);},
   takeDmg(amt){
     if(this.dodging||this._spawnShield)return;
+    if(this._ghostTimer>0)return; // SHADOW 5pc — untargetable after kill
     if(this.shielded)amt*=.25;
     // Toughness — flat damage reduction
     if(this._dmgReduce!=null&&this._dmgReduce<1)amt*=this._dmgReduce;
+    // Set bonus damage reduction (IRONCLAD 4pc)
+    if(this._setDmgReduce)amt*=(1-this._setDmgReduce);
     // Fortress — standing still 2s+ gives 50% reduction
     if(this._fortress&&this._stillTime>2)amt*=.5;
     // Armor absorbs more with bulletproof
@@ -4564,6 +4667,7 @@ const Player={
         equipped.push(best.name.split(' ').slice(0,2).join(' '));
       }
     }
+    try{_checkSetBonuses();}catch(e){}
     try{Player.recalc();}catch(e){}
     try{InvUI.refresh();}catch(ex){}
     if(equipped.length>0)showBanner('⬆ EQUIPPED: '+equipped.slice(0,3).join(', '),2500);
@@ -4590,9 +4694,10 @@ const Player={
     if(!this.mesh)return;
     if(this.fireTimer>0)this.fireTimer-=dt;
     if(this.dodgeCd>0)this.dodgeCd-=dt;
+    if(this._ghostTimer>0)this._ghostTimer-=dt;
     // Track movement vs standing-still time (for Sprinter / Fortress skills)
     {
-      const mvMag=IS_MOB?(Math.abs(Input.moveX)+Math.abs(Input.moveZ)):0;
+      const mvMag=Math.abs(Input.moveX)+Math.abs(Input.moveZ);
       const kbMoving=!IS_MOB&&(Input.down('KeyW')||Input.down('KeyS')||Input.down('KeyA')||Input.down('KeyD')||Input.down('ArrowUp')||Input.down('ArrowDown')||Input.down('ArrowLeft')||Input.down('ArrowRight'));
       if(mvMag>.1||kbMoving){this._moveTime=(this._moveTime||0)+dt;this._stillTime=0;}
       else{this._stillTime=(this._stillTime||0)+dt;this._moveTime=0;}
@@ -4605,7 +4710,11 @@ const Player={
     // ── Movement inputs (hoisted so facing block can read them) ──
     let mx=0,mz=0;
     if(IS_MOB){mx=Input.moveX;mz=Input.moveZ;}
-    else{if(Input.down('KeyW')||Input.down('ArrowUp'))mz-=1;if(Input.down('KeyS')||Input.down('ArrowDown'))mz+=1;if(Input.down('KeyA')||Input.down('ArrowLeft'))mx-=1;if(Input.down('KeyD')||Input.down('ArrowRight'))mx+=1;}
+    else{
+      if(Input.down('KeyW')||Input.down('ArrowUp'))mz-=1;if(Input.down('KeyS')||Input.down('ArrowDown'))mz+=1;if(Input.down('KeyA')||Input.down('ArrowLeft'))mx-=1;if(Input.down('KeyD')||Input.down('ArrowRight'))mx+=1;
+      // Gamepad stick overrides keyboard on desktop when deflected
+      if(Math.abs(Input.moveX)>.1||Math.abs(Input.moveZ)>.1){mx=Input.moveX;mz=Input.moveZ;}
+    }
 
     // In 3rd person: remap left-stick to camera-relative world movement
     // Left stick up = forward along facing, right = strafe along right vector
@@ -4623,7 +4732,7 @@ const Player={
 
     if(!this.dodging){
       const stats=Armor.getStats();
-      const spd=C.PLAYER_SPD*(1+stats.spd+CharCreator.classBonus.speedBonus+this.bonusSpd);
+      const spd=C.PLAYER_SPD*(1+stats.spd+CharCreator.classBonus.speedBonus+this.bonusSpd+(this._setSpd||0));
       const sprint=Input.down('ShiftLeft')||Input.down('ShiftRight');
       const smult=sprint?C.SPRINT:1;
       const inHub=gameState===GS.HUB;
@@ -4670,12 +4779,12 @@ const Player={
         this._stepT-=dt;
         if(this._stepT<=0){this._stepT=sprint?.25:.4;Audio.step(sprint);}
         // ── Dodge while moving ──
-        const doDodge=Input.down('Space')||(IS_MOB&&Input.mDodge);
-        if(doDodge&&this.dodgeCd<=0){const dodgeCdMult=1-SkillTree.nodes.dodgeUp.lvl*.25;this.dodging=true;this.dodgeTimer=.22;this.dodgeCd=1.4*dodgeCdMult;this.dodgeDir.set(nx,0,nz);Input.mDodge=false;}
+        const doDodge=Input.down('Space')||Input.mDodge;
+        if(doDodge&&this.dodgeCd<=0){const dodgeCdMult=1-SkillTree.nodes.dodgeUp.lvl*.25;this.dodging=true;this.dodgeTimer=.22;this.dodgeCd=1.4*dodgeCdMult;this.dodgeDir.set(nx,0,nz);Input.mDodge=false;if(this._setDodgeBlast)try{Bullets._blast(this.mesh.position.clone(),100);Audio.explosion();}catch(e){}}
       } else {
         // ── Dodge while stationary ──
-        const doDodge=Input.down('Space')||(IS_MOB&&Input.mDodge);
-        if(doDodge&&this.dodgeCd<=0){const dodgeCdMult=1-SkillTree.nodes.dodgeUp.lvl*.25;this.dodging=true;this.dodgeTimer=.22;this.dodgeCd=1.4*dodgeCdMult;this.dodgeDir.copy(this.facing);Input.mDodge=false;}
+        const doDodge=Input.down('Space')||Input.mDodge;
+        if(doDodge&&this.dodgeCd<=0){const dodgeCdMult=1-SkillTree.nodes.dodgeUp.lvl*.25;this.dodging=true;this.dodgeTimer=.22;this.dodgeCd=1.4*dodgeCdMult;this.dodgeDir.copy(this.facing);Input.mDodge=false;if(this._setDodgeBlast)try{Bullets._blast(this.mesh.position.clone(),100);Audio.explosion();}catch(e){}}
         if(this._armL){this._armL.rotation.x+=(0.85-this._armL.rotation.x)*.18;this._armR.rotation.x+=(1.1-this._armR.rotation.x)*.18;}
         if(this._legL){this._legL.rotation.x*=.82;this._legR.rotation.x*=.82;}
       }
@@ -4795,9 +4904,14 @@ const Player={
         }
       }
     } else {
-      // Desktop — face mouse cursor
-      const mw=Input.world;const fdx=mw.x-this.mesh.position.x,fdz=mw.z-this.mesh.position.z;
-      if(Math.abs(fdx)+Math.abs(fdz)>.1){this.facing.set(fdx,0,fdz).normalize();this.mesh.rotation.y=Math.atan2(fdx,fdz)+Math.PI;}
+      // Desktop — gamepad right stick takes priority when deflected, else mouse
+      if((Math.abs(Input.aimX)+Math.abs(Input.aimZ))>.2){
+        this.facing.set(Input.aimX,0,Input.aimZ).normalize();
+        this.mesh.rotation.y=Math.atan2(Input.aimX,Input.aimZ)+Math.PI;
+      } else {
+        const mw=Input.world;const fdx=mw.x-this.mesh.position.x,fdz=mw.z-this.mesh.position.z;
+        if(Math.abs(fdx)+Math.abs(fdz)>.1){this.facing.set(fdx,0,fdz).normalize();this.mesh.rotation.y=Math.atan2(fdx,fdz)+Math.PI;}
+      }
     }
     this.mesh.position.y=0;
     this.light.position.copy(this.mesh.position);this.light.position.y+=2;
@@ -5182,6 +5296,27 @@ const HubSystem={
 
     // ── ATTACHMENT SOCKETING (Torchlight gem-style) ──────────────────
     const bag=Player._attachmentBag||[];
+    // ── GEAR SETS ──────────────────────────────────────────────────
+    {
+      const counts={};
+      Object.values(Armor.equipped||{}).filter(Boolean).forEach(a=>{if(a.setName)counts[a.setName]=(counts[a.setName]||0)+1;});
+      const sec=document.createElement('div');
+      sec.style.cssText='margin-bottom:14px;border:1px solid rgba(255,215,0,.25);padding:10px;background:rgba(20,18,0,.4)';
+      sec.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;color:#ffd700;margin-bottom:8px">⬡ GEAR SETS</div>`;
+      if(Object.keys(counts).length===0){
+        sec.innerHTML+=`<div style="font-family:'Courier New',monospace;font-size:8px;color:#554;line-height:1.6">SET PIECES DROP FROM EPIC+ ARMOR (30%)<br>WEAR 2/3/4/5 MATCHING PIECES FOR ESCALATING BONUSES</div>`;
+      } else {
+        Object.entries(counts).forEach(([sn,cnt])=>{
+          const set=ITEM_SETS[sn];if(!set)return;
+          const rows=Object.entries(set.bonuses).map(([n,b])=>{
+            const active=cnt>=+n;
+            return `<div style="font-size:8px;color:${active?set.col:'#445'};padding:1px 0">${active?'✦':'○'} ${n}PC — ${b.replace(/_/g,' ').toUpperCase()}</div>`;
+          }).join('');
+          sec.innerHTML+=`<div style="margin-bottom:8px;font-family:'Courier New',monospace"><div style="font-size:10px;color:${set.col}">${set.name} — ${cnt}/5 EQUIPPED</div>${rows}</div>`;
+        });
+      }
+      grid.appendChild(sec);
+    }
     // ── ATTACHMENT BAG ─────────────────────────────────────────────
     {
       const sec=document.createElement('div');
@@ -5645,6 +5780,7 @@ function _loadSaveIntoGame(d){
   Enemies.totalKills=d.kills||0;SkillTree.points=d.skillPts||0;
   if(d.skillTree)Object.entries(d.skillTree).forEach(([k,v])=>{if(SkillTree.nodes[k])SkillTree.nodes[k].lvl=v;});
   try{SkillTree.applyAll();}catch(e){}
+  try{_checkSetBonuses();}catch(e){}
   Player.recalc();
   try{Player._updateWeaponMesh();}catch(e){}
   UI.updateWeaponHUD();Zone._hud();UI.credit(Player.credits);
@@ -7677,6 +7813,7 @@ function loop(){
   try{
     const dt=Math.min(clock.getDelta(),.05);
     renderer.render(scene,camera);
+    try{Gamepad.update();}catch(e){}
     if(!gameRunning)return;
     Input.updateWorld();
     Player.update(dt);
@@ -12077,26 +12214,35 @@ const ITEM_SETS={
 function _checkSetBonuses(){
   const equipped=Object.values(Armor.equipped||{}).filter(Boolean);
   const setCounts={};
-  equipped.forEach(a=>{
-    if(a.setName){setCounts[a.setName]=(setCounts[a.setName]||0)+1;}
-  });
+  equipped.forEach(a=>{if(a.setName)setCounts[a.setName]=(setCounts[a.setName]||0)+1;});
   Player._activeSets=setCounts;
-  // Apply bonuses
-  let extraDmg=0,extraSpd=0,extraArmor=0,extraCrit=0;
+  // Reset ALL set-derived fields first — makes this fully idempotent
+  Player._setDmg=0;Player._setSpd=0;Player._setArmor=0;Player._setCrit=0;
+  Player._setDmgReduce=0;Player._setXPBonus=1;Player._elementalBonus=1;Player._setCdr=0;
+  Player._setKillArmor=false;Player._setGhostKill=false;Player._setDodgeBlast=false;Player._setPetXP=false;
   Object.entries(setCounts).forEach(([sn,cnt])=>{
-    const set=ITEM_SETS[sn];if(!set)return;
-    if(cnt>=2&&set.bonuses[2]?.includes('armor'))extraArmor+=30;
-    if(cnt>=2&&set.bonuses[2]?.includes('spd'))extraSpd+=.15;
-    if(cnt>=2&&set.bonuses[2]?.includes('elemental'))Player._elementalBonus=1.25;
-    if(cnt>=2&&set.bonuses[2]?.includes('all_stats')){extraDmg+=.1;extraSpd+=.1;extraArmor+=10;}
-    if(cnt>=4&&set.bonuses[4]?.includes('crit'))extraCrit+=.20;
-    if(cnt>=4&&set.bonuses[4]?.includes('xp'))Player._setXPBonus=1.25;
-    if(cnt>=4&&set.bonuses[4]?.includes('dmg_reduce'))Player._dmgReduce=(Player._dmgReduce||1)-.15;
+    if(sn==='IRONCLAD'){
+      if(cnt>=2)Player._setArmor+=30;
+      if(cnt>=4)Player._setDmgReduce+=.15;
+      if(cnt>=5)Player._setKillArmor=true;   // kills restore armor
+    }
+    if(sn==='SHADOW'){
+      if(cnt>=2)Player._setSpd+=.15;
+      if(cnt>=4)Player._setCrit+=.20;
+      if(cnt>=5)Player._setGhostKill=true;   // 2s untargetable after kill
+    }
+    if(sn==='REACTOR'){
+      if(cnt>=2)Player._elementalBonus=1.25;
+      if(cnt>=3)Player._setCdr+=.20;
+      if(cnt>=5)Player._setDodgeBlast=true;  // dodge triggers explosion
+    }
+    if(sn==='ZERO'){
+      if(cnt>=2){Player._setDmg+=.10;Player._setSpd+=.10;Player._setArmor+=10;}
+      if(cnt>=4)Player._setXPBonus=1.25;
+      if(cnt>=5)Player._setPetXP=true;       // companion levels 2x faster
+    }
   });
-  if(extraDmg)Player.bonusDmg=(Player.bonusDmg||1)+extraDmg;
-  if(extraSpd)Player.bonusSpd=(Player.bonusSpd||0)+extraSpd;
-  if(extraCrit)Player.bonusCrit=(Player.bonusCrit||0)+extraCrit;
-  if(extraArmor){Player.maxArmor=Math.max(Player.maxArmor,100+extraArmor);Player.armor=Math.min(Player.armor+extraArmor,Player.maxArmor);}
+  try{Player.recalc();}catch(e){}
   try{UI.updateBars();}catch(e){}
 }
 // Hook into Armor.equip
@@ -12282,13 +12428,28 @@ Enemies._kill=function(e){
   const comboMult=Combo.add();
   const scavMult=Player._scavenger||1;
   const crMult=(Player._bufordActive?1.4:1)*(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1)*comboMult*scavMult;
-  const xpMult=(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1)*comboMult;
+  const xpMult=(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1)*comboMult*(Player._setXPBonus||1);
   const creditsEarned=~~(eT.cr*(1+Zone.zone*.1)*crMult);
   Player.credits+=creditsEarned;
   // Midas Touch — convert 10% of credits earned into XP
   if(Player._midas)try{Player.gainXP(~~(creditsEarned*.1));}catch(ex){}
   // Combat Reload — flag a recent kill for 3s
   if(Player._combatReload){Player._recentKill=true;clearTimeout(Player._recentKillTimer);Player._recentKillTimer=setTimeout(()=>{Player._recentKill=false;},3000);}
+  // ── Gear set 5pc kill effects ──
+  if(Player._setKillArmor){Player.armor=Math.min(Player.maxArmor,Player.armor+12);UI.updateBars();} // IRONCLAD 5pc
+  if(Player._setGhostKill){Player._ghostTimer=2;} // SHADOW 5pc — 2s untargetable
+  // ── VOLATILE elite — explodes on death, damaging the player if close ──
+  try{
+    if(e&&e.modifier==='VOLATILE'&&Player.mesh){
+      const bp2=e.mesh.position;
+      Particles.burst(bp2.clone().add(new THREE.Vector3(0,1,0)),0xff6600,24);
+      Audio.explosion();
+      const pd=Player.mesh.position.distanceTo(bp2);
+      if(pd<5)Player.takeDmg(~~(30*(1-pd/5))+10);
+      // Also damages nearby enemies
+      for(const oe of Enemies.list){if(oe.alive&&oe!==e&&oe.mesh.position.distanceTo(bp2)<5)Enemies.hit(oe,60,false);}
+    }
+  }catch(ex){}
   // Energized — kills shave time off skill cooldowns
   if(Player._energizedCdr)try{for(let i=0;i<Skills.cds.length;i++)if(Skills.cds[i]>0)Skills.cds[i]=Math.max(0,Skills.cds[i]-Player._energizedCdr);}catch(ex){}
   // Second Wind — heal on elite kill
@@ -12310,7 +12471,7 @@ Enemies._kill=function(e){
     showBanner('🔧 '+att.name+' ['+att.slot+'] — '+att.desc,2000);
   }
   // Pet XP
-  try{if(Mercs.active)Mercs.gainXP(elite?12:5);}catch(ex){}
+  try{if(Mercs.active)Mercs.gainXP((elite?12:5)*(Player._setPetXP?2:1));}catch(ex){}
   // Loot drops
   try{if(Math.random()<.55)Loot.spawnDrop(lx,lz);}catch(ex){}
   try{if(eKey==='HEAVY'&&Math.random()<.8)Loot.spawnDrop(lx,lz,'RARE',true);}catch(ex){}
@@ -12429,6 +12590,13 @@ Skills.activate=function(i){
 
 // Measure hub header height so tabs stick correctly below it
 const UPDATES=[
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'⬡ GEAR SETS LIVE — IRONCLAD, SHADOW OPERATIVE, REACTOR CORE & AGENT ZERO sets now actually work. Wear 2/3/4/5 matching pieces for escalating bonuses, incl. 5pc effects: armor-on-kill, 2s ghost after kills, explosion on dodge, 2x companion XP. Track progress in Armory'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'⚠ ELITE AFFIXES — elites now show a colored ground ring for their modifier: ARMORED, BERSERKER, REGENERATOR, PHANTOM (shots phase through), VOLATILE (explodes on death!), SWIFT. Heavies & Snipers can roll affixes past zone 8'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'CRIT CHANCE skill now actually raises your crit rolls (was never applied)'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Set bonuses no longer stack infinitely on re-equip; armor no longer refills free on every stat recalc'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'🎮 CONTROLLER SUPPORT — connect any Bluetooth gamepad (Xbox/PS/MFi). Left stick move, right stick aim, RT fire, A dodge, X reload, Y inventory, LB/RB/LT/B skills, Start pause, Select map'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Landscape HUD fixed — stat bars, HUB button & controls no longer overlap on short screens'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'Tactical map no longer black — starting room revealed on spawn, whole rooms light up as you enter them'},
   {date:'TODAY',tag:'NEW',col:'#e67e22',text:'SKILL TREE EXPANDED — 39 nodes across 4 trees (Division-style). New capstones: Executioner, Berserker, Fortress, Second Wind, Auto-Turret, Midas Touch & more'},
   {date:'TODAY',tag:'NEW',col:'#e67e22',text:'Every skill now has a real gameplay effect — crit damage, headshot dmg, armor pen, lifesteal, toughness, rampage (combo dmg), sprinter, combat reload all wired in'},
   {date:'TODAY',tag:'NEW',col:'#e67e22',text:'RESPEC button in skill menu — refund all skill points for credits to rebuild your loadout'},
