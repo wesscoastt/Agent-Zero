@@ -5220,6 +5220,51 @@ const HubSystem={
       grid.appendChild(sec);
     }
 
+    // ── 🎰 SMUGGLER'S CACHE — gamble credits on mystery gear ─────────
+    {
+      const sec=document.createElement('div');
+      sec.style.cssText='margin-bottom:14px;border:1px solid rgba(255,60,120,.3);padding:10px;background:rgba(25,0,12,.5)';
+      sec.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;color:#ff3c78;margin-bottom:4px">🎰 SMUGGLER'S CACHE</div><div style="font-family:'Courier New',monospace;font-size:8px;color:#554;margin-bottom:8px">UNMARKED CRATES. NO REFUNDS. RARE OR BETTER — MAYBE MUCH BETTER.</div>`;
+      const rollRarity=()=>{const r=Math.random();return r<.03?'EXOTIC':r<.15?'LEGENDARY':r<.45?'EPIC':'RARE';};
+      const options=[
+        {label:'⚔ MYSTERY WEAPON',cost:150,buy:()=>{
+          const w=Loot.genWeapon(rollRarity());
+          Player.weaponBag.unshift(w);if(Player.weaponBag.length>8)Player.weaponBag.pop();
+          return w;
+        }},
+        {label:'🛡 MYSTERY ARMOR',cost:100,buy:()=>{
+          if(Armor.bag.length>=Armor.MAX_BAG){showBanner('🎒 ARMOR BAG FULL — MAKE SPACE FIRST',1800);return null;}
+          const a=Loot.genArmor(rollRarity());
+          Armor.bag.push(a);
+          return a;
+        }},
+      ];
+      options.forEach(opt=>{
+        const row=document.createElement('div');
+        row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)';
+        row.innerHTML=`<div style="flex:1;font-family:'Courier New',monospace;font-size:9px;color:#ccc">${opt.label}</div>`;
+        const btn=document.createElement('button');
+        const can=Player.credits>=opt.cost;
+        btn.style.cssText=`padding:7px 12px;border:1px solid ${can?'#ff3c78':'#443'};background:transparent;color:${can?'#ff3c78':'#443'};font-family:'Courier New',monospace;font-size:9px;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
+        btn.textContent=`🎲 ${opt.cost} CR`;
+        btn.onclick=btn.ontouchend=(e)=>{
+          if(e.type==='touchend')e.preventDefault();
+          if(Player.credits<opt.cost){showBanner('NOT ENOUGH CREDITS',1500);return;}
+          const item=opt.buy();
+          if(!item)return; // refused (e.g. bag full) — no charge
+          Player.credits-=opt.cost;try{UI.credit(Player.credits);}catch(ex){}
+          const r=RARITY[item.rarity];
+          // Rarity-scaled fanfare
+          try{Audio.pickupRarity(item.rarity);}catch(ex){}
+          showBanner((item.rarity==='EXOTIC'?'🔴 JACKPOT! ':item.rarity==='LEGENDARY'?'⚡ BIG PULL! ':'')+r.name.toUpperCase()+' '+(item.kind==='armor'?item.slot.toUpperCase():item.type.toUpperCase())+' — UNIDENTIFIED',2500);
+          try{Save.save();}catch(ex){}
+          this.renderMarket();try{InvUI.refresh();}catch(ex){}
+        };
+        row.appendChild(btn);sec.appendChild(row);
+      });
+      grid.appendChild(sec);
+    }
+
     // ── BUY WEAPONS ─────────────────────────────────────────────────────
     const buyHdr=document.createElement('div');
     buyHdr.style.cssText='font-family:"Courier New",monospace;font-size:9px;letter-spacing:3px;color:#e74c3c;margin-bottom:8px';
@@ -12590,6 +12635,7 @@ Skills.activate=function(i){
 
 // Measure hub header height so tabs stick correctly below it
 const UPDATES=[
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'🎰 SMUGGLER\'S CACHE — gamble credits on mystery gear at the Market (Kadala-style). 150 CR weapon / 100 CR armor, always Rare+, 3% Exotic jackpot. Arrives unidentified — identify & reroll for the full loop'},
   {date:'TODAY',tag:'NEW',col:'#e67e22',text:'⬡ GEAR SETS LIVE — IRONCLAD, SHADOW OPERATIVE, REACTOR CORE & AGENT ZERO sets now actually work. Wear 2/3/4/5 matching pieces for escalating bonuses, incl. 5pc effects: armor-on-kill, 2s ghost after kills, explosion on dodge, 2x companion XP. Track progress in Armory'},
   {date:'TODAY',tag:'NEW',col:'#e67e22',text:'⚠ ELITE AFFIXES — elites now show a colored ground ring for their modifier: ARMORED, BERSERKER, REGENERATOR, PHANTOM (shots phase through), VOLATILE (explodes on death!), SWIFT. Heavies & Snipers can roll affixes past zone 8'},
   {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'CRIT CHANCE skill now actually raises your crit rolls (was never applied)'},
