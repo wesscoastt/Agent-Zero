@@ -1114,6 +1114,12 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
     </div>
     <div class="hub-section-title">MISSION TERMINAL</div>
     <div class="mission-list" id="mission-list"></div>
+    <!-- ── ENDGAME: HORDE MODE ── -->
+    <div style="border:1px solid rgba(231,76,60,.4);background:rgba(30,0,0,.35);padding:16px;margin-top:14px;border-radius:2px">
+      <div style="font-size:9px;letter-spacing:3px;color:#e74c3c;margin-bottom:4px">☠ ENDLESS HORDE</div>
+      <div style="font-size:10px;color:#8899aa;letter-spacing:1px;margin-bottom:10px">Survive infinite waves in one arena. Each wave hits harder. No zone exit — only your best wave counts. Best: <span id="horde-best" style="color:#e74c3c">0</span></div>
+      <button onclick="startHordeMode()" ontouchend="event.preventDefault();startHordeMode()" style="width:100%;padding:13px;border:1px solid rgba(231,76,60,.5);background:rgba(231,76,60,.15);color:#e74c3c;font-family:'Courier New',monospace;font-size:12px;letter-spacing:3px;cursor:pointer;-webkit-tap-highlight-color:transparent">☠ ENTER THE HORDE</button>
+    </div>
   </div>
   <div id="hub-market" class="hub-panel">
     <div class="hub-section-title">WEAPON DEALER <span id="market-refresh-label" style="color:#334;font-size:6px"> · REFRESHES ON MISSION</span></div>
@@ -1624,6 +1630,10 @@ canvas.slot-icon{display:block;image-rendering:pixelated;margin:0 auto 2px}
       <span class="setting-lbl">STUCK?</span>
       <button onclick="resetZone()" ontouchend="event.preventDefault();resetZone()" style="padding:6px 14px;border:1px solid rgba(255,80,80,.4);background:rgba(255,50,50,.08);color:#e05050;font-family:'Courier New',monospace;font-size:9px;letter-spacing:2px;cursor:pointer;touch-action:manipulation">↺ RESET ZONE</button>
     </div>
+    <div class="setting-row" style="margin-top:8px">
+      <span class="setting-lbl">DISPLAY</span>
+      <button id="s-fs-btn" onclick="toggleFullscreen()" ontouchend="event.preventDefault();toggleFullscreen()" style="padding:6px 14px;border:1px solid rgba(120,200,255,.4);background:rgba(80,160,255,.1);color:#5aacff;font-family:'Courier New',monospace;font-size:9px;letter-spacing:2px;cursor:pointer;touch-action:manipulation">⛶ FULLSCREEN</button>
+    </div>
   </div>
   <div class="pause-save-msg" id="pause-save-msg">✓ GAME SAVED</div>
 </div>
@@ -1861,6 +1871,31 @@ const CAM_OFF = new THREE.Vector3(0, 24, 18);
 let _camLook = new THREE.Vector3();
 let _camMode = 'top'; // 'top' or 'third'
 
+function toggleFullscreen(){
+  try{Audio.uiClick();}catch(e){}
+  const el=document.documentElement;
+  const isFs=document.fullscreenElement||document.webkitFullscreenElement;
+  const btn=document.getElementById('s-fs-btn');
+  if(!isFs){
+    const req=el.requestFullscreen||el.webkitRequestFullscreen||el.webkitRequestFullScreen;
+    if(req){
+      Promise.resolve(req.call(el)).then(()=>{if(btn)btn.textContent='⛶ EXIT FULLSCREEN';}).catch(()=>{
+        showBanner('FULLSCREEN NOT SUPPORTED ON THIS DEVICE',2000);
+      });
+    } else {
+      // iOS Safari has no Fullscreen API — guide the user
+      showBanner('TAP "AA" IN SAFARI → HIDE TOOLBAR, OR ADD TO HOME SCREEN',3200);
+    }
+  } else {
+    const exit=document.exitFullscreen||document.webkitExitFullscreen;
+    if(exit){Promise.resolve(exit.call(document)).then(()=>{if(btn)btn.textContent='⛶ FULLSCREEN';}).catch(()=>{});}
+  }
+}
+// Keep the button label synced if the user exits fullscreen via Esc/gesture
+document.addEventListener('fullscreenchange',()=>{
+  const btn=document.getElementById('s-fs-btn');
+  if(btn)btn.textContent=document.fullscreenElement?'⛶ EXIT FULLSCREEN':'⛶ FULLSCREEN';
+});
 function resetZone(){
   // Force respawn all enemies on current zone without advancing zone number
   try{Audio.uiClick();}catch(e){}
@@ -2090,7 +2125,8 @@ function setState(s) {
     HubWorld.leave();
   }
   document.getElementById('hud').style.display = (s===GS.MISSION)?'block':'none';
-  if(s!==GS.MISSION){try{Combo.reset();}catch(e){}}
+  if(s===GS.MISSION){try{const wm=WeeklyMutator.apply();if(wm&&!Player._wkAnnounced){Player._wkAnnounced=true;setTimeout(()=>showBanner('📅 WEEKLY: '+wm.name+' — '+wm.desc,3800),1000);}}catch(e){}}
+  if(s!==GS.MISSION){try{Combo.reset();}catch(e){}Player._wkAnnounced=false;}
   try{_updateCrosshair();}catch(e){}
   document.getElementById('btn-pause').style.display = (s===GS.MISSION)?'flex':'none';
   document.getElementById('pause-screen').classList.remove('on');
@@ -2970,7 +3006,7 @@ const Bullets = {
               if(e.modifier==='PHANTOM'&&Math.random()<.25){Particles.burst(b.position.clone(),0xaa44ff,4);kill=true;break;}
               const isHead=(!e.isDrone)&&dy>headY*.5;
               const ghostCrit=Player._ghosting&&!Player._ghostUsed;
-              const critChance=(Player.weapon?.critChance||.05)+(Player.bonusCrit||0)+(Player._setCrit||0);
+              const critChance=(Player.weapon?.critChance||.05)+(Player.bonusCrit||0)+(Player._setCrit||0)+(Player._paragonCrit||0);
               const cr=Math.random()<critChance||(isHead)||ghostCrit;
               if(ghostCrit)Player._ghostUsed=true;
               // Headshot multiplier (with Headhunter bonus)
@@ -2978,12 +3014,16 @@ const Bullets = {
               // Crit damage multiplier (with Crit Damage skill)
               const critMult=(cr&&!isHead)?(1.9*(Player._critDmgMult||1)):1;
               // Damage bonuses: rampage (combo), berserker (low HP), sprinter (moving), gear sets
-              let dmgBonus=1+(Player._setDmg||0);
+              let dmgBonus=(1+(Player._setDmg||0)+(Player._paragonDmg||0))*(Player._wkDmgDealt||1);
               if(Player._rampageMult&&Combo.count>0){const tier=Combo._tier?Combo.tiers.indexOf(Combo._tier()):0;dmgBonus+=Player._rampageMult*tier;}
               if(Player._berserk&&Player.hp<Player.maxHp*.4)dmgBonus+=.30;
+              if(Player._setLowHpDmg&&Player.hp<Player.maxHp*.5)dmgBonus+=Player._setLowHpDmg;
+              if(Player._setRampStack&&Player._voidStacks>0)dmgBonus+=Player._voidStacks; // each stack = +100%
               if(Player._sprinterMult&&Player._moveTime>3)dmgBonus+=Player._sprinterMult;
               if(Player._armorPen&&e.T&&e.T.armored)dmgBonus+=Player._armorPen;
-              let finalDmg=~~(ud.dmg*headMult*critMult*dmgBonus);
+              // Crit damage multiplier incl. VOIDWALKER set crit dmg
+              const critDmgFull=(cr&&!isHead)?(1.9*(Player._critDmgMult||1)+(Player._setCritDmg||0)):critMult;
+              let finalDmg=~~(ud.dmg*headMult*Math.max(critMult,critDmgFull)*dmgBonus);
               // Executioner — instakill low HP enemies
               if(Player._executioner&&e.hp>0&&e.maxHp&&(e.hp-finalDmg)<e.maxHp*.15&&(e.hp-finalDmg)>0){finalDmg=e.hp;}
               Enemies.hit(e,finalDmg,cr,isHead,ud.element);
@@ -3008,7 +3048,11 @@ const Bullets = {
     }
   },
   _blast(pos,baseDmg){
-    const R2=64; // radius 8 units squared
+    // ARTILLERY set + Blast Radius skill scale the radius; blast dmg scales damage
+    const radMult=(1+(Player._setBlast||0))*(Player._blastMult||1);
+    const dmgMult=1+(Player._setBlastDmg||0);
+    const R=8*radMult, R2=R*R;
+    baseDmg=baseDmg*dmgMult;
     for(const e of Enemies.list){if(!e.alive)continue;const d=e.mesh.position.distanceToSquared(pos);if(d<R2){const falloff=1-Math.sqrt(d/R2);Enemies.hit(e,~~(baseDmg*(0.4+0.6*falloff)),false);}}
     if(Boss.active){const d=Boss.active.mesh.position.distanceToSquared(pos);if(d<R2)Boss.hit(~~(baseDmg*.5*(1-Math.sqrt(d/R2))));}
     Particles.burst(pos,0xff6600,IS_MOB?12:20);
@@ -3229,8 +3273,9 @@ const Enemies = {
     if(z>=4)available.push('HEAVY');
     if(z>=5)available.push('SNIPER');
     let key=forceKey||available[~~(Math.random()*available.length)];
-    if(!forceKey&&z>=3&&Math.random()<.08)key='ELITE';
-    if(!forceKey&&z>=6&&Math.random()<.15)key='ELITE';
+    const eliteRate=(Enemies._wkEliteRate||1);
+    if(!forceKey&&z>=3&&Math.random()<.08*eliteRate)key='ELITE';
+    if(!forceKey&&z>=6&&Math.random()<.15*eliteRate)key='ELITE';
     const T=this.TYPES[key];
     // ARPG scaling: gentle zones 1-5, meaningful 5-15, brutal 15+
     // HP: soft cap early, exponential late — similar to Division gear score
@@ -3248,6 +3293,9 @@ const Enemies = {
       dmg:~~(T.dmg*dmgScale),
       fRate:T.fRate*frMult,
     };
+    // Weekly mutator enemy modifiers
+    if(Enemies._wkJugg){scaledT.hp=~~(scaledT.hp*1.4);scaledT.maxHp=~~(scaledT.maxHp*1.4);scaledT.spd=(scaledT.spd||T.spd)*.8;}
+    if(Enemies._wkSwarm){scaledT.hp=~~(scaledT.hp*.7);scaledT.maxHp=~~(scaledT.maxHp*.7);}
     const {G,bodyMats,hpBar}=this._makeMesh(key,T);
     G.position.copy(pos).setY(key==='DRONE'?3.2:0);
     scene.add(G);
@@ -3279,6 +3327,8 @@ const Enemies = {
   hit(e,dmg,isCrit,isHead,element){
     if(!e.alive)return;
     if(e.modifier&&!e._modAnnounced){e._modAnnounced=true;try{showBanner('⚠ '+e.modifier+' — '+(e._modDesc||''),2200);}catch(ex){}}
+    // VENOM 4pc — hits apply a poison DoT
+    if(Player._setPoison&&element!=='poison'){e._poisoned=true;e._poisonTimer=3;e._poisonDmg=Math.max(e._poisonDmg||0,~~(dmg*.15));}
     // Armor modifier
     if(e.modifier==='ARMORED')dmg=~~(dmg*.5);
     e.hp-=dmg;
@@ -3396,6 +3446,7 @@ const Enemies = {
       if(e.state==='stunned')e.state='chase';
       // DoT fire
       if(e.dotTimer>0){e.dotTimer-=dt;if(Math.random()<.3)this.hit(e,ELEMENTS.FIRE.dotDmg,false,false,null);Particles.burst(ep.clone().add(new THREE.Vector3(0,1,0)),0xff4400,1);}
+      if(e._poisonTimer>0){e._poisonTimer-=dt;e._poisonTick=(e._poisonTick||0)+dt;if(e._poisonTick>=.5){e._poisonTick=0;this.hit(e,e._poisonDmg||5,false,false,'poison');Particles.burst(ep.clone().add(new THREE.Vector3(0,1,0)),0x2ecc71,1);}}
       const spd=e.T.spd*diff*(e.slow>0?e.slow:1);
       if(e.slow>0)e.slow=Math.max(0,e.slow-dt*.5);
       e.stateTimer+=dt;
@@ -3708,6 +3759,66 @@ const Combo={
   },
 };
 
+// ── ENDLESS HORDE MODE ──────────────────────────────────────────────
+const Horde={
+  active:false, wave:0, best:0, KEY:'az_horde_best',
+  load(){try{this.best=+localStorage.getItem(this.KEY)||0;}catch(e){this.best=0;}},
+  saveBest(){try{localStorage.setItem(this.KEY,String(this.best));}catch(e){}},
+  start(){
+    this.active=true;this.wave=0;
+    this.load();
+    // Generate a compact arena zone
+    Zone.zone=1;Zone.killsInZone=0;
+    Map3D.generate();
+    Player.init();
+    const sp=Map3D.startPos();
+    if(Player.mesh){Player.mesh.position.set(sp.x,0,sp.z);camera.position.copy(Player.mesh.position).add(CAM_OFF);_camLook.copy(Player.mesh.position);camera.lookAt(_camLook);}
+    setState(GS.MISSION);gameRunning=true;
+    Combo.reset();
+    this.nextWave();
+    setTimeout(()=>{try{Audio.startMusic();}catch(e){}},300);
+  },
+  nextWave(){
+    this.wave++;
+    if(this.wave-1>this.best){this.best=this.wave-1;this.saveBest();}
+    // Difficulty scales with wave — reuse Zone.zone as the scaling knob
+    Zone.zone=Math.max(1,~~(this.wave*1.5));
+    // Clear any stragglers
+    Enemies.list.forEach(e=>{try{scene.remove(e.mesh);}catch(ex){}});
+    Enemies.list=[];
+    // Spawn count grows each wave
+    const count=Math.min(18,4+~~(this.wave*1.2));
+    const G=Map3D._G||C.GRID,off=-(G/2)*C.CELL;
+    let spawned=0,tries=0;
+    while(spawned<count&&tries<count*8){
+      tries++;
+      const room=Map3D.rooms[~~(Math.random()*Map3D.rooms.length)];
+      if(!room||room.type==='start')continue;
+      const ex=off+(room.x+1+Math.random()*(room.w-2))*C.CELL;
+      const ez=off+(room.z+1+Math.random()*(room.h-2))*C.CELL;
+      if(!Map3D.isFloor(ex,ez))continue;
+      // Every 5th wave is a mini-boss wave with all elites
+      const forceElite=this.wave%5===0;
+      Enemies.spawn(new THREE.Vector3(ex,0,ez),forceElite?'ELITE':undefined);
+      spawned++;
+    }
+    Zone.killsToNext=Enemies.list.length;
+    const bossWave=this.wave%5===0;
+    showBanner((bossWave?'☠ ELITE WAVE ':'☠ WAVE ')+this.wave+' — '+Enemies.list.length+' HOSTILES',2200);
+    // Heal a little between waves as a reward
+    if(this.wave>1)Player.heal(Player.maxHp*.15);
+    try{Zone._hud();}catch(e){}
+  },
+  end(){
+    this.active=false;
+    if(this.wave-1>this.best){this.best=this.wave-1;this.saveBest();}
+  },
+};
+function startHordeMode(){
+  try{Audio.uiClick();}catch(e){}
+  Horde.start();
+}
+
 const Zone={
   zone:1,killsInZone:0,killsToNext:10,
   _worldTier:1, // increases every 10 zones, multiplies all rewards
@@ -3759,8 +3870,9 @@ const Zone={
     this.killsInZone++;
     const anyAlive=Enemies.list.some(e=>e.alive);
     if(!anyAlive&&!Boss.active&&!this._portal){
+      // ── HORDE MODE — endless escalating waves, no exit ──
+      if(Horde.active){Horde.nextWave();try{this._hud();}catch(ex){}return;}
       this.killsInZone=0;
-      // Don't increment zone here — that happens in _enterPortal when player walks through
       BattlePass.addXP(500);
       setTimeout(()=>{if(gameState===GS.MISSION){Save.save();const el=document.getElementById('autosave-indicator');if(el){el.style.opacity='1';el.textContent='SAVED';clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity='0',2200);}}},600);
       try{Zone._spawnExitPortal();}catch(ex){console.warn('portal err',ex.message);}
@@ -3878,12 +3990,23 @@ const Zone={
   },
 
   _hud(){
+    const alive=Enemies.list.filter(e=>e.alive).length;
+    const total=Enemies.list.length;
+    // ── Horde mode HUD ──
+    if(Horde.active){
+      document.getElementById('zone-name').textContent=`☠ ENDLESS HORDE — WAVE ${Horde.wave}`;
+      document.getElementById('zone-sub').textContent=alive>0?`${alive} HOSTILES · BEST WAVE ${Horde.best}`:`WAVE CLEAR — INCOMING...`;
+      const pct=total>0?Math.min(1,(total-alive)/total)*100:0;
+      const fill=document.getElementById('zone-progress-fill');
+      if(fill){fill.style.width=pct+'%';fill.style.background='linear-gradient(90deg,#e74c3c,#ff8800)';}
+      const kl=document.getElementById('zone-kills-lbl');
+      if(kl)kl.textContent=total>0?`${total-alive} / ${total}`:``;
+      return;
+    }
     const wt=this.worldTier();
     const sn=this.sectors[(this.zone-1)%this.sectors.length];
     const wtLabel=wt>1?` [WT${wt}]`:'';
     document.getElementById('zone-name').textContent=`SECTOR ${sn} — ZONE ${this.zone}${wtLabel}`;
-    const alive=Enemies.list.filter(e=>e.alive).length;
-    const total=Enemies.list.length;
     const isBossZone=this.zone%3===0;
     const modText=this._modifier?` · ${this._modifier.name}`:'';
     document.getElementById('zone-sub').textContent=
@@ -4043,7 +4166,7 @@ const Skills={
     if(i===3){this.active[3]=true;this.timers[3]=this.defs[3].dur*(1+SkillTree.nodes.shieldUp.lvl*.2)*(Player._skillDurMult||1);Player.shielded=true;document.getElementById('shield-vfx').classList.add('on');}
   },
   update(dt){
-    const cdrBonus=Armor.getStats().cdr+CharCreator.classBonus.cdBonus+(Player._skillCdr||0)+(Player._setCdr||0);
+    const cdrBonus=Armor.getStats().cdr+CharCreator.classBonus.cdBonus+(Player._skillCdr||0)+(Player._setCdr||0)+(Player._wkCdr||0);
     for(let i=0;i<4;i++){
       if(this.cds[i]>0)this.cds[i]=Math.max(0,this.cds[i]-dt*(1+cdrBonus));
       if(this.active[i]){
@@ -4554,8 +4677,35 @@ const Player={
   },
 
   recalc(){const s=Armor.getStats();this.maxArmor=100+s.armor+(this._skillArmorBonus||0)+(this._setArmor||0);this.maxHp=100+s.hp+(this._classHpBonus||0);this.armor=Math.min(this.armor,this.maxArmor);UI.updateBars();InvUI.refresh();},
-  heal(amt){this.hp=Math.min(this.maxHp,this.hp+amt*(this._healMult||1));UI.updateBars();},
-  gainXP(amt){this.xp+=amt;while(this.xp>=this.xpNext){this.xp-=this.xpNext;this.level++;this.xpNext=~~(this.xpNext*1.45);this.maxHp+=12;this.hp=this.maxHp;this.maxArmor+=5;SkillTree.points++;Audio.levelUp();UI.levelUp(this.level);}UI.updateBars();},
+  heal(amt){this.hp=Math.min(this.maxHp,this.hp+amt*((this._healMult||1)+(this._setHealMult||0)));UI.updateBars();},
+  gainXP(amt){
+    amt=~~(amt);this.xp+=amt;
+    const LVL_CAP=50;
+    while(this.xp>=this.xpNext){
+      this.xp-=this.xpNext;
+      if(this.level<LVL_CAP){
+        // Normal leveling
+        this.level++;this.xpNext=~~(this.xpNext*1.45);this.maxHp+=12;this.hp=this.maxHp;this.maxArmor+=5;SkillTree.points++;
+        Audio.levelUp();UI.levelUp(this.level);
+      } else {
+        // PARAGON — infinite levels, each grants a small permanent stat + occasional skill point
+        this.paragon=(this.paragon||0)+1;
+        this.xpNext=~~(this.xpNext*1.08); // gentle ramp so paragon keeps flowing
+        // Rotate the stat each paragon level for balanced growth
+        const p=this.paragon%5;
+        if(p===0){this._paragonDmg=(this._paragonDmg||0)+.02;}       // +2% dmg
+        else if(p===1){this.maxHp+=8;this.hp=this.maxHp;}             // +8 HP
+        else if(p===2){this._paragonCrit=(this._paragonCrit||0)+.01;} // +1% crit
+        else if(p===3){this.maxArmor+=6;}                            // +6 armor
+        else{this._paragonSpd=(this._paragonSpd||0)+.005;}           // +0.5% speed
+        // Every 5th paragon = a skill point
+        if(this.paragon%5===0)SkillTree.points++;
+        try{Audio.levelUp();}catch(e){}
+        showBanner('✦ PARAGON '+this.paragon+(this.paragon%5===0?' — +1 SKILL POINT':''),1800);
+      }
+    }
+    UI.updateBars();
+  },
 
   pickupWeapon(w){
     if(!this.weapon){
@@ -4573,6 +4723,8 @@ const Player={
     if(!this.weapon||this.reloading||this.fireTimer>0)return;
     if(this.weapon.currentAmmo<=0){this.startReload();return;}
     this.weapon.currentAmmo--;this.fireTimer=this.weapon.fireRate*(this._fireRateMult||1);
+    // ARTILLERY 5pc — every Nth shot is explosive
+    if(this._setNthShot){this._shotCount=(this._shotCount||0)+1;this._nthExplosive=(this._shotCount%this._setNthShot===0);}
     const o=this.mesh.position.clone().add(new THREE.Vector3(0,1.1,0));
     const dmg=~~(this.weapon.damage*this.bonusDmg);
     // ── Soft aim assist — nudge facing toward nearest enemy in a 50° cone ──
@@ -4602,8 +4754,10 @@ const Player={
         ).normalize();
       }
     }
+    const shotBlast=this.weapon.isBlast||this._nthExplosive;
     for(let p=0;p<this.weapon.pellets;p++)
-      Bullets.fire(o,aimDir,dmg,true,this.weapon.spread,this.weapon.element,this.weapon.isBlast);
+      Bullets.fire(o,aimDir,dmg,true,this.weapon.spread,this.weapon.element,shotBlast);
+    if(this._nthExplosive)this._nthExplosive=false;
     Audio.gunshot(this.weapon.type);
     UI.updateWeaponAmmo();
   },
@@ -4616,6 +4770,8 @@ const Player={
     if(this._dmgReduce!=null&&this._dmgReduce<1)amt*=this._dmgReduce;
     // Set bonus damage reduction (IRONCLAD 4pc)
     if(this._setDmgReduce)amt*=(1-this._setDmgReduce);
+    // Weekly mutator — extra damage taken
+    if(this._wkDmgTaken)amt*=this._wkDmgTaken;
     // Fortress — standing still 2s+ gives 50% reduction
     if(this._fortress&&this._stillTime>2)amt*=.5;
     // Armor absorbs more with bulletproof
@@ -4631,7 +4787,16 @@ const Player={
     }
     this.hp=Math.max(0,this.hp-hpDmg);
     Audio.hit();UI.flashDmg();UI.updateBars();
-    if(this.hp<=0)_die();
+    if(this.hp<=0){
+      // PHOENIX 5pc — revive once per zone at 50% HP
+      if(this._setRevive&&!this._phoenixUsed){
+        this._phoenixUsed=true;this.hp=~~(this.maxHp*.5);this.armor=~~(this.maxArmor*.3);
+        try{Particles.burst(this.mesh.position.clone().add(new THREE.Vector3(0,1.5,0)),0xff5e3a,40);Audio.levelUp();}catch(e){}
+        showBanner('🔥 PHOENIX REVIVAL — RISEN FROM THE ASHES',2500);
+        UI.updateBars();return;
+      }
+      _die();
+    }
   },
 
   autoEquipBest(){
@@ -4680,6 +4845,7 @@ const Player={
     return{
       hp:this.hp,maxHp:this.maxHp,armor:this.armor,maxArmor:this.maxArmor,
       xp:this.xp,level:this.level,xpNext:this.xpNext,
+      paragon:this.paragon||0,_paragonDmg:this._paragonDmg||0,_paragonCrit:this._paragonCrit||0,_paragonSpd:this._paragonSpd||0,
       credits:this.credits,
       weapon:this.weapon,weaponBag:this.weaponBag,
       agentName:this.agentName,
@@ -4702,8 +4868,9 @@ const Player={
       if(mvMag>.1||kbMoving){this._moveTime=(this._moveTime||0)+dt;this._stillTime=0;}
       else{this._stillTime=(this._stillTime||0)+dt;this._moveTime=0;}
     }
-    // Passive regen from REGEN skill
-    if(this._passiveRegen&&this._passiveRegen>0&&this.hp<this.maxHp)this.heal(this._passiveRegen*dt);
+    // Passive regen from REGEN skill + set regen (SENTINEL/PHOENIX)
+    const totalRegen=(this._passiveRegen||0)+(this._setRegen||0);
+    if(totalRegen>0&&this.hp<this.maxHp)this.heal(totalRegen*dt);
     if(this.reloading){this.reloadTimer-=dt;UI.updateReloadBar(1-this.reloadTimer/this.reloadTotal);if(this.reloadTimer<=0){this.reloading=false;this.weapon.currentAmmo=this.weapon.magazine;UI.showReload(false);UI.updateWeaponHUD();}}
     if(this.dodging){this.dodgeTimer-=dt;this.mesh.position.addScaledVector(this.dodgeDir,15*dt);if(this.dodgeTimer<=0)this.dodging=false;}
 
@@ -4732,7 +4899,7 @@ const Player={
 
     if(!this.dodging){
       const stats=Armor.getStats();
-      const spd=C.PLAYER_SPD*(1+stats.spd+CharCreator.classBonus.speedBonus+this.bonusSpd+(this._setSpd||0));
+      const spd=C.PLAYER_SPD*(1+stats.spd+CharCreator.classBonus.speedBonus+this.bonusSpd+(this._setSpd||0)+(this._paragonSpd||0));
       const sprint=Input.down('ShiftLeft')||Input.down('ShiftRight');
       const smult=sprint?C.SPRINT:1;
       const inHub=gameState===GS.HUB;
@@ -4933,7 +5100,7 @@ const Rain={
 let _mmCtx=null;
 const UI={
   init(){_mmCtx=document.getElementById('mm-canvas').getContext('2d');},
-  updateBars(){if(!Player.mesh)return;const h=Player.hp,mh=Player.maxHp,a=Player.armor,ma=Player.maxArmor,x=Player.xp,mx=Player.xpNext;document.getElementById('hfill').style.width=Math.max(0,h/mh*100)+'%';document.getElementById('afill').style.width=Math.max(0,a/ma*100)+'%';document.getElementById('xfill').style.width=Math.max(0,x/mx*100)+'%';document.getElementById('hval').textContent=`${~~h}/${mh}`;document.getElementById('aval').textContent=`${~~a}/${ma}`;document.getElementById('xval').textContent=`${x} XP`;document.getElementById('lvlnum').textContent=Player.level;},
+  updateBars(){if(!Player.mesh)return;const h=Player.hp,mh=Player.maxHp,a=Player.armor,ma=Player.maxArmor,x=Player.xp,mx=Player.xpNext;document.getElementById('hfill').style.width=Math.max(0,h/mh*100)+'%';document.getElementById('afill').style.width=Math.max(0,a/ma*100)+'%';document.getElementById('xfill').style.width=Math.max(0,x/mx*100)+'%';document.getElementById('hval').textContent=`${~~h}/${mh}`;document.getElementById('aval').textContent=`${~~a}/${ma}`;document.getElementById('xval').textContent=`${x} XP`;document.getElementById('lvlnum').textContent=Player.paragon>0?(Player.level+' ✦'+Player.paragon):Player.level;},
   credit(v){document.getElementById('cr-val').textContent=v;document.getElementById('hub-credits-val').textContent=v;},
   updateWeaponHUD(){const w=Player.weapon;if(!w)return;const wn=document.getElementById('wname');wn.textContent=w.name;wn.style.color=RARITY[w.rarity].col;this.updateWeaponAmmo();const el=document.getElementById('weapon-element');if(w.element){const E=ELEMENTS[w.element];el.textContent=`◈ ${E.name}`;el.style.color=E.glowCol;}else el.textContent='';},
   updateWeaponAmmo(){if(!Player.weapon||Player.reloading)return;document.getElementById('wammo').innerHTML=`${Player.weapon.currentAmmo} <span>/ ${Player.weapon.magazine}</span>`;},
@@ -5353,9 +5520,9 @@ const HubSystem={
       } else {
         Object.entries(counts).forEach(([sn,cnt])=>{
           const set=ITEM_SETS[sn];if(!set)return;
-          const rows=Object.entries(set.bonuses).map(([n,b])=>{
+          const rows=Object.entries(set.bonusText).map(([n,b])=>{
             const active=cnt>=+n;
-            return `<div style="font-size:8px;color:${active?set.col:'#445'};padding:1px 0">${active?'✦':'○'} ${n}PC — ${b.replace(/_/g,' ').toUpperCase()}</div>`;
+            return `<div style="font-size:8px;color:${active?set.col:'#445'};padding:1px 0">${active?'✦':'○'} ${n}PC — ${b}</div>`;
           }).join('');
           sec.innerHTML+=`<div style="margin-bottom:8px;font-family:'Courier New',monospace"><div style="font-size:10px;color:${set.col}">${set.name} — ${cnt}/5 EQUIPPED</div>${rows}</div>`;
         });
@@ -5918,6 +6085,7 @@ function redeployGame(){_isNewAgent=true;Audio.uiClick();_startNewGame();setStat
 function deathGoHub(){Audio.uiClick();_startNewGame();HubSystem.refresh();setState(GS.HUB);}
 
 function _startNewGame(){
+  Horde.active=false;
   if(Player.mesh){scene.remove(Player.mesh);Player.mesh=null;}
   if(Player.light){scene.remove(Player.light);Player.light=null;}
   try{Enemies.list.forEach(e=>{if(e.mesh)scene.remove(e.mesh);});Enemies.list=[];}catch(e){}
@@ -5929,9 +6097,10 @@ function _startNewGame(){
   Armor.equipped={helmet:null,chest:null,gloves:null,kneepads:null,backpack:null};Armor.bag=[];
   Player.hp=100;Player.maxHp=100;Player.armor=60;Player.maxArmor=100;
   Player.xp=0;Player.level=1;Player.xpNext=100;Player.credits=0;Player.weapon=null;Player.weaponBag=[];
+  Player.paragon=0;Player._paragonDmg=0;Player._paragonCrit=0;Player._paragonSpd=0;
   Player.bonusDmg=1;Player.bonusCrit=0;Player.bonusSpd=0;Player._classRegen=false;
   // Clear all skill-derived flags for a fresh agent
-  ['_critDmgMult','_headMult','_armorPen','_fireRateMult','_blastMult','_rampageMult','_overkill','_executioner','_berserk','_passiveRegen','_dmgReduce','_lifesteal','_lastStand','_healMult','_armorAbsorb','_secondWind','_fortress','_skillCdr','_skillDurMult','_nanobots','_chainEmp','_turret','_energizedCdr','_scavenger','_luck','_ghosting','_sprinterMult','_combatReload','_tactician','_midas','_skillArmorBonus','_ghostUsed','_lastStandUsed','_recentKill','_moveTime','_stillTime'].forEach(k=>delete Player[k]);
+  ['_critDmgMult','_headMult','_armorPen','_fireRateMult','_blastMult','_rampageMult','_overkill','_executioner','_berserk','_passiveRegen','_dmgReduce','_lifesteal','_lastStand','_healMult','_armorAbsorb','_secondWind','_fortress','_skillCdr','_skillDurMult','_nanobots','_chainEmp','_turret','_energizedCdr','_scavenger','_luck','_ghosting','_sprinterMult','_combatReload','_tactician','_midas','_skillArmorBonus','_ghostUsed','_lastStandUsed','_recentKill','_moveTime','_stillTime','_voidStacks','_phoenixUsed','_shotCount','_nthExplosive','_setLowHpDmg','_setKillHeal','_setBlast','_setBlastDmg','_setNthShot','_setPoison','_setPoisonBurst','_setRegen','_setReflect','_setRampStack','_setHealMult','_setRevive','_setCritDmg'].forEach(k=>delete Player[k]);
   Player._attachmentBag=[];Player._ownedSkins=[];
   SkillTree.points=0;Object.values(SkillTree.nodes).forEach(n=>{n.lvl=0;});
   CharCreator.classBonus={speedBonus:0,cdBonus:0,regen:false};
@@ -5954,6 +6123,7 @@ let _mainRunSnapshot=null;
 let _activeMissionIdx=-1;
 
 function _startMission(missionIdx){
+  Horde.active=false;
   Audio.uiClick();
   const m=HubSystem.MISSIONS[missionIdx||0];
   _activeMissionIdx=missionIdx||0;
@@ -6001,6 +6171,7 @@ function _spawnEnemies(){
   // Reset per-zone skill states
   Player._ghostUsed=false;
   Player._lastStandUsed=false;
+  Player._phoenixUsed=false;
   const G=Map3D._G||C.GRID;
   const off=-(G/2)*C.CELL;
   const z=Zone.zone;
@@ -6032,7 +6203,7 @@ function _spawnEnemies(){
 
     const wtBonus=Math.min(6,(wt-1)*1.0);
     const zScale=Math.min(2.5, 1+(z-1)*.12);
-    const hordeBonus=isHorde?1.4:1;
+    const hordeBonus=(isHorde?1.4:1)*(Enemies._wkSwarm?1.5:1);
     const baseCount=isLast
       ? Math.min(hardCapLast, Math.ceil((2+wtBonus*.5)*zScale*hordeBonus + depthRatio*2))
       : Math.min(hardCapRoom, Math.ceil((1+wtBonus*.3)*zScale*hordeBonus + depthRatio*1.5));
@@ -6167,6 +6338,7 @@ function _die(){
   gameRunning=false;
   Audio.stopMusic();
   Combo.reset();
+  if(Horde.active){const w=Horde.wave;Horde.end();setTimeout(()=>showBanner('☠ HORDE ENDED — REACHED WAVE '+w+' · BEST '+Horde.best,3500),400);}
   if(_isDailyRun){DailyChallenge.recordScore(Enemies.totalKills,Zone.zone);_isDailyRun=false;}
 
   // ── Penalties: lose XP and credits, keep gear ──
@@ -6288,6 +6460,7 @@ function deathGoHub(){deathReturnToHub();}
 
 // ── CONTINUE RUN — drop back into the active zone ──────────────────
 function hubContinueRun(){
+  Horde.active=false;
   try{Audio.uiClick();}catch(e){}
   const rb=document.getElementById('hub-return-btn');
   if(rb)rb.style.display='none';
@@ -9896,6 +10069,14 @@ function _todayKey(){
   return`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
 }
 
+function _weekSeed(){
+  // ISO-ish week number: days since epoch / 7. Same for all players in a given week.
+  const d=new Date();
+  const dayNum=Math.floor(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())/86400000);
+  return Math.floor(dayNum/7);
+}
+function _weekKey(){return 'W'+_weekSeed();}
+
 // =====================================================================
 //  DAILY CHALLENGE
 // =====================================================================
@@ -9921,6 +10102,36 @@ const DAILY_MODS=[
   {id:'exotic_only',icon:'🔴',name:'EXOTIC CACHE',desc:'Chests guaranteed to contain Exotic gear.',
     apply(){Loot._dailyExoticChests=true;}},
 ];
+
+// ── WEEKLY MUTATORS — one powerful global rule active all week ──────
+const WEEKLY_MUTATORS=[
+  {id:'bloodlust',icon:'🩸',name:'BLOODLUST',desc:'Kills heal you for 8% max HP, but you take +20% damage.',
+    apply(){Player._wkLifesteal=.08;Player._wkDmgTaken=1.2;}},
+  {id:'glass_storm',icon:'💥',name:'GLASS STORM',desc:'Everyone deals double damage — you and enemies.',
+    apply(){Player._wkDmgDealt=2;Player._wkDmgTaken=(Player._wkDmgTaken||1)*2;}},
+  {id:'swarm',icon:'🐝',name:'THE SWARM',desc:'50% more enemies per wave, but they have 30% less HP.',
+    apply(){Enemies._wkSwarm=true;}},
+  {id:'juggernaut',icon:'🛡',name:'JUGGERNAUTS',desc:'All enemies have +40% HP but move 20% slower.',
+    apply(){Enemies._wkJugg=true;}},
+  {id:'gold_rush',icon:'💰',name:'GOLD RUSH',desc:'Triple credits from every source this week.',
+    apply(){Player._wkCredits=3;}},
+  {id:'elite_hunt',icon:'💀',name:'ELITE HUNT',desc:'Elites appear twice as often and drop guaranteed sets.',
+    apply(){Enemies._wkEliteRate=2;Loot._wkSetDrops=true;}},
+  {id:'overcharge',icon:'⚡',name:'OVERCHARGE',desc:'Skill cooldowns 40% faster all week.',
+    apply(){Player._wkCdr=.4;}},
+];
+const WeeklyMutator={
+  current(){
+    _seedRng((_weekSeed()*2654435761)>>>0);
+    return WEEKLY_MUTATORS[~~(_rng()*WEEKLY_MUTATORS.length)];
+  },
+  apply(){
+    ['_wkLifesteal','_wkDmgTaken','_wkDmgDealt','_wkCredits','_wkCdr'].forEach(k=>delete Player[k]);
+    Enemies._wkSwarm=false;Enemies._wkJugg=false;Enemies._wkEliteRate=1;Loot._wkSetDrops=false;
+    const m=this.current();try{m.apply();}catch(e){}
+    return m;
+  },
+};
 
 const DailyChallenge={
   KEY:'az_daily',
@@ -11575,6 +11786,9 @@ const HubWorld={
     this._savedPlayerPos=Player.mesh?Player.mesh.position.clone():null;
     this._savedAliveCount=Enemies.list.filter(e=>e.alive).length;
     try{Combo.reset();}catch(e){}
+    // Leaving to hub ends any active horde run
+    if(Horde.active)try{Horde.end();}catch(e){}
+    try{Horde.load();const hb=document.getElementById('horde-best');if(hb)hb.textContent=Horde.best;}catch(e){}
     // Show hub geometry, hide mission geometry
     if(this._group)this._group.visible=true;
     if(Map3D.group)Map3D.group.visible=false;
@@ -12235,56 +12449,122 @@ function rerollAffixes(item){
 //  ITEM SETS — matching pieces unlock bonuses
 // ═══════════════════════════════════════════════════════════════════
 const ITEM_SETS={
+  // ── Tier 1: drop from zone 1+ (Epic+) ──
   IRONCLAD:{
-    name:'IRONCLAD SET',col:'#4488ff',
+    name:'IRONCLAD BULWARK',col:'#4488ff',tier:1,
     pieces:['IRONCLAD HELM','IRONCLAD VEST','IRONCLAD GLOVES','IRONCLAD KNEES','IRONCLAD PACK'],
-    bonuses:{2:'armor+30',4:'dmg_reduce+15%',5:'on_kill_armor_restore'},
+    bonusText:{2:'+30 Armor',4:'-15% Damage Taken',5:'Kills restore 12 Armor'},
   },
   SHADOW:{
-    name:'SHADOW OPERATIVE',col:'#aa44ff',
+    name:'SHADOW OPERATIVE',col:'#aa44ff',tier:1,
     pieces:['SHADOW MASK','SHADOW COAT','SHADOW GRIPS','SHADOW PADS','SHADOW SATCHEL'],
-    bonuses:{2:'spd+15%',4:'crit+20%',5:'invisible_after_kill_2s'},
+    bonusText:{2:'+15% Speed',4:'+20% Crit',5:'Untargetable 2s after a kill'},
   },
   REACTOR:{
-    name:'REACTOR CORE',col:'#ff6600',
+    name:'REACTOR CORE',col:'#ff6600',tier:1,
     pieces:['REACTOR HELM','REACTOR VEST','REACTOR GRIPS','REACTOR KNEES','REACTOR CORE'],
-    bonuses:{2:'elemental_dmg+25%',3:'skills_cd-20%',5:'explosion_on_dodge'},
+    bonusText:{2:'+25% Elemental',3:'-20% Skill CD',5:'Dodge triggers an explosion'},
   },
   ZERO:{
-    name:'AGENT ZERO',col:'#ffd700',
+    name:'AGENT ZERO',col:'#ffd700',tier:1,
     pieces:['ZERO HELM','ZERO COAT','ZERO GLOVES','ZERO KNEES','ZERO PACK'],
-    bonuses:{2:'all_stats+10%',4:'xp+25%',5:'companion_lvl_up_faster'},
+    bonusText:{2:'+10% All Stats',4:'+25% XP',5:'Companion levels 2x faster'},
+  },
+  // ── Tier 2: drop from zone 8+ (Legendary+) — stronger, build-defining ──
+  BERSERKER:{
+    name:'BLOOD BERSERKER',col:'#e0303a',tier:2,minZone:8,
+    pieces:['BERSERK HELM','BERSERK PLATE','BERSERK GAUNTLETS','BERSERK GREAVES','BERSERK TOTEM'],
+    bonusText:{2:'+15% Damage',4:'+30% Damage below 50% HP',5:'Kills heal 6% max HP'},
+  },
+  ARTILLERY:{
+    name:'ARTILLERY DOCTRINE',col:'#f39c12',tier:2,minZone:8,
+    pieces:['ARTY HELM','ARTY RIG','ARTY GRIPS','ARTY PADS','ARTY PACK'],
+    bonusText:{2:'+30% Blast Radius',4:'+25% Explosive Damage',5:'Every 6th shot explodes'},
+  },
+  VENOM:{
+    name:'VENOM PROTOCOL',col:'#2ecc71',tier:2,minZone:8,
+    pieces:['VENOM MASK','VENOM WEAVE','VENOM CLAWS','VENOM PADS','VENOM SAC'],
+    bonusText:{2:'+20% Elemental',4:'Hits apply poison DoT',5:'Poisoned enemies explode on death'},
+  },
+  SENTINEL:{
+    name:'SENTINEL WARD',col:'#1abc9c',tier:2,minZone:8,
+    pieces:['SENTINEL CROWN','SENTINEL AEGIS','SENTINEL GRIPS','SENTINEL KNEES','SENTINEL CORE'],
+    bonusText:{2:'+40 Armor',3:'+2 HP/sec Regen',5:'Shield Wall reflects damage'},
+  },
+  // ── Tier 3: MYTHIC — only from zone 20+ or horde wave 10+ (chase endgame) ──
+  VOIDWALKER:{
+    name:'VOIDWALKER',col:'#9b59ff',tier:3,minZone:20,mythic:true,
+    pieces:['VOID CROWN','VOID SHROUD','VOID TALONS','VOID STRIDERS','VOID HEART'],
+    bonusText:{2:'+25% Crit Damage',4:'+15% All Stats',5:'Kills grant 1s of 2x damage (stacks)'},
+  },
+  PHOENIX:{
+    name:'PHOENIX ASCENDANT',col:'#ff5e3a',tier:3,minZone:20,mythic:true,
+    pieces:['PHOENIX HALO','PHOENIX MANTLE','PHOENIX TALONS','PHOENIX GREAVES','PHOENIX EMBER'],
+    bonusText:{2:'+2 HP/sec',4:'+35% Healing',5:'Revive once per zone with 50% HP'},
   },
 };
+
+// Which sets can drop at a given zone
+function _eligibleSets(zone){
+  return Object.keys(ITEM_SETS).filter(k=>{
+    const s=ITEM_SETS[k];
+    return (s.minZone||1)<=zone;
+  });
+}
 function _checkSetBonuses(){
   const equipped=Object.values(Armor.equipped||{}).filter(Boolean);
   const setCounts={};
   equipped.forEach(a=>{if(a.setName)setCounts[a.setName]=(setCounts[a.setName]||0)+1;});
   Player._activeSets=setCounts;
   // Reset ALL set-derived fields first — makes this fully idempotent
-  Player._setDmg=0;Player._setSpd=0;Player._setArmor=0;Player._setCrit=0;
+  Player._setDmg=0;Player._setSpd=0;Player._setArmor=0;Player._setCrit=0;Player._setCritDmg=0;
   Player._setDmgReduce=0;Player._setXPBonus=1;Player._elementalBonus=1;Player._setCdr=0;
   Player._setKillArmor=false;Player._setGhostKill=false;Player._setDodgeBlast=false;Player._setPetXP=false;
+  Player._setLowHpDmg=0;Player._setKillHeal=0;Player._setBlast=0;Player._setBlastDmg=0;Player._setNthShot=0;
+  Player._setPoison=false;Player._setPoisonBurst=false;Player._setRegen=0;Player._setReflect=false;
+  Player._setRampStack=false;Player._setHealMult=0;Player._setRevive=false;
   Object.entries(setCounts).forEach(([sn,cnt])=>{
-    if(sn==='IRONCLAD'){
-      if(cnt>=2)Player._setArmor+=30;
-      if(cnt>=4)Player._setDmgReduce+=.15;
-      if(cnt>=5)Player._setKillArmor=true;   // kills restore armor
-    }
-    if(sn==='SHADOW'){
-      if(cnt>=2)Player._setSpd+=.15;
-      if(cnt>=4)Player._setCrit+=.20;
-      if(cnt>=5)Player._setGhostKill=true;   // 2s untargetable after kill
-    }
-    if(sn==='REACTOR'){
-      if(cnt>=2)Player._elementalBonus=1.25;
-      if(cnt>=3)Player._setCdr+=.20;
-      if(cnt>=5)Player._setDodgeBlast=true;  // dodge triggers explosion
-    }
-    if(sn==='ZERO'){
-      if(cnt>=2){Player._setDmg+=.10;Player._setSpd+=.10;Player._setArmor+=10;}
-      if(cnt>=4)Player._setXPBonus=1.25;
-      if(cnt>=5)Player._setPetXP=true;       // companion levels 2x faster
+    switch(sn){
+      case'IRONCLAD':
+        if(cnt>=2)Player._setArmor+=30;
+        if(cnt>=4)Player._setDmgReduce+=.15;
+        if(cnt>=5)Player._setKillArmor=true;break;
+      case'SHADOW':
+        if(cnt>=2)Player._setSpd+=.15;
+        if(cnt>=4)Player._setCrit+=.20;
+        if(cnt>=5)Player._setGhostKill=true;break;
+      case'REACTOR':
+        if(cnt>=2)Player._elementalBonus=Math.max(Player._elementalBonus,1.25);
+        if(cnt>=3)Player._setCdr+=.20;
+        if(cnt>=5)Player._setDodgeBlast=true;break;
+      case'ZERO':
+        if(cnt>=2){Player._setDmg+=.10;Player._setSpd+=.10;Player._setArmor+=10;}
+        if(cnt>=4)Player._setXPBonus=1.25;
+        if(cnt>=5)Player._setPetXP=true;break;
+      case'BERSERKER':
+        if(cnt>=2)Player._setDmg+=.15;
+        if(cnt>=4)Player._setLowHpDmg=.30;      // +30% dmg below 50% HP
+        if(cnt>=5)Player._setKillHeal=.06;break; // kills heal 6% max HP
+      case'ARTILLERY':
+        if(cnt>=2)Player._setBlast+=.30;         // +30% blast radius
+        if(cnt>=4)Player._setBlastDmg+=.25;      // +25% explosive dmg
+        if(cnt>=5)Player._setNthShot=6;break;    // every 6th shot explodes
+      case'VENOM':
+        if(cnt>=2)Player._elementalBonus=Math.max(Player._elementalBonus,1.20);
+        if(cnt>=4)Player._setPoison=true;        // hits apply poison
+        if(cnt>=5)Player._setPoisonBurst=true;break; // poisoned die → explode
+      case'SENTINEL':
+        if(cnt>=2)Player._setArmor+=40;
+        if(cnt>=3)Player._setRegen+=2;
+        if(cnt>=5)Player._setReflect=true;break; // shield reflects
+      case'VOIDWALKER':
+        if(cnt>=2)Player._setCritDmg+=.25;
+        if(cnt>=4){Player._setDmg+=.15;Player._setSpd+=.15;Player._setArmor+=15;Player._setCrit+=.15;}
+        if(cnt>=5)Player._setRampStack=true;break; // kills → stacking 2x dmg
+      case'PHOENIX':
+        if(cnt>=2)Player._setRegen+=2;
+        if(cnt>=4)Player._setHealMult+=.35;
+        if(cnt>=5)Player._setRevive=true;break;  // revive once per zone
     }
   });
   try{Player.recalc();}catch(e){}
@@ -12295,12 +12575,11 @@ const _origArmorEquip=Armor.equip.bind(Armor);
 Armor.equip=function(a){
   _origArmorEquip(a);
   _checkSetBonuses();
-  // Notify set progress
   if(a.setName){
     const cnt=Object.values(this.equipped||{}).filter(e=>e&&e.setName===a.setName).length;
     const set=ITEM_SETS[a.setName];
-    if(set){const next=Object.keys(set.bonuses).map(Number).sort((x,y)=>x-y).find(n=>n>cnt);
-      showBanner(set.name+' '+cnt+'/5'+(next?' — NEXT BONUS AT '+next+'pc':'— FULL SET!'),2000);}
+    if(set){const next=Object.keys(set.bonusText).map(Number).sort((x,y)=>x-y).find(n=>n>cnt);
+      showBanner(set.name+' '+cnt+'/5'+(next?' — NEXT BONUS AT '+next+'pc':' — ⭐ FULL SET!'),2200);}
   }
 };
 
@@ -12361,14 +12640,18 @@ Loot.genArmor=function(rar){
   const slots=rar==='EXOTIC'?3:rar==='LEGENDARY'?2:rar==='EPIC'?2:rar==='RARE'?1:0;
   a.sockets=Array(slots).fill(null);
   a.affixes=[];
-  // 30% chance for set item on EPIC+
-  if((rar==='EPIC'||rar==='LEGENDARY'||rar==='EXOTIC')&&Math.random()<.3){
-    const setKeys=Object.keys(ITEM_SETS);
-    const setKey=setKeys[~~(Math.random()*setKeys.length)];
+  // 30% chance for set item on EPIC+ (100% during ELITE HUNT week)
+  if((rar==='EPIC'||rar==='LEGENDARY'||rar==='EXOTIC')&&(Loot._wkSetDrops||Math.random()<.3)){
+    const eligible=_eligibleSets(Zone.zone||1);
+    // Mythic (tier 3) sets require Legendary+ rarity even if zone-eligible
+    const pool=eligible.filter(k=>{const s=ITEM_SETS[k];return !s.mythic||rar==='LEGENDARY'||rar==='EXOTIC';});
+    const setKey=pool[~~(Math.random()*pool.length)];
     const set=ITEM_SETS[setKey];
     const pieceIdx=~~(Math.random()*set.pieces.length);
     a.name=set.pieces[pieceIdx];a.setName=setKey;
     a._hiddenName=a.name;
+    // Mythic pieces get a stat boost
+    if(set.mythic){a.armor=~~(a.armor*1.3);a.healthBonus=~~(a.healthBonus*1.3);}
   }
   if(rar==='RARE'||rar==='EPIC'||rar==='LEGENDARY'||rar==='EXOTIC')_unidentify(a);
   return a;
@@ -12472,7 +12755,7 @@ Enemies._kill=function(e){
   try{BattlePass.addXP(elite?30:10);}catch(ex){}
   const comboMult=Combo.add();
   const scavMult=Player._scavenger||1;
-  const crMult=(Player._bufordActive?1.4:1)*(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1)*comboMult*scavMult;
+  const crMult=(Player._bufordActive?1.4:1)*(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1)*comboMult*scavMult*(Player._wkCredits||1);
   const xpMult=(Zone.rewardMult?.()??1)*(Zone._modifier?.id==='reward'?2:1)*comboMult*(Player._setXPBonus||1);
   const creditsEarned=~~(eT.cr*(1+Zone.zone*.1)*crMult);
   Player.credits+=creditsEarned;
@@ -12483,6 +12766,17 @@ Enemies._kill=function(e){
   // ── Gear set 5pc kill effects ──
   if(Player._setKillArmor){Player.armor=Math.min(Player.maxArmor,Player.armor+12);UI.updateBars();} // IRONCLAD 5pc
   if(Player._setGhostKill){Player._ghostTimer=2;} // SHADOW 5pc — 2s untargetable
+  if(Player._setKillHeal)try{Player.heal(Player.maxHp*Player._setKillHeal);}catch(ex){} // BERSERKER 5pc
+  if(Player._setRampStack){ // VOIDWALKER 5pc — stacking 2x dmg window
+    Player._voidStacks=Math.min(4,(Player._voidStacks||0)+1);
+    clearTimeout(Player._voidTimer);
+    Player._voidTimer=setTimeout(()=>{Player._voidStacks=0;},1000);
+  }
+  // VENOM 5pc — poisoned enemies explode on death
+  if(Player._setPoisonBurst&&e&&e._poisoned&&Player.mesh)try{
+    Particles.burst(e.mesh.position.clone().add(new THREE.Vector3(0,1,0)),0x2ecc71,18);
+    for(const oe of Enemies.list){if(oe.alive&&oe!==e&&oe.mesh.position.distanceTo(e.mesh.position)<4)Enemies.hit(oe,50,false,false,'poison');}
+  }catch(ex){}
   // ── VOLATILE elite — explodes on death, damaging the player if close ──
   try{
     if(e&&e.modifier==='VOLATILE'&&Player.mesh){
@@ -12499,6 +12793,8 @@ Enemies._kill=function(e){
   if(Player._energizedCdr)try{for(let i=0;i<Skills.cds.length;i++)if(Skills.cds[i]>0)Skills.cds[i]=Math.max(0,Skills.cds[i]-Player._energizedCdr);}catch(ex){}
   // Second Wind — heal on elite kill
   if(elite&&Player._secondWind)try{Player.heal(Player.maxHp*.4);showBanner('🌬 SECOND WIND',1200);}catch(ex){}
+  // Weekly BLOODLUST — heal on every kill
+  if(Player._wkLifesteal)try{Player.heal(Player.maxHp*Player._wkLifesteal);}catch(ex){}
   UI.credit(Player.credits);
   try{Player.gainXP(~~(eT.xp*xpMult));}catch(ex){}
   try{UI.killFeed(eT.label,'#e74c3c');}catch(ex){}
@@ -12635,6 +12931,12 @@ Skills.activate=function(i){
 
 // Measure hub header height so tabs stick correctly below it
 const UPDATES=[
+  {date:'TODAY',tag:'NEW',col:'#ffd700',text:'⭐ 10 GEAR SETS (was 4) — new build-defining sets: BLOOD BERSERKER, ARTILLERY DOCTRINE, VENOM PROTOCOL, SENTINEL WARD, plus MYTHIC endgame sets VOIDWALKER & PHOENIX ASCENDANT (revive once per zone!). Higher-tier sets only drop deeper — a real chase'},
+  {date:'TODAY',tag:'NEW',col:'#e67e22',text:'✦ PARAGON LEVELS — past level 50 you keep leveling forever, each paragon granting permanent stacking stats + a skill point every 5th. Infinite progression'},
+  {date:'TODAY',tag:'NEW',col:'#e74c3c',text:'☠ ENDLESS HORDE MODE — survive infinite escalating waves in one arena. Every 5th wave is an all-elite gauntlet. Best wave saved. Launch from the hub'},
+  {date:'TODAY',tag:'NEW',col:'#9b59b6',text:'📅 WEEKLY MUTATORS — one powerful global rule rotates every week: Bloodlust, Glass Storm, The Swarm, Juggernauts, Gold Rush, Elite Hunt, Overcharge. Same for everyone'},
+  {date:'TODAY',tag:'NEW',col:'#5aacff',text:'⛶ FULLSCREEN toggle added to Settings'},
+  {date:'TODAY',tag:'FIX',col:'#2ecc71',text:'All set bonuses fully implemented incl. poison DoT, explosive nth-shot, void damage stacks, phoenix revival, damage reflection'},
   {date:'TODAY',tag:'NEW',col:'#e67e22',text:'🎰 SMUGGLER\'S CACHE — gamble credits on mystery gear at the Market (Kadala-style). 150 CR weapon / 100 CR armor, always Rare+, 3% Exotic jackpot. Arrives unidentified — identify & reroll for the full loop'},
   {date:'TODAY',tag:'NEW',col:'#e67e22',text:'⬡ GEAR SETS LIVE — IRONCLAD, SHADOW OPERATIVE, REACTOR CORE & AGENT ZERO sets now actually work. Wear 2/3/4/5 matching pieces for escalating bonuses, incl. 5pc effects: armor-on-kill, 2s ghost after kills, explosion on dodge, 2x companion XP. Track progress in Armory'},
   {date:'TODAY',tag:'NEW',col:'#e67e22',text:'⚠ ELITE AFFIXES — elites now show a colored ground ring for their modifier: ARMORED, BERSERKER, REGENERATOR, PHANTOM (shots phase through), VOLATILE (explodes on death!), SWIFT. Heavies & Snipers can roll affixes past zone 8'},
